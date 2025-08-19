@@ -1,0 +1,16 @@
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\bin\Debug\net9.0\PriceCompareCore.deps.json
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\bin\Debug\net9.0\PriceCompareCore.dll
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\bin\Debug\net9.0\PriceCompareCore.pdb
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\bin\Debug\net9.0\PriceCompareData.dll
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\bin\Debug\net9.0\PriceCompareData.pdb
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCompareCore.csproj.AssemblyReference.cache
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCompareCore.GeneratedMSBuildEditorConfig.editorconfig
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCompareCore.AssemblyInfoInputs.cache
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCompareCore.AssemblyInfo.cs
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCompareCore.csproj.CoreCompileInputs.cache
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCompareCore.sourcelink.json
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCom.4E529DE9.Up2Date
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCompareCore.dll
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\refint\PriceCompareCore.dll
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\PriceCompareCore.pdb
+e:\USYD\training\project-1\price-compare\src\PriceCompareCore\obj\Debug\net9.0\ref\PriceCompareCore.dll

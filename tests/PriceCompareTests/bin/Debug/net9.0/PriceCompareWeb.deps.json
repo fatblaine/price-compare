@@ -1,0 +1,56 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "PriceCompareWeb/1.0.0": {
+        "dependencies": {
+          "PriceCompareCore": "1.0.0",
+          "PriceCompareData": "1.0.0"
+        },
+        "runtime": {
+          "PriceCompareWeb.dll": {}
+        }
+      },
+      "PriceCompareCore/1.0.0": {
+        "dependencies": {
+          "PriceCompareData": "1.0.0"
+        },
+        "runtime": {
+          "PriceCompareCore.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "PriceCompareData/1.0.0": {
+        "runtime": {
+          "PriceCompareData.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PriceCompareWeb/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "PriceCompareCore/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "PriceCompareData/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
