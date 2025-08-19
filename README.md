@@ -3,7 +3,7 @@
 
 **PriceCompare** is a .NET-based web application that allows users to compare current and historical prices (within the past 7 days) of grocery products from **Woolworths** and **Coles** by either barcode or product name.  
 
-Built with modern .NET technologies and a clean architecture, this app is designed as a Minimum Viable Product (MVP) for real-world, industry-standard software development.
+Built with modern .NET technologies and a clean architecture, this app is designed as a Minimum Viable Product for real-world software development.
 
 ---
 
