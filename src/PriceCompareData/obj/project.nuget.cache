@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "420N7XMbD3k=",
+  "dgSpecHash": "EspxvCpLgDs=",
   "success": true,
   "projectFilePath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
   "expectedPackageFiles": [
@@ -36,6 +36,8 @@
     "C:\\Users\\Fan\\.nuget\\packages\\microsoft.extensions.dependencymodel\\9.0.8\\microsoft.extensions.dependencymodel.9.0.8.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\microsoft.extensions.diagnostics\\9.0.8\\microsoft.extensions.diagnostics.9.0.8.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\microsoft.extensions.diagnostics.abstractions\\9.0.8\\microsoft.extensions.diagnostics.abstractions.9.0.8.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\microsoft.extensions.fileproviders.abstractions\\9.0.0\\microsoft.extensions.fileproviders.abstractions.9.0.0.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\microsoft.extensions.hosting.abstractions\\9.0.0\\microsoft.extensions.hosting.abstractions.9.0.0.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\microsoft.extensions.http\\9.0.8\\microsoft.extensions.http.9.0.8.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\microsoft.extensions.http.polly\\9.0.8\\microsoft.extensions.http.polly.9.0.8.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\microsoft.extensions.logging\\9.0.8\\microsoft.extensions.logging.9.0.8.nupkg.sha512",
@@ -59,6 +61,9 @@
     "C:\\Users\\Fan\\.nuget\\packages\\polly\\8.6.2\\polly.8.6.2.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\polly.core\\8.6.2\\polly.core.8.6.2.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\polly.extensions.http\\3.0.0\\polly.extensions.http.3.0.0.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\quartz\\3.15.0\\quartz.3.15.0.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\quartz.extensions.dependencyinjection\\3.15.0\\quartz.extensions.dependencyinjection.3.15.0.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\quartz.extensions.hosting\\3.15.0\\quartz.extensions.hosting.3.15.0.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\system.clientmodel\\1.0.0\\system.clientmodel.1.0.0.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\system.codedom\\6.0.0\\system.codedom.6.0.0.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\system.collections.immutable\\7.0.0\\system.collections.immutable.7.0.0.nupkg.sha512",
