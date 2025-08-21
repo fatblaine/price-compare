@@ -17,41 +17,41 @@ build_property._SupportedPlatformList = Linux,macOS,Windows
 build_property._SupportedPlatformList = Linux,macOS,Windows
 build_property.RootNamespace = PriceCompareWeb
 build_property.RootNamespace = PriceCompareWeb
-build_property.ProjectDir = e:\USYD\training\project-1\price-compare\src\PriceCompareWeb\
+build_property.ProjectDir = E:\USYD\training\project-1\price-compare\src\PriceCompareWeb\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 build_property.RazorLangVersion = 9.0
 build_property.SupportLocalizedComponentNames = 
 build_property.GenerateRazorMetadataSourceChecksumAttributes = 
-build_property.MSBuildProjectDirectory = e:\USYD\training\project-1\price-compare\src\PriceCompareWeb
+build_property.MSBuildProjectDirectory = E:\USYD\training\project-1\price-compare\src\PriceCompareWeb
 build_property._RazorSourceGeneratorDebug = 
 build_property.EffectiveAnalysisLevelStyle = 9.0
 build_property.EnableCodeStyleSeverity = 
 
-[e:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Error.cshtml]
+[E:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Error.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcRXJyb3IuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[e:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Index.cshtml]
+[E:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[e:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Privacy.cshtml]
+[E:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Privacy.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUHJpdmFjeS5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[e:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Shared/_ValidationScriptsPartial.cshtml]
+[E:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Shared/_ValidationScriptsPartial.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[e:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/_ViewImports.cshtml]
+[E:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/_ViewImports.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcX1ZpZXdJbXBvcnRzLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[e:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/_ViewStart.cshtml]
+[E:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/_ViewStart.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcX1ZpZXdTdGFydC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[e:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Shared/_Layout.cshtml]
+[E:/USYD/training/project-1/price-compare/src/PriceCompareWeb/Pages/Shared/_Layout.cshtml]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU2hhcmVkXF9MYXlvdXQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = b-2mb1xw0z20

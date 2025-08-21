@@ -77,9 +77,21 @@
               "target": "Package",
               "version": "[9.0.8, )"
             },
+            "Microsoft.Extensions.Logging": {
+              "target": "Package",
+              "version": "[9.0.8, )"
+            },
             "Polly": {
               "target": "Package",
               "version": "[8.6.2, )"
+            },
+            "Quartz": {
+              "target": "Package",
+              "version": "[3.15.0, )"
+            },
+            "Quartz.Extensions.Hosting": {
+              "target": "Package",
+              "version": "[3.15.0, )"
             }
           },
           "imports": [
