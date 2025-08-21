@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "xXAnDCP+auo=",
+  "dgSpecHash": "snQJX7sW91k=",
   "success": true,
   "projectFilePath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareWeb\\PriceCompareWeb.csproj",
   "expectedPackageFiles": [
@@ -76,6 +76,9 @@
     "C:\\Users\\Fan\\.nuget\\packages\\polly\\8.6.2\\polly.8.6.2.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\polly.core\\8.6.2\\polly.core.8.6.2.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\polly.extensions.http\\3.0.0\\polly.extensions.http.3.0.0.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\quartz\\3.15.0\\quartz.3.15.0.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\quartz.extensions.dependencyinjection\\3.15.0\\quartz.extensions.dependencyinjection.3.15.0.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\quartz.extensions.hosting\\3.15.0\\quartz.extensions.hosting.3.15.0.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\swashbuckle.aspnetcore\\9.0.3\\swashbuckle.aspnetcore.9.0.3.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\swashbuckle.aspnetcore.annotations\\9.0.3\\swashbuckle.aspnetcore.annotations.9.0.3.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\swashbuckle.aspnetcore.swagger\\9.0.3\\swashbuckle.aspnetcore.swagger.9.0.3.nupkg.sha512",
