@@ -1,13 +1,23 @@
 using Microsoft.EntityFrameworkCore;
+using Polly;
+using PriceCompareCore.Interfaces;
+using PriceCompareCore.Services;
 using PriceCompareData.Data;
+using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(); // Swagger
+
+// Swagger
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddHttpClient<IScraperService, ColesScraperService>()
+    .AddTransientHttpErrorPolicy(policy =>
+        policy.WaitAndRetryAsync(3, retryAttempt =>
+            TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 

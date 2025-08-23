@@ -259,3 +259,6 @@ e:\USYD\training\project-1\price-compare\src\PriceCompareWeb\obj\Debug\net9.0\co
 e:\USYD\training\project-1\price-compare\src\PriceCompareWeb\obj\Debug\net9.0\compressed\okhm26dnwr-qlccset4i1.gz
 e:\USYD\training\project-1\price-compare\src\PriceCompareWeb\obj\Debug\net9.0\compressed\z7l20s447a-xzw0cte36n.gz
 e:\USYD\training\project-1\price-compare\src\PriceCompareWeb\obj\Debug\net9.0\compressed\qwkdifnlsx-jfsiqqwiad.gz
+e:\USYD\training\project-1\price-compare\src\PriceCompareWeb\bin\Debug\net9.0\Quartz.dll
+e:\USYD\training\project-1\price-compare\src\PriceCompareWeb\bin\Debug\net9.0\Quartz.Extensions.DependencyInjection.dll
+e:\USYD\training\project-1\price-compare\src\PriceCompareWeb\bin\Debug\net9.0\Quartz.Extensions.Hosting.dll

@@ -476,3 +476,6 @@ e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\runtimes\win\lib\net6.0\System.Security.Cryptography.ProtectedData.dll
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\runtimes\win\lib\net6.0\System.Windows.Extensions.dll
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\obj\Debug\net9.0\MvcTestingAppManifest.json
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Quartz.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Quartz.Extensions.DependencyInjection.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Quartz.Extensions.Hosting.dll
