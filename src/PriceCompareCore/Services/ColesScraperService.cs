@@ -10,6 +10,10 @@ using Polly.Retry;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.Entities;
 using PriceCompareData.Entities.Common;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json;
+
+
 
 namespace PriceCompareCore.Services
 {
@@ -18,14 +22,16 @@ namespace PriceCompareCore.Services
         private readonly HttpClient _httpClient;
         private readonly ILogger<ColesScraperService> _logger;
         private readonly AsyncRetryPolicy _retryPolicy;
+        private readonly IDistributedCache _cache;
         private const string BaseUrl = WebInfo.COLES_BASE_URL;
 
-        public ColesScraperService(HttpClient httpClient, ILogger<ColesScraperService> logger)
+        public ColesScraperService(HttpClient httpClient, ILogger<ColesScraperService> logger, IDistributedCache cache)
         {
             _httpClient = httpClient;
             _httpClient.DefaultRequestHeaders
                 .Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
             _logger = logger;
+            _cache = cache;
 
             // polly retry policy
             _retryPolicy = Policy
@@ -42,6 +48,13 @@ namespace PriceCompareCore.Services
         // get all down down products
         public async Task<List<ScrapedProduct>> GetAllDownDownProductsAsync()
         {
+            var cachedData = await _cache.GetStringAsync(CacheKey.COLES_DOWNDOWN_PRODUCTS);
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                _logger.LogInformation("Returning cached Down Down products from Redis.");
+                return JsonSerializer.Deserialize<List<ScrapedProduct>>(cachedData);
+            }
+
             var allProducts = new List<ScrapedProduct>();
             int page = 1;
             bool hasMorePages = true;
@@ -88,10 +101,20 @@ namespace PriceCompareCore.Services
                     hasMorePages = false;
                 }
             }
+
+            var serializedData = JsonSerializer.Serialize(allProducts);
+            await _cache.SetStringAsync(
+                CacheKey.COLES_DOWNDOWN_PRODUCTS,
+                serializedData,
+                new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+                });
+
             return allProducts;
         }
 
-
+        // load html using html agility pack
         private async Task<HtmlDocument> LoadHtmlDocumentAsync(string url)
         {
             try
