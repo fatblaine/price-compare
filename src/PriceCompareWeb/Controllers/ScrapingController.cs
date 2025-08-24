@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Azure;
 using Microsoft.AspNetCore.Mvc;
 using PriceCompareCore.Interfaces;
 
@@ -20,16 +21,19 @@ namespace PriceCompareWeb.Controllers
             _logger = logger;
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetDownDownProducts()
+        [HttpGet("down-down/all")]
+        public async Task<IActionResult> GetDownDownProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
             {
                 var products = await _scraperService.GetAllDownDownProductsAsync();
+                var pagedProducts = products.Skip((page - 1) * pageSize).Take(pageSize).ToList();
                 return Ok(new
                 {
+                    Page = page,
+                    PageSize = pageSize,
                     Count = products.Count,
-                    Products = products
+                    Products = pagedProducts
                 });
             }
             catch (Exception ex)
