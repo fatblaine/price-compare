@@ -10,5 +10,6 @@ namespace PriceCompareCore.Interfaces
     {
         // get all the down-down products prices
         Task<List<ScrapedProduct>> GetAllDownDownProductsAsync();
+
     }
 }

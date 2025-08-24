@@ -35,7 +35,6 @@ namespace PriceCompareCore.Services
                     TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
                     onRetry: (exception, timeSpan, retryCount, context) =>
                     {
-                        // You may want to inject ILogger and use it here instead of Console.WriteLine
                         Console.WriteLine($"Retry {retryCount} after {timeSpan.TotalSeconds}s due to: {exception.Message}");
                     });
         }
@@ -91,6 +90,7 @@ namespace PriceCompareCore.Services
             }
             return allProducts;
         }
+
 
         private async Task<HtmlDocument> LoadHtmlDocumentAsync(string url)
         {
@@ -149,7 +149,7 @@ namespace PriceCompareCore.Services
                     if (pricePerUnitNode != null)
                     {
                         var pricePerUnitText = pricePerUnitNode.InnerText.Trim();
-                        var match = System.Text.RegularExpressions.Regex.Match(pricePerUnitText, @"^\$[\d\.]+ per [^\s]+");
+                        var match = System.Text.RegularExpressions.Regex.Match(pricePerUnitText, @"^\$(\d+(?:\.\d+)?)\s+per\s+([a-z0-9]+)");
                         product.PricePerUnit = match.Success ? match.Value : pricePerUnitText;
                     }
                     // get original price info
@@ -176,12 +176,6 @@ namespace PriceCompareCore.Services
                     {
                         product.ImageUrl = imageNode.Attributes["src"].Value;
                     }
-                    // get product detail URL
-                    // var linkNode = productNode.SelectSingleNode("");
-                    // if (linkNode != null && linkNode.Attributes["href"] != null)
-                    // {
-                    //     product.ProductUrl = BaseUrl + linkNode.Attributes["href"].Value;
-                    // }
                     // check if product is sponsored
                     var sponsoredNode = productNode.SelectSingleNode(".//li[contains(@class, 'product__top_messaging__item') and contains(text(), 'Sponsored')]");
                     product.IsSponsored = sponsoredNode != null;
