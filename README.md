@@ -23,7 +23,7 @@ Built with modern .NET technologies and a clean architecture, this app is design
 | Layer        | Tools & Libraries                        |
 |--------------|------------------------------------------|
 | Backend      | C#, .NET 8 Web API, EF Core, SQL Server |
-| Frontend     | ASP.NET Core Razor Pages (or Blazor)     |
+| Frontend     | React     |
 | Database     | SQL Server (LocalDB or Azure SQL)        |
 | Testing      | xUnit, Moq                               |
 | DevOps       | GitHub, GitHub Actions, Azure (optional) |
