@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Net; // Add this for WebException
+using System.Net;
 using HtmlAgilityPack;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -12,6 +12,7 @@ using PriceCompareData.Entities;
 using PriceCompareData.Entities.Common;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
+using PriceCompareData.DTOs;
 
 
 
@@ -46,72 +47,110 @@ namespace PriceCompareCore.Services
         }
 
         // get all down down products
-        public async Task<List<ScrapedProduct>> GetAllDownDownProductsAsync()
+        public async Task<List<ScrapedProduct>> GetAllDownDownProductsAsync(ScrapedProductRequest request = null)
         {
+            List<ScrapedProduct> allProducts;
+
             var cachedData = await _cache.GetStringAsync(CacheKey.COLES_DOWNDOWN_PRODUCTS);
             if (!string.IsNullOrEmpty(cachedData))
             {
                 _logger.LogInformation("Returning cached Down Down products from Redis.");
-                return JsonSerializer.Deserialize<List<ScrapedProduct>>(cachedData);
+                allProducts = JsonSerializer.Deserialize<List<ScrapedProduct>>(cachedData);
             }
-
-            var allProducts = new List<ScrapedProduct>();
-            int page = 1;
-            bool hasMorePages = true;
-
-            while (hasMorePages)
+            else
             {
-                string url = page == 1 ?
-                    $"{BaseUrl}/browse/down-down" :
-                    $"{BaseUrl}/browse/down-down?page={page}";
+                allProducts = new List<ScrapedProduct>();
+                int page = 1;
+                bool hasMorePages = true;
 
-                try
+                while (hasMorePages)
                 {
-                    // send request by using Polly
-                    var htmlDocument = await _retryPolicy.ExecuteAsync(async () =>
-                        await LoadHtmlDocumentAsync(url));
+                    string url = page == 1 ?
+                        $"{BaseUrl}/browse/down-down" :
+                        $"{BaseUrl}/browse/down-down?page={page}";
 
-                    if (htmlDocument == null)
+                    try
                     {
-                        _logger.LogWarning($"Failed to load HTML document from: {url}");
+                        // send request by using Polly
+                        var htmlDocument = await _retryPolicy.ExecuteAsync(async () =>
+                            await LoadHtmlDocumentAsync(url));
+
+                        if (htmlDocument == null)
+                        {
+                            _logger.LogWarning($"Failed to load HTML document from: {url}");
+                            hasMorePages = false;
+                            continue;
+                        }
+
+                        // get products
+                        var products = ParseProductsFromHtml(htmlDocument);
+                        if (products.Count > 0)
+                        {
+                            allProducts.AddRange(products);
+                            page++;
+                            _logger.LogInformation($"Scraped data of {page - 1} pages, there are {products.Count} products in total.");
+                        }
+                        else
+                        {
+                            hasMorePages = false;
+                            _logger.LogInformation($"No products found on page {page}, stopping pagination.");
+                        }
+
+                        // Delay to avoid overwhelming the server
+                        await Task.Delay(TimeSpan.FromSeconds(1));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error scraping page {page}: {ex.Message}");
                         hasMorePages = false;
-                        continue;
                     }
-
-                    // get products
-                    var products = ParseProductsFromHtml(htmlDocument);
-                    if (products.Count > 0)
-                    {
-                        allProducts.AddRange(products);
-                        page++;
-                        _logger.LogInformation($"Scraped data of {page - 1} pages, there are {products.Count} products in total.");
-                    }
-                    else
-                    {
-                        hasMorePages = false;
-                        _logger.LogInformation($"No products found on page {page}, stopping pagination.");
-                    }
-
-                    // Delay to avoid overwhelming the server
-                    await Task.Delay(TimeSpan.FromSeconds(1));
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error scraping page {page}: {ex.Message}");
-                    hasMorePages = false;
-                }
+
+                var serializedData = JsonSerializer.Serialize(allProducts);
+                await _cache.SetStringAsync(
+                    CacheKey.COLES_DOWNDOWN_PRODUCTS,
+                    serializedData,
+                    new DistributedCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+                    });
             }
 
-            var serializedData = JsonSerializer.Serialize(allProducts);
-            await _cache.SetStringAsync(
-                CacheKey.COLES_DOWNDOWN_PRODUCTS,
-                serializedData,
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
-                });
+
+
+            // filters
+            if (request != null)
+            {
+                allProducts = ApplyFilters(allProducts, request);
+            }
 
             return allProducts;
+        }
+
+        private List<ScrapedProduct> ApplyFilters(List<ScrapedProduct> products, ScrapedProductRequest request)
+        {
+            var query = products.AsQueryable();
+            // product name
+            if (!string.IsNullOrWhiteSpace(request.Name))
+            {
+                query = query.Where(p => !string.IsNullOrEmpty(p.Name) && p.Name.Contains(request.Name, StringComparison.OrdinalIgnoreCase));
+            }
+            // isSponsored
+            if (request.IsSponsored)
+            {
+                query = query.Where(p => p.IsSponsored);
+            }
+            // current price
+            if (request.MinPrice.HasValue)
+            {
+                query = query.Where(p => p.CurrentPrice >= request.MinPrice.Value);
+            }
+            if (request.MaxPrice.HasValue)
+            {
+                query = query.Where(p => p.CurrentPrice <= request.MaxPrice.Value);
+            }
+
+            return query.ToList();
         }
 
         // load html using html agility pack
