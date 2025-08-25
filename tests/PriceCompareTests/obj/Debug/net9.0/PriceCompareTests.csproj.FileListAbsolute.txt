@@ -479,3 +479,6 @@ e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\obj\Debug\net9.
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Quartz.dll
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Quartz.Extensions.DependencyInjection.dll
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Quartz.Extensions.Hosting.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Microsoft.Extensions.Caching.StackExchangeRedis.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Pipelines.Sockets.Unofficial.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\StackExchange.Redis.dll

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Azure;
 using Microsoft.AspNetCore.Mvc;
 using PriceCompareCore.Interfaces;
+using PriceCompareData.DTOs;
 
 namespace PriceCompareWeb.Controllers
 {
@@ -22,11 +23,11 @@ namespace PriceCompareWeb.Controllers
         }
 
         [HttpGet("down-down/all")]
-        public async Task<IActionResult> GetDownDownProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> GetDownDownProducts([FromQuery] ScrapedProductRequest request, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
             {
-                var products = await _scraperService.GetAllDownDownProductsAsync();
+                var products = await _scraperService.GetAllDownDownProductsAsync(request);
                 var pagedProducts = products.Skip((page - 1) * pageSize).Take(pageSize).ToList();
                 return Ok(new
                 {
