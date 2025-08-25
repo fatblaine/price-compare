@@ -13,6 +13,7 @@ using PriceCompareData.Entities.Common;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
 using PriceCompareData.DTOs;
+using PriceCompareData.Common;
 
 
 
@@ -178,7 +179,7 @@ namespace PriceCompareCore.Services
         private List<ScrapedProduct> ParseProductsFromHtml(HtmlDocument htmlDocument)
         {
             var products = new List<ScrapedProduct>();
-            var productNodes = htmlDocument.DocumentNode.SelectNodes("//*[@id='coles-targeting-product-tiles']//section[@data-testid='product-tile']");
+            var productNodes = htmlDocument.DocumentNode.SelectNodes(Xpath.DOWN_DOWN_PRODUCTS_NODE);
             if (productNodes == null)
             {
                 _logger.LogInformation("No product nodes found in the HTML document.");
@@ -191,13 +192,13 @@ namespace PriceCompareCore.Services
                 {
                     var product = new ScrapedProduct();
                     // get product name
-                    var nameNode = productNode.SelectSingleNode(".//a[contains(@class, 'product__link')]/h2[contains(@class, 'product__title')]");
+                    var nameNode = productNode.SelectSingleNode(Xpath.DOWN_DOWN_PRODUCTS_NAME);
                     if (nameNode != null)
                     {
                         product.Name = nameNode.InnerText.Trim();
                     }
                     // get product price
-                    var priceNode = productNode.SelectSingleNode(".//span[contains(@class, 'price')]");
+                    var priceNode = productNode.SelectSingleNode(Xpath.DOWN_DOWN_PRODUCTS_PRICE);
                     if (priceNode != null)
                     {
                         var priceText = priceNode.InnerText.Trim().Replace("$", "");
@@ -207,7 +208,7 @@ namespace PriceCompareCore.Services
                         }
                     }
                     // get price per unit
-                    var pricePerUnitNode = productNode.SelectSingleNode(".//div[contains(@class, 'price__calculation_method')]");
+                    var pricePerUnitNode = productNode.SelectSingleNode(Xpath.DOWN_DOWN_PRODUCTS_PRICE_PER_UNIT);
                     if (pricePerUnitNode != null)
                     {
                         var pricePerUnitText = pricePerUnitNode.InnerText.Trim();
@@ -215,7 +216,7 @@ namespace PriceCompareCore.Services
                         product.PricePerUnit = match.Success ? match.Value : pricePerUnitText;
                     }
                     // get original price info
-                    var wasPriceNode = productNode.SelectSingleNode(".//div[contains(@class, 'price__was')]/strong");
+                    var wasPriceNode = productNode.SelectSingleNode(Xpath.DOWN_DOWN_PRODUCTS_ORIGINAL_PRICE);
                     if (wasPriceNode != null)
                     {
                         product.WasPriceText = wasPriceNode.InnerText.Trim();
@@ -233,13 +234,13 @@ namespace PriceCompareCore.Services
                         }
                     }
                     // get product image URL
-                    var imageNode = productNode.SelectSingleNode(".//img[@data-testid='product-image']");
+                    var imageNode = productNode.SelectSingleNode(Xpath.DOWN_DOWN_PRODUCTS_IMAGE_URL);
                     if (imageNode != null && imageNode.Attributes["src"] != null)
                     {
                         product.ImageUrl = imageNode.Attributes["src"].Value;
                     }
                     // check if product is sponsored
-                    var sponsoredNode = productNode.SelectSingleNode(".//li[contains(@class, 'product__top_messaging__item') and contains(text(), 'Sponsored')]");
+                    var sponsoredNode = productNode.SelectSingleNode(Xpath.DOWN_DOWN_PRODUCTS_IS_SPONSORED);
                     product.IsSponsored = sponsoredNode != null;
 
                     product.ScrapedAt = DateTime.UtcNow;
