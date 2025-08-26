@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Polly;
 using PriceCompareCore.Interfaces;
+using PriceCompareCore.Jobs;
 using PriceCompareCore.Services;
 using PriceCompareData.Data;
 using Quartz;
@@ -14,12 +15,30 @@ builder.Services.AddEndpointsApiExplorer();
 // Swagger
 builder.Services.AddSwaggerGen();
 
-//Redis
+// Redis
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = "localhost:6379";
     options.InstanceName = "PriceCompare_";
 });
+
+// Quartz
+builder.Services.AddQuartz(q =>
+{
+    q.UseMicrosoftDependencyInjectionJobFactory();
+
+    q.AddJobListener<LoggingJobListener>();
+
+    var jobKey = new JobKey("ColesRefreshJob");
+    q.AddJob<ColesRefreshJob>(opts => opts.WithIdentity(jobKey));
+
+    q.AddTrigger(opts => opts
+        .ForJob(jobKey)
+        .WithIdentity("ColesRefreshJob-trigger")
+        .WithCronSchedule("0 0 16 * * ?"));
+});
+
+builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
 builder.Services.AddHttpClient<IScraperService, ColesScraperService>()
     .AddTransientHttpErrorPolicy(policy =>
