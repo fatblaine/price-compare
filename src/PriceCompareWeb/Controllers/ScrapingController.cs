@@ -13,17 +13,17 @@ namespace PriceCompareWeb.Controllers
     [Route("api/[controller]")]
     public class ScrapingController : ControllerBase
     {
-        private readonly IScraperService _scraperService;
+        private readonly IColesDownScraperService _scraperService;
         private readonly ILogger<ScrapingController> _logger;
 
-        public ScrapingController(IScraperService scraperService, ILogger<ScrapingController> logger)
+        public ScrapingController(IColesDownScraperService scraperService, ILogger<ScrapingController> logger)
         {
             _scraperService = scraperService;
             _logger = logger;
         }
 
         [HttpGet("down-down/all")]
-        public async Task<IActionResult> GetDownDownProducts([FromQuery] ScrapedProductRequest request, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> GetDownDownProducts([FromQuery] ColesDownProductRequest request, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
             {
