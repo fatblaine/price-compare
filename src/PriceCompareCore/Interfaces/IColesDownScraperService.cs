@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using PriceCompareData.Entities;
 using PriceCompareData.DTOs;
+using PriceCompareData.Entities.History;
 
 namespace PriceCompareCore.Interfaces
 {
@@ -11,5 +12,11 @@ namespace PriceCompareCore.Interfaces
     {
         // get all the down-down products prices
         Task<List<ColesDownProduct>> GetAllDownDownProductsAsync(ColesDownProductRequest request);
+
+        // get price history in the past 7 days
+        Task<List<PriceHistory>> GetPriceHistoryAsync(string name);
+
+        // delete data every 14 days
+        Task CleanOldPriceHistoryAsync();
     }
 }
