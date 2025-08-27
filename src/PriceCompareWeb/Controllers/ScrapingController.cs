@@ -43,5 +43,20 @@ namespace PriceCompareWeb.Controllers
                 return StatusCode(500, "Failed to get Down Down products");
             }
         }
+
+        [HttpGet("priceHistory")]
+        public async Task<IActionResult> GetPriceHistory([FromQuery] string name)
+        {
+            try
+            {
+                var history = await _scraperService.GetPriceHistoryAsync(name);
+                return Ok(history);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get price history");
+                return StatusCode(500, "Failed to get price history");
+            }
+        }
     }
 }
