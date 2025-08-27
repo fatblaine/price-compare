@@ -26,16 +26,24 @@ builder.Services.AddStackExchangeRedisCache(options =>
 builder.Services.AddQuartz(q =>
 {
     q.UseMicrosoftDependencyInjectionJobFactory();
-
     q.AddJobListener<LoggingJobListener>();
 
     var jobKey = new JobKey("ColesRefreshJob");
     q.AddJob<ColesRefreshJob>(opts => opts.WithIdentity(jobKey));
 
+    // scrape data
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("ColesRefreshJob-trigger")
         .WithCronSchedule("0 0 6 * * ?"));
+
+    // delete data
+    var cleanJobKey = new JobKey("CleanPriceHistoryJob");
+    q.AddJob<CleanPriceHistoryJob>(opts => opts.WithIdentity(cleanJobKey));
+    q.AddTrigger(opts => opts
+        .ForJob(cleanJobKey)
+        .WithIdentity("CleanPriceHistoryJob-trigger")
+        .WithCronSchedule("0 0 2 */14 * ?"));
 });
 
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

@@ -14,6 +14,9 @@ using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
 using PriceCompareData.DTOs;
 using PriceCompareData.Common;
+using PriceCompareData.Data;
+using PriceCompareData.Entities.History;
+using Microsoft.EntityFrameworkCore;
 
 
 
@@ -27,13 +30,16 @@ namespace PriceCompareCore.Services
         private readonly IDistributedCache _cache;
         private const string BaseUrl = WebInfo.COLES_BASE_URL;
 
-        public ColesDownScraperService(HttpClient httpClient, ILogger<ColesDownScraperService> logger, IDistributedCache cache)
+        private readonly AppDbContext _dbContext;
+
+        public ColesDownScraperService(HttpClient httpClient, ILogger<ColesDownScraperService> logger, IDistributedCache cache, AppDbContext dbContext)
         {
             _httpClient = httpClient;
             _httpClient.DefaultRequestHeaders
                 .Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
             _logger = logger;
             _cache = cache;
+            _dbContext = dbContext;
 
             // polly retry policy
             _retryPolicy = Policy
@@ -107,6 +113,7 @@ namespace PriceCompareCore.Services
                     }
                 }
 
+                // redis
                 var serializedData = JsonSerializer.Serialize(allProducts);
                 await _cache.SetStringAsync(
                     CacheKey.COLES_DOWNDOWN_PRODUCTS,
@@ -117,7 +124,25 @@ namespace PriceCompareCore.Services
                     });
             }
 
+            // add price histories to database
+            foreach (var product in allProducts)
+            {
+                var today = DateTime.UtcNow.Date;
+                bool alreadyExists = _dbContext.PriceHistory
+                .Any(p => p.Name == product.Name && p.ScrapedAt.Date == today);
 
+                if (!alreadyExists)
+                {
+                    _dbContext.PriceHistory.Add(new PriceHistory
+                    {
+                        Name = product.Name,
+                        ImageUrl = product.ImageUrl,
+                        CurrentPrice = product.CurrentPrice,
+                        ScrapedAt = DateTime.UtcNow
+                    });
+                }
+            }
+            await _dbContext.SaveChangesAsync();
 
             // filters
             if (request != null)
@@ -128,6 +153,27 @@ namespace PriceCompareCore.Services
             return allProducts;
         }
 
+        public async Task<List<PriceHistory>> GetPriceHistoryAsync(string name)
+        {
+            var since = DateTime.UtcNow.AddDays(-7);
+            return await _dbContext.PriceHistory.Where(p => p.Name == name && p.ScrapedAt >= since)
+            .OrderBy(p => p.ScrapedAt)
+            .ToListAsync();
+        }
+
+        public async Task CleanOldPriceHistoryAsync()
+        {
+            var threshold = DateTime.UtcNow.AddDays(-7);
+            var oldRecords = _dbContext.PriceHistory.Where(p => p.ScrapedAt < threshold);
+            _dbContext.PriceHistory.RemoveRange(oldRecords);
+            await _dbContext.SaveChangesAsync();
+        }
+
+
+
+
+
+        // multi conditions filter
         private List<ColesDownProduct> ApplyFilters(List<ColesDownProduct> products, ColesDownProductRequest request)
         {
             var query = products.AsQueryable();
