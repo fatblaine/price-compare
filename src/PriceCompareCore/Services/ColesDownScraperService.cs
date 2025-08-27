@@ -19,15 +19,15 @@ using PriceCompareData.Common;
 
 namespace PriceCompareCore.Services
 {
-    public class ColesScraperService : IScraperService
+    public class ColesDownScraperService : IColesDownScraperService
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<ColesScraperService> _logger;
+        private readonly ILogger<ColesDownScraperService> _logger;
         private readonly AsyncRetryPolicy _retryPolicy;
         private readonly IDistributedCache _cache;
         private const string BaseUrl = WebInfo.COLES_BASE_URL;
 
-        public ColesScraperService(HttpClient httpClient, ILogger<ColesScraperService> logger, IDistributedCache cache)
+        public ColesDownScraperService(HttpClient httpClient, ILogger<ColesDownScraperService> logger, IDistributedCache cache)
         {
             _httpClient = httpClient;
             _httpClient.DefaultRequestHeaders
@@ -48,19 +48,19 @@ namespace PriceCompareCore.Services
         }
 
         // get all down down products
-        public async Task<List<ScrapedProduct>> GetAllDownDownProductsAsync(ScrapedProductRequest request = null)
+        public async Task<List<ColesDownProduct>> GetAllDownDownProductsAsync(ColesDownProductRequest request = null)
         {
-            List<ScrapedProduct> allProducts;
+            List<ColesDownProduct> allProducts;
 
             var cachedData = await _cache.GetStringAsync(CacheKey.COLES_DOWNDOWN_PRODUCTS);
             if (!string.IsNullOrEmpty(cachedData))
             {
                 _logger.LogInformation("Returning cached Down Down products from Redis.");
-                allProducts = JsonSerializer.Deserialize<List<ScrapedProduct>>(cachedData);
+                allProducts = JsonSerializer.Deserialize<List<ColesDownProduct>>(cachedData);
             }
             else
             {
-                allProducts = new List<ScrapedProduct>();
+                allProducts = new List<ColesDownProduct>();
                 int page = 1;
                 bool hasMorePages = true;
 
@@ -128,7 +128,7 @@ namespace PriceCompareCore.Services
             return allProducts;
         }
 
-        private List<ScrapedProduct> ApplyFilters(List<ScrapedProduct> products, ScrapedProductRequest request)
+        private List<ColesDownProduct> ApplyFilters(List<ColesDownProduct> products, ColesDownProductRequest request)
         {
             var query = products.AsQueryable();
             // product name
@@ -176,9 +176,9 @@ namespace PriceCompareCore.Services
         }
 
         // Parse product information from HTML
-        private List<ScrapedProduct> ParseProductsFromHtml(HtmlDocument htmlDocument)
+        private List<ColesDownProduct> ParseProductsFromHtml(HtmlDocument htmlDocument)
         {
-            var products = new List<ScrapedProduct>();
+            var products = new List<ColesDownProduct>();
             var productNodes = htmlDocument.DocumentNode.SelectNodes(Xpath.DOWN_DOWN_PRODUCTS_NODE);
             if (productNodes == null)
             {
@@ -190,7 +190,7 @@ namespace PriceCompareCore.Services
             {
                 try
                 {
-                    var product = new ScrapedProduct();
+                    var product = new ColesDownProduct();
                     // get product name
                     var nameNode = productNode.SelectSingleNode(Xpath.DOWN_DOWN_PRODUCTS_NAME);
                     if (nameNode != null)

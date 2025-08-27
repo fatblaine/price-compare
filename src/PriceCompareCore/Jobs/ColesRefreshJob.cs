@@ -8,16 +8,16 @@ namespace PriceCompareCore.Interfaces
 {
     public class ColesRefreshJob : IJob
     {
-        private readonly IScraperService _scraperService;
+        private readonly IColesDownScraperService _scraperService;
 
-        public ColesRefreshJob(IScraperService scraperService)
+        public ColesRefreshJob(IColesDownScraperService scraperService)
         {
             _scraperService = scraperService;
         }
 
         public async Task Execute(IJobExecutionContext context)
         {
-            await _scraperService.GetAllDownDownProductsAsync(new PriceCompareData.DTOs.ScrapedProductRequest());
+            await _scraperService.GetAllDownDownProductsAsync(new PriceCompareData.DTOs.ColesDownProductRequest());
         }
     }
 }

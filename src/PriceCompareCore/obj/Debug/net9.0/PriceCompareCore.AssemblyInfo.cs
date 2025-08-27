@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PriceCompareCore")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2ba9ab61d01c4998f23242c8fe3d7e34a77a3e6e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fa76be777b75591cb84d2ae5a4c8ef54092b4311")]
 [assembly: System.Reflection.AssemblyProductAttribute("PriceCompareCore")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PriceCompareCore")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

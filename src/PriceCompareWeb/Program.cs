@@ -40,7 +40,7 @@ builder.Services.AddQuartz(q =>
 
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
-builder.Services.AddHttpClient<IScraperService, ColesScraperService>()
+builder.Services.AddHttpClient<IColesDownScraperService, ColesDownScraperService>()
     .AddTransientHttpErrorPolicy(policy =>
         policy.WaitAndRetryAsync(3, retryAttempt =>
             TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
