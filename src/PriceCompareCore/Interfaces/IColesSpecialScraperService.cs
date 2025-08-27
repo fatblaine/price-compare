@@ -7,10 +7,9 @@ using PriceCompareData.DTOs;
 
 namespace PriceCompareCore.Interfaces
 {
-    public interface IScraperService
+    public interface IColesSpecialScraperService
     {
-        // get all the down-down products prices
-        Task<List<ScrapedProduct>> GetAllDownDownProductsAsync(ScrapedProductRequest request);
-
+        //get all the on-special products prices
+        Task<List<ColesSpecialProduct>> GetAllOnSpecialProductsAsync(ColesSpecialProductRequest request);
     }
 }
