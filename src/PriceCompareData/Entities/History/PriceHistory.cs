@@ -12,5 +12,8 @@ namespace PriceCompareData.Entities.History
         public decimal CurrentPrice { get; set; }
         public string ImageUrl { get; set; }
         public DateTime ScrapedAt { get; set; }
+
+        // 0: down-down 1: on-special
+        public int? OfferType { get; set; }
     }
 }
