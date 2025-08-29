@@ -138,7 +138,8 @@ namespace PriceCompareCore.Services
                         Name = product.Name,
                         ImageUrl = product.ImageUrl,
                         CurrentPrice = product.CurrentPrice,
-                        ScrapedAt = DateTime.UtcNow
+                        ScrapedAt = DateTime.UtcNow,
+                        OfferType = OfferType.DOWN_DOWN
                     });
                 }
             }
