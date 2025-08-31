@@ -15,5 +15,7 @@ namespace PriceCompareData.Entities.History
 
         // 0: down-down 1: on-special
         public int? OfferType { get; set; }
+        // 0: coles 1: woolworths
+        public int? ShopType { get; set; }
     }
 }

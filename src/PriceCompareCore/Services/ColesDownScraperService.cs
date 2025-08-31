@@ -139,7 +139,8 @@ namespace PriceCompareCore.Services
                         ImageUrl = product.ImageUrl,
                         CurrentPrice = product.CurrentPrice,
                         ScrapedAt = DateTime.UtcNow,
-                        OfferType = OfferType.DOWN_DOWN
+                        OfferType = OfferType.DOWN_DOWN,
+                        ShopType = ShopType.COLES
                     });
                 }
             }
@@ -154,10 +155,10 @@ namespace PriceCompareCore.Services
             return allProducts;
         }
 
-        public async Task<List<PriceHistory>> GetPriceHistoryAsync(string name)
+        public async Task<List<PriceHistory>> GetPriceHistoryAsync(string name, int offerType, int shopType)
         {
             var since = DateTime.UtcNow.AddDays(-7);
-            return await _dbContext.PriceHistory.Where(p => p.Name == name && p.ScrapedAt >= since)
+            return await _dbContext.PriceHistory.Where(p => p.Name == name && p.ScrapedAt >= since && p.OfferType == offerType && p.ShopType == shopType)
             .OrderBy(p => p.ScrapedAt)
             .ToListAsync();
         }
