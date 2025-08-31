@@ -14,7 +14,7 @@ namespace PriceCompareCore.Interfaces
         Task<List<ColesDownProduct>> GetAllDownDownProductsAsync(ColesDownProductRequest request);
 
         // get price history in the past 7 days
-        Task<List<PriceHistory>> GetPriceHistoryAsync(string name);
+        Task<List<PriceHistory>> GetPriceHistoryAsync(string name, int offerType, int shopType);
 
         // delete data every 14 days
         Task CleanOldPriceHistoryAsync();
