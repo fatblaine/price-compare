@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
 using Microsoft.Extensions.Caching.Distributed;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using PriceCompareCore.Interfaces;
+using PriceCompareData.Common;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
 using PriceCompareData.Entities;
@@ -28,13 +30,14 @@ namespace PriceCompareCore.Services
 
         private readonly AppDbContext _dbContext;
 
-        public ColesSpecialScraperService(HttpClient httpClient, ILogger<ColesSpecialScraperService> logger, IDistributedCache cache)
+        public ColesSpecialScraperService(HttpClient httpClient, ILogger<ColesSpecialScraperService> logger, IDistributedCache cache, AppDbContext dbContext)
         {
             _httpClient = httpClient;
             _httpClient.DefaultRequestHeaders
                 .Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
             _logger = logger;
             _cache = cache;
+            _dbContext = dbContext;
 
             // polly retry policy
             _retryPolicy = Policy
@@ -128,7 +131,9 @@ namespace PriceCompareCore.Services
                         Name = product.Name,
                         ImageUrl = product.ImageUrl,
                         CurrentPrice = product.CurrentPrice,
-                        ScrapedAt = DateTime.UtcNow
+                        ScrapedAt = DateTime.UtcNow,
+                        OfferType = OfferType.ON_SPECIAL,
+                        ShopType = ShopType.COLES
                     });
                 }
             }
@@ -143,19 +148,125 @@ namespace PriceCompareCore.Services
             return allProducts;
         }
 
-        private List<ColesSpecialProduct> ApplyFilters(List<ColesSpecialProduct> allProducts, ColesSpecialProductRequest request)
+        private List<ColesSpecialProduct> ApplyFilters(List<ColesSpecialProduct> products, ColesSpecialProductRequest request)
         {
-            throw new NotImplementedException();
+            var query = products.AsQueryable();
+            // product name
+            if (!string.IsNullOrWhiteSpace(request.Name))
+            {
+                query = query.Where(p => !string.IsNullOrEmpty(p.Name) && p.Name.Contains(request.Name, StringComparison.OrdinalIgnoreCase));
+            }
+            // isSponsored
+            if (request.IsSponsored)
+            {
+                query = query.Where(p => p.IsSponsored);
+            }
+            // current price
+            if (request.MinPrice.HasValue)
+            {
+                query = query.Where(p => p.CurrentPrice >= request.MinPrice.Value);
+            }
+            if (request.MaxPrice.HasValue)
+            {
+                query = query.Where(p => p.CurrentPrice <= request.MaxPrice.Value);
+            }
+
+            return query.ToList();
         }
 
         private async Task<HtmlDocument> LoadHtmlDocumentAsync(string url)
         {
-            throw new NotImplementedException();
+            try
+            {
+                var response = await _httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                var htmlContent = await response.Content.ReadAsStringAsync();
+                var htmlDocument = new HtmlDocument();
+                htmlDocument.LoadHtml(htmlContent);
+
+                return htmlDocument;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to load HTML document from: {url}");
+                return null;
+            }
         }
 
         private List<ColesSpecialProduct> ParseProductsFromHtml(HtmlDocument htmlDocument)
         {
-            throw new NotImplementedException();
+            var products = new List<ColesSpecialProduct>();
+            var productNodes = htmlDocument.DocumentNode.SelectNodes(Xpath.SPECIAL_PRODUCTS_NODE);
+            if (productNodes == null)
+            {
+                _logger.LogInformation("No product nodes found in the HTML document.");
+                return products;
+            }
+
+            foreach (var productNode in productNodes)
+            {
+                try
+                {
+                    var product = new ColesSpecialProduct();
+                    // get product name
+                    var nameNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_NAME);
+                    if (nameNode != null)
+                    {
+                        product.Name = WebUtility.HtmlDecode(nameNode.InnerText.Trim());
+                    }
+                    // get product price
+                    var priceNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_PRICE);
+                    if (priceNode != null)
+                    {
+                        var priceText = priceNode.InnerText.Trim().Replace("$", "");
+                        if (decimal.TryParse(priceText, out decimal price))
+                        {
+                            product.CurrentPrice = price;
+                        }
+                    }
+                    // get price per unit
+                    var pricePerUnitNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_PRICE_PER_UNIT);
+                    if (pricePerUnitNode != null)
+                    {
+                        // remove "Was $" part
+                        var text = pricePerUnitNode.InnerText.Trim();
+                        // If it contains "Was $", only take the first half
+                        var unitPriceText = text.Split("Was")[0].Trim();
+                        product.PricePerUnit = unitPriceText;
+                    }
+                    // get original price info
+                    var wasPriceNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_ORIGINAL_PRICE);
+                    if (wasPriceNode != null)
+                    {
+                        product.WasPriceText = wasPriceNode.InnerText.Trim();
+
+                        var match = Regex.Match(product.WasPriceText, @"Was \$(\d+(\.\d{1,2})?)");
+                        if (match.Success && decimal.TryParse(match.Groups[1].Value, out decimal originalPrice))
+                        {
+                            product.OriginalPrice = originalPrice;
+                        }
+                    }
+                    // get product image URL
+                    var imageNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_IMAGE_URL);
+                    if (imageNode != null && imageNode.Attributes["src"] != null)
+                    {
+                        product.ImageUrl = imageNode.Attributes["src"].Value;
+                    }
+                    // check if product is sponsored
+                    var sponsoredNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_IS_SPONSORED);
+                    product.IsSponsored = sponsoredNode != null;
+
+                    product.ScrapedAt = DateTime.UtcNow;
+
+                    products.Add(product);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error parsing product information: {ex.Message}");
+                }
+            }
+            return products;
         }
     }
 }

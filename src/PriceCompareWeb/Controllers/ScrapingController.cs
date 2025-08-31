@@ -14,12 +14,14 @@ namespace PriceCompareWeb.Controllers
     public class ScrapingController : ControllerBase
     {
         private readonly IColesDownScraperService _scraperService;
+        private readonly IColesSpecialScraperService _specialScraperService;
         private readonly ILogger<ScrapingController> _logger;
 
-        public ScrapingController(IColesDownScraperService scraperService, ILogger<ScrapingController> logger)
+        public ScrapingController(IColesDownScraperService scraperService, ILogger<ScrapingController> logger, IColesSpecialScraperService specialScraperService)
         {
             _scraperService = scraperService;
             _logger = logger;
+            _specialScraperService = specialScraperService;
         }
 
         [HttpGet("down-down/all")]
@@ -44,12 +46,34 @@ namespace PriceCompareWeb.Controllers
             }
         }
 
-        [HttpGet("priceHistory")]
-        public async Task<IActionResult> GetPriceHistory([FromQuery] string name)
+        [HttpGet("on-special/all")]
+        public async Task<IActionResult> GetDownDownProducts([FromQuery] ColesSpecialProductRequest request, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
             {
-                var history = await _scraperService.GetPriceHistoryAsync(name);
+                var products = await _specialScraperService.GetAllOnSpecialProductsAsync(request);
+                var pagedProducts = products.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+                return Ok(new
+                {
+                    Page = page,
+                    PageSize = pageSize,
+                    Count = products.Count,
+                    Products = pagedProducts
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get on-special products");
+                return StatusCode(500, "Failed to get on-special products");
+            }
+        }
+
+        [HttpGet("priceHistory")]
+        public async Task<IActionResult> GetPriceHistory([FromQuery] string name, [FromQuery] int offerType, [FromQuery] int shopType)
+        {
+            try
+            {
+                var history = await _scraperService.GetPriceHistoryAsync(name, offerType, shopType);
                 return Ok(history);
             }
             catch (Exception ex)
