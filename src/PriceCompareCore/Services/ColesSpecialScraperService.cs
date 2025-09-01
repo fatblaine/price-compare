@@ -88,7 +88,7 @@ namespace PriceCompareCore.Services
                     {
                         // mapping to ColesSpecialProduct
                         allProducts.AddRange(products
-                        .Where(p => p._type == "Product")
+                        .Where(p => p._type == "PRODUCT")
                         .Select(p => new ColesSpecialProduct
                         {
                             Id = p.Id,
