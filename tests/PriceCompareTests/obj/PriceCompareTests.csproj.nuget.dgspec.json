@@ -4,14 +4,14 @@
     "E:\\USYD\\training\\project-1\\price-compare\\tests\\PriceCompareTests\\PriceCompareTests.csproj": {}
   },
   "projects": {
-    "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
+    "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj",
+        "projectUniqueName": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj",
         "projectName": "PriceCompareCore",
-        "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj",
+        "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj",
         "packagesPath": "C:\\Users\\Fan\\.nuget\\packages\\",
-        "outputPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\obj\\",
+        "outputPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -33,8 +33,8 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
-                "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj"
+              "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
+                "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj"
               }
             }
           }
@@ -74,14 +74,14 @@
         }
       }
     },
-    "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
+    "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
+        "projectUniqueName": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
         "projectName": "PriceCompareData",
-        "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
+        "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
         "packagesPath": "C:\\Users\\Fan\\.nuget\\packages\\",
-        "outputPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\obj\\",
+        "outputPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -213,11 +213,11 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
-                "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj"
+              "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
+                "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj"
               },
-              "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
-                "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj"
+              "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
+                "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj"
               }
             }
           }

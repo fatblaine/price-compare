@@ -135,6 +135,7 @@ namespace PriceCompareCore.Services
                 {
                     _dbContext.PriceHistory.Add(new PriceHistory
                     {
+                        Id = product.Id,
                         Name = product.Name,
                         ImageUrl = product.ImageUrl,
                         CurrentPrice = product.CurrentPrice,
