@@ -7,6 +7,7 @@ namespace PriceCompareData.Entities
 {
     public class ColesSpecialProduct
     {
+        public int Id { get; set; }
         public string Name { get; set; }
         public decimal CurrentPrice { get; set; }
         public decimal? OriginalPrice { get; set; }

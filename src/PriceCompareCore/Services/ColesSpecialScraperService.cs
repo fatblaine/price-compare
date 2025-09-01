@@ -27,6 +27,7 @@ namespace PriceCompareCore.Services
         private readonly AsyncRetryPolicy _retryPolicy;
         private readonly IDistributedCache _cache;
         private const string BaseUrl = WebInfo.COLES_BASE_URL;
+        private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         private readonly AppDbContext _dbContext;
 
@@ -51,222 +52,168 @@ namespace PriceCompareCore.Services
                     });
         }
 
-        public async Task<List<ColesSpecialProduct>> GetAllOnSpecialProductsAsync(ColesSpecialProductRequest request)
+        public async Task<List<ColesSpecialProduct>> GetAllOnSpecialProductsAsync(ColesSpecialProductRequest request = null)
         {
-            List<ColesSpecialProduct> allProducts = new List<ColesSpecialProduct>();
+            List<ColesSpecialProduct> allProducts;
 
-            var cachedData = await _cache.GetStringAsync("ColesSpecialProducts");
+            var cachedData = await _cache.GetStringAsync(CacheKey.COLES_ON_SPECIAL_PRODUCTS);
             if (!string.IsNullOrEmpty(cachedData))
             {
-                _logger.LogInformation("Fetching Coles special products from cache.");
                 allProducts = JsonSerializer.Deserialize<List<ColesSpecialProduct>>(cachedData);
+                _logger.LogInformation($"Using cached Coles specials data.");
             }
             else
             {
                 allProducts = new List<ColesSpecialProduct>();
+                string buildId = await GetBuildIdAsync();
+
                 int page = 1;
                 bool hasMorePages = true;
 
                 while (hasMorePages)
                 {
-                    string url = page == 1 ? $"{BaseUrl}/on-special" : $"{BaseUrl}/on-special?page={page}";
+                    string url = $"https://www.coles.com.au/_next/data/{buildId}/en/on-special.json?page={page}";
+                    _logger.LogInformation($"Fetching Coles specials page {page} with buildId={buildId}");
 
-                    try
+                    string response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetStringAsync(url));
+                    var data = JsonSerializer.Deserialize<ColesApiResponse>(response, _jsonOptions);
+
+                    var products = data?.PageProps?.SearchResults?.Results;
+
+                    if (products == null || products.Count == 0)
                     {
-                        var htmlDocument = await _retryPolicy.ExecuteAsync(async () => await LoadHtmlDocumentAsync(url));
-
-                        if (htmlDocument == null)
-                        {
-                            _logger.LogWarning($"Failed to load HTML document from: {url}");
-                            hasMorePages = false;
-                            continue;
-                        }
-
-                        // get products
-                        var products = ParseProductsFromHtml(htmlDocument);
-                        if (products.Count > 0)
-                        {
-                            allProducts.AddRange(products);
-                            page++;
-                            _logger.LogInformation($"Scraped data of {page - 1} pages, there are {products.Count} products in total.");
-                        }
-                        else
-                        {
-                            hasMorePages = false;
-                            _logger.LogInformation($"No products found on page {page}, stopping pagination.");
-                        }
-
-                        // Delay to avoid overwhelming the server
-                        await Task.Delay(TimeSpan.FromSeconds(1));
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, $"Error scraping page {page}: {ex.Message}");
                         hasMorePages = false;
                     }
+                    else
+                    {
+                        // mapping to ColesSpecialProduct
+                        allProducts.AddRange(products
+                        .Where(p => p._type == "Product")
+                        .Select(p => new ColesSpecialProduct
+                        {
+                            Id = p.Id,
+                            Name = p.Name,
+                            CurrentPrice = p.Pricing?.Now ?? 0,
+                            OriginalPrice = p.Pricing?.Was ?? 0,
+                            PricePerUnit = p.Pricing?.Comparable,
+                            ImageUrl = p.ImageUris?.FirstOrDefault()?.Uri,
+                            IsSponsored = p._type != "PRODUCT",
+                            ScrapedAt = DateTime.UtcNow
+                        }));
+
+                        _logger.LogInformation($"Scraped {products.Count} products from page {page}");
+                        page++;
+                    }
                 }
 
-                // redis
-                var serializedData = JsonSerializer.Serialize(allProducts);
+                // Cache the results
                 await _cache.SetStringAsync(
                     CacheKey.COLES_ON_SPECIAL_PRODUCTS,
-                    serializedData,
+                    JsonSerializer.Serialize(allProducts),
                     new DistributedCacheEntryOptions
                     {
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
                     });
-            }
-
-            // add price histories to database
-            foreach (var product in allProducts)
-            {
-                var today = DateTime.UtcNow.Date;
-                bool alreadyExists = _dbContext.PriceHistory
-                .Any(p => p.Name == product.Name && p.ScrapedAt.Date == today);
-
-                if (!alreadyExists)
-                {
-                    _dbContext.PriceHistory.Add(new PriceHistory
-                    {
-                        Name = product.Name,
-                        ImageUrl = product.ImageUrl,
-                        CurrentPrice = product.CurrentPrice,
-                        ScrapedAt = DateTime.UtcNow,
-                        OfferType = OfferType.ON_SPECIAL,
-                        ShopType = ShopType.COLES
-                    });
-                }
-            }
-            await _dbContext.SaveChangesAsync();
-
-            // filters
-            if (request != null)
-            {
-                allProducts = ApplyFilters(allProducts, request);
             }
 
             return allProducts;
         }
 
-        private List<ColesSpecialProduct> ApplyFilters(List<ColesSpecialProduct> products, ColesSpecialProductRequest request)
+
+        private async Task<string> GetBuildIdAsync()
         {
-            var query = products.AsQueryable();
-            // product name
-            if (!string.IsNullOrWhiteSpace(request.Name))
+            string cachedBuildId = await _cache.GetStringAsync(CacheKey.BUILD_ID);
+            if (!string.IsNullOrEmpty(cachedBuildId))
             {
-                query = query.Where(p => !string.IsNullOrEmpty(p.Name) && p.Name.Contains(request.Name, StringComparison.OrdinalIgnoreCase));
-            }
-            // isSponsored
-            if (request.IsSponsored)
-            {
-                query = query.Where(p => p.IsSponsored);
-            }
-            // current price
-            if (request.MinPrice.HasValue)
-            {
-                query = query.Where(p => p.CurrentPrice >= request.MinPrice.Value);
-            }
-            if (request.MaxPrice.HasValue)
-            {
-                query = query.Where(p => p.CurrentPrice <= request.MaxPrice.Value);
+                _logger.LogInformation($"Using cached Coles buildId: {cachedBuildId}");
+                return cachedBuildId;
             }
 
-            return query.ToList();
-        }
-
-        private async Task<HtmlDocument> LoadHtmlDocumentAsync(string url)
-        {
-            try
+            string url = $"{BaseUrl}/on-special";
+            string html = await _retryPolicy.ExecuteAsync(async () =>
             {
                 var response = await _httpClient.GetAsync(url);
                 response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
+            });
 
-                var htmlContent = await response.Content.ReadAsStringAsync();
-                var htmlDocument = new HtmlDocument();
-                htmlDocument.LoadHtml(htmlContent);
+            var doc = new HtmlDocument();
+            doc.LoadHtml(html);
 
-                return htmlDocument;
-            }
-            catch (Exception ex)
+            var scriptNode = doc.DocumentNode.SelectSingleNode("//script[@id='__NEXT_DATA__']");
+            if (scriptNode == null)
             {
-                _logger.LogError(ex, $"Failed to load HTML document from: {url}");
-                return null;
-            }
-        }
-
-        private List<ColesSpecialProduct> ParseProductsFromHtml(HtmlDocument htmlDocument)
-        {
-            var products = new List<ColesSpecialProduct>();
-            var productNodes = htmlDocument.DocumentNode.SelectNodes(Xpath.SPECIAL_PRODUCTS_NODE);
-            if (productNodes == null)
-            {
-                _logger.LogInformation("No product nodes found in the HTML document.");
-                return products;
+                _logger.LogError("Could not find __NEXT_DATA__ script in Coles page. HTML content: {0}", html.Substring(0, Math.Min(500, html.Length)));
+                throw new Exception("Could not find __NEXT_DATA__ script in Coles page.");
             }
 
-            foreach (var productNode in productNodes)
+            var json = scriptNode.InnerText;
+            try
             {
-                try
+                using var docJson = JsonDocument.Parse(json);
+                var root = docJson.RootElement;
+
+                if (root.TryGetProperty("buildId", out var buildIdElement))
                 {
-                    var product = new ColesSpecialProduct();
-                    // get product name
-                    var nameNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_NAME);
-                    if (nameNode != null)
+                    string buildId = buildIdElement.GetString();
+
+                    if (string.IsNullOrEmpty(buildId))
                     {
-                        product.Name = WebUtility.HtmlDecode(nameNode.InnerText.Trim());
+                        throw new Exception("BuildId is null or empty.");
                     }
-                    // get product price
-                    var priceNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_PRICE);
-                    if (priceNode != null)
-                    {
-                        var priceText = priceNode.InnerText.Trim().Replace("$", "");
-                        if (decimal.TryParse(priceText, out decimal price))
+
+                    // Cache the buildId
+                    await _cache.SetStringAsync(
+                        CacheKey.BUILD_ID,
+                        buildId,
+                        new DistributedCacheEntryOptions
                         {
-                            product.CurrentPrice = price;
+                            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+                        });
+
+                    _logger.LogInformation($"Fetched new Coles buildId: {buildId}");
+                    return buildId;
+                }
+                else
+                {
+                    _logger.LogWarning("buildId not found at root level, trying alternative paths...");
+
+                    if (root.TryGetProperty("runtimeConfig", out var runtimeConfig) &&
+                        runtimeConfig.TryGetProperty("buildId", out var runtimeBuildIdElement))
+                    {
+                        string buildId = runtimeBuildIdElement.GetString();
+
+                        if (!string.IsNullOrEmpty(buildId))
+                        {
+                            await _cache.SetStringAsync(CacheKey.BUILD_ID, buildId,
+                                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60) });
+                            _logger.LogInformation($"Fetched Coles buildId from runtimeConfig: {buildId}");
+                            return buildId;
                         }
                     }
-                    // get price per unit
-                    var pricePerUnitNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_PRICE_PER_UNIT);
-                    if (pricePerUnitNode != null)
-                    {
-                        // remove "Was $" part
-                        var text = pricePerUnitNode.InnerText.Trim();
-                        // If it contains "Was $", only take the first half
-                        var unitPriceText = text.Split("Was")[0].Trim();
-                        product.PricePerUnit = unitPriceText;
-                    }
-                    // get original price info
-                    var wasPriceNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_ORIGINAL_PRICE);
-                    if (wasPriceNode != null)
-                    {
-                        product.WasPriceText = wasPriceNode.InnerText.Trim();
 
-                        var match = Regex.Match(product.WasPriceText, @"Was \$(\d+(\.\d{1,2})?)");
-                        if (match.Success && decimal.TryParse(match.Groups[1].Value, out decimal originalPrice))
+                    var match = Regex.Match(json, @"""buildId""\s*:\s*""([^""]+)""");
+                    if (match.Success)
+                    {
+                        string buildId = match.Groups[1].Value;
+
+                        if (!string.IsNullOrEmpty(buildId))
                         {
-                            product.OriginalPrice = originalPrice;
+                            await _cache.SetStringAsync(CacheKey.BUILD_ID, buildId,
+                                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60) });
+                            _logger.LogInformation($"Fetched Coles buildId using regex: {buildId}");
+                            return buildId;
                         }
                     }
-                    // get product image URL
-                    var imageNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_IMAGE_URL);
-                    if (imageNode != null && imageNode.Attributes["src"] != null)
-                    {
-                        product.ImageUrl = imageNode.Attributes["src"].Value;
-                    }
-                    // check if product is sponsored
-                    var sponsoredNode = productNode.SelectSingleNode(Xpath.SPECIAL_PRODUCTS_IS_SPONSORED);
-                    product.IsSponsored = sponsoredNode != null;
 
-                    product.ScrapedAt = DateTime.UtcNow;
-
-                    products.Add(product);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error parsing product information: {ex.Message}");
+                    throw new Exception("Could not extract buildId from Coles page using any method.");
                 }
             }
-            return products;
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Failed to parse __NEXT_DATA__ JSON. Content: {0}", json);
+                throw new Exception("Failed to parse __NEXT_DATA__ JSON.", ex);
+            }
         }
     }
 }
