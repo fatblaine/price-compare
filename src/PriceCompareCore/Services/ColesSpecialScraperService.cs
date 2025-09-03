@@ -112,13 +112,44 @@ namespace PriceCompareCore.Services
                     JsonSerializer.Serialize(allProducts),
                     new DistributedCacheEntryOptions
                     {
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
                     });
+            }
+
+            // filter
+            if (request != null)
+            {
+                allProducts = ApplyFilters(allProducts, request);
             }
 
             return allProducts;
         }
 
+        private List<ColesSpecialProduct> ApplyFilters(List<ColesSpecialProduct> products, ColesSpecialProductRequest request)
+        {
+            var query = products.AsQueryable();
+            // product name
+            if (!string.IsNullOrWhiteSpace(request.Name))
+            {
+                query = query.Where(p => !string.IsNullOrEmpty(p.Name) && p.Name.Contains(request.Name, StringComparison.OrdinalIgnoreCase));
+            }
+            // isSponsored
+            if (request.IsSponsored)
+            {
+                query = query.Where(p => p.IsSponsored);
+            }
+            // current price
+            if (request.MinPrice.HasValue)
+            {
+                query = query.Where(p => p.CurrentPrice >= request.MinPrice.Value);
+            }
+            if (request.MaxPrice.HasValue)
+            {
+                query = query.Where(p => p.CurrentPrice <= request.MaxPrice.Value);
+            }
+
+            return query.ToList();
+        }
 
         private async Task<string> GetBuildIdAsync()
         {
