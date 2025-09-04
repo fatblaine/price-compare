@@ -129,7 +129,7 @@ namespace PriceCompareCore.Services
             {
                 var today = DateTime.UtcNow.Date;
                 bool alreadyExists = _dbContext.PriceHistory
-                .Any(p => p.Name == product.Name && p.ScrapedAt.Date == today);
+                .Any(p => p.Name == product.Name && p.ScrapedAt >= today && p.ScrapedAt < today.AddDays(1));
 
                 if (!alreadyExists)
                 {
@@ -166,7 +166,8 @@ namespace PriceCompareCore.Services
 
         public async Task CleanOldPriceHistoryAsync()
         {
-            var threshold = DateTime.UtcNow.AddDays(-7);
+            var now = DateTime.UtcNow;
+            var threshold = new DateTime(now.Year, now.Month, 1).AddMonths(-2);
             var oldRecords = _dbContext.PriceHistory.Where(p => p.ScrapedAt < threshold);
             _dbContext.PriceHistory.RemoveRange(oldRecords);
             await _dbContext.SaveChangesAsync();

@@ -116,6 +116,29 @@ namespace PriceCompareCore.Services
                     });
             }
 
+            // add price histories to database
+            foreach (var product in allProducts)
+            {
+                var today = DateTime.UtcNow.Date;
+                bool alreadyExists = _dbContext.PriceHistory
+                .Any(ph => ph.Name == product.Name && ph.ScrapedAt >= today && ph.ScrapedAt < today.AddDays(1));
+                if (!alreadyExists)
+                {
+                    var priceHistory = new PriceHistory
+                    {
+                        // Id = product.Id,
+                        Name = product.Name,
+                        ImageUrl = product.ImageUrl,
+                        CurrentPrice = product.CurrentPrice,
+                        ScrapedAt = DateTime.UtcNow,
+                        OfferType = OfferType.ON_SPECIAL,
+                        ShopType = ShopType.COLES
+                    };
+                    _dbContext.PriceHistory.Add(priceHistory);
+                    await _dbContext.SaveChangesAsync();
+                }
+            }
+
             // filter
             if (request != null)
             {
