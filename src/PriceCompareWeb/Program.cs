@@ -28,14 +28,21 @@ builder.Services.AddQuartz(q =>
     q.UseMicrosoftDependencyInjectionJobFactory();
     q.AddJobListener<LoggingJobListener>();
 
+    // scrape data - down down
     var jobKey = new JobKey("ColesRefreshJob");
     q.AddJob<ColesRefreshJob>(opts => opts.WithIdentity(jobKey));
-
-    // scrape data
     q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("ColesRefreshJob-trigger")
-        .WithCronSchedule("0 0 6 * * ?"));
+        .WithCronSchedule("0 0 2 ? * WED"));
+
+    // scrape data - on special
+    var jobKeySpecial = new JobKey("ColesRefreshJobSpecial");
+    q.AddJob<ColesRefreshJobSpecial>(opts => opts.WithIdentity(jobKeySpecial));
+    q.AddTrigger(opts => opts
+        .ForJob(jobKeySpecial)
+        .WithIdentity("ColesRefreshJobSpecial-trigger")
+        .WithCronSchedule("0 0 3 ? * WED"));
 
     // delete data
     var cleanJobKey = new JobKey("CleanPriceHistoryJob");
@@ -43,7 +50,7 @@ builder.Services.AddQuartz(q =>
     q.AddTrigger(opts => opts
         .ForJob(cleanJobKey)
         .WithIdentity("CleanPriceHistoryJob-trigger")
-        .WithCronSchedule("0 0 2 */14 * ?"));
+        .WithCronSchedule("0 0 1 ? 1/3 4#1"));
 });
 
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
