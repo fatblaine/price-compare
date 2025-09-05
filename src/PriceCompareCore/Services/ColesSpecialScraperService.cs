@@ -135,9 +135,9 @@ namespace PriceCompareCore.Services
                         ShopType = ShopType.COLES
                     };
                     _dbContext.PriceHistory.Add(priceHistory);
-                    await _dbContext.SaveChangesAsync();
                 }
             }
+            await _dbContext.SaveChangesAsync();
 
             // filter
             if (request != null)

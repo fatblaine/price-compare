@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PriceCompareWeb\PriceCompareWeb.csproj" />
+    <ProjectReference Include="..\..\src\PriceCompareCore\PriceCompareCore.csproj" />
   </ItemGroup>
 
 </Project>
