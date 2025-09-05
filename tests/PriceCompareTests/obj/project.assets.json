@@ -6546,6 +6546,7 @@
       "Microsoft.EntityFrameworkCore.InMemory >= 9.0.8",
       "Microsoft.NET.Test.Sdk >= 17.14.1",
       "Moq >= 4.20.72",
+      "PriceCompareCore >= 1.0.0",
       "PriceCompareWeb >= 1.0.0",
       "coverlet.collector >= 6.0.2",
       "xunit >= 2.9.3",
@@ -6585,6 +6586,9 @@
         "net9.0": {
           "targetAlias": "net9.0",
           "projectReferences": {
+            "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
+              "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj"
+            },
             "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareWeb\\PriceCompareWeb.csproj": {
               "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareWeb\\PriceCompareWeb.csproj"
             }
