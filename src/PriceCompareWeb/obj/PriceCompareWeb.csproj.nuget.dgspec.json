@@ -54,6 +54,12 @@
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
+          "dependencies": {
+            "Microsoft.Playwright": {
+              "target": "Package",
+              "version": "[1.55.0, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -269,6 +275,10 @@
             "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": {
               "target": "Package",
               "version": "[9.0.8, )"
+            },
+            "Microsoft.Playwright": {
+              "target": "Package",
+              "version": "[1.55.0, )"
             },
             "Swashbuckle.AspNetCore": {
               "target": "Package",
