@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {}
+    "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {}
   },
   "projects": {
-    "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
+    "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
+        "projectUniqueName": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
         "projectName": "PriceCompareData",
-        "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
+        "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
         "packagesPath": "C:\\Users\\Fan\\.nuget\\packages\\",
-        "outputPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\obj\\",
+        "outputPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
