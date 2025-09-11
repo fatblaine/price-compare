@@ -7033,11 +7033,11 @@
         "net9.0": {
           "targetAlias": "net9.0",
           "projectReferences": {
-            "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
-              "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj"
+            "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
+              "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj"
             },
-            "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
-              "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj"
+            "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj": {
+              "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj"
             }
           }
         }
