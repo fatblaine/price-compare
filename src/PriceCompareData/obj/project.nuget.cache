@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "8lPrkpxx+NM=",
+  "dgSpecHash": "EspxvCpLgDs=",
   "success": true,
-  "projectFilePath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
+  "projectFilePath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareData\\PriceCompareData.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Fan\\.nuget\\packages\\azure.core\\1.38.0\\azure.core.1.38.0.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\azure.identity\\1.11.4\\azure.identity.1.11.4.nupkg.sha512",

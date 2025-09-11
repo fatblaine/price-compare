@@ -7074,8 +7074,8 @@
         "net9.0": {
           "targetAlias": "net9.0",
           "projectReferences": {
-            "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
-              "projectPath": "e:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj"
+            "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj": {
+              "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareCore\\PriceCompareCore.csproj"
             },
             "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareWeb\\PriceCompareWeb.csproj": {
               "projectPath": "E:\\USYD\\training\\project-1\\price-compare\\src\\PriceCompareWeb\\PriceCompareWeb.csproj"
