@@ -1,6 +1,5 @@
 name: Jira Key Check
 
-# trigger
 on:
   pull_request:
     types: [opened, edited, synchronize]
@@ -16,7 +15,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # check whether the PR title contains Jira Key
       - name: Check PR title for Jira Key
         if: github.event_name == 'pull_request'
         run: |
@@ -26,12 +24,11 @@ jobs:
             exit 1
           fi
 
-      # check whether the commit message contains Jira Key
       - name: Check commit messages for Jira Key
         if: github.event_name == 'push'
         run: |
           echo "Checking commit messages..."
-          commits=$(git log --format=%B ${{ github.event.before }}..${{ github.sha }})
+          commits=$(git log --no-merges --format=%B ${{ github.event.before }}..${{ github.sha }})
           echo "$commits"
           if ! echo "$commits" | grep -qE '[A-Z]+-[0-9]+'; then
             echo "❌ ERROR: Commit messages must include a Jira issue key (e.g. BTS-123)"
