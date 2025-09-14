@@ -9,7 +9,7 @@ namespace PriceCompareData.Entities.Compare
     public class Product
     {
         public Guid ProductId { get; set; } = Guid.NewGuid();
-        public ShopType ShopType { get; set; } // COLES / WOOLWORTHS
+        public int? ShopType { get; set; } // COLES / WOOLWORTHS
         public string? SourceId { get; set; }  // Coles: Id; WWS: Barcode
         public string Name { get; set; } = default!;
         public string? Brand { get; set; }
