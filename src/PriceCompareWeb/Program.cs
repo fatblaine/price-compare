@@ -46,7 +46,7 @@ builder.Services.AddQuartz(q =>
 
     // scrape data - wws
     var jobKeyWwsSpecial = new JobKey("WwsRefreshJobSpecial");
-    q.AddJob<ColesRefreshJobSpecial>(opts => opts.WithIdentity(jobKeySpecial));
+    q.AddJob<ColesRefreshJobSpecial>(opts => opts.WithIdentity(jobKeyWwsSpecial));
     q.AddTrigger(opts => opts
         .ForJob(jobKeyWwsSpecial)
         .WithIdentity("WwsRefreshJobSpecial-trigger")
