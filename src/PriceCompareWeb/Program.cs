@@ -75,6 +75,10 @@ builder.Services.AddHttpClient<IColesSpecialScraperService, ColesSpecialScraperS
 
 builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialScraperService>();
 
+builder.Services.AddScoped<ICategoryMappingService, CategoryMappingService>();
+
+builder.Services.AddScoped<IIngestionService, IngestionService>();
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContext<AppDbContext>(options =>

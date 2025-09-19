@@ -28,10 +28,12 @@ namespace PriceCompareCore.Services
         private readonly IDistributedCache _cache;
         private const string BaseUrl = WebInfo.COLES_BASE_URL;
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
+        private readonly IIngestionService _ingestion;
 
         private readonly AppDbContext _dbContext;
 
-        public ColesSpecialScraperService(HttpClient httpClient, ILogger<ColesSpecialScraperService> logger, IDistributedCache cache, AppDbContext dbContext)
+        public ColesSpecialScraperService(HttpClient httpClient,
+        ILogger<ColesSpecialScraperService> logger, IDistributedCache cache, AppDbContext dbContext, IIngestionService ingestion)
         {
             _httpClient = httpClient;
             _httpClient.DefaultRequestHeaders
@@ -39,6 +41,7 @@ namespace PriceCompareCore.Services
             _logger = logger;
             _cache = cache;
             _dbContext = dbContext;
+            _ingestion = ingestion;
 
             // polly retry policy
             _retryPolicy = Policy
@@ -138,6 +141,7 @@ namespace PriceCompareCore.Services
                 }
             }
             await _dbContext.SaveChangesAsync();
+            await _ingestion.UpsertColesSpecialAsync(allProducts);
 
             // filter
             if (request != null)
