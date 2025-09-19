@@ -27,6 +27,7 @@ namespace PriceCompareCore.Services
         private readonly IDistributedCache _cache;
         private readonly AppDbContext _dbContext;
         private readonly AsyncRetryPolicy _retryPolicy;
+        private readonly IIngestionService _ingestion;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -45,11 +46,13 @@ namespace PriceCompareCore.Services
         public WoolworthsSpecialScraperService(
             ILogger<WoolworthsSpecialScraperService> logger,
             IDistributedCache cache,
-            AppDbContext dbContext)
+            AppDbContext dbContext,
+            IIngestionService ingestion)
         {
             _logger = logger;
             _cache = cache;
             _dbContext = dbContext;
+            _ingestion = ingestion;
 
             _retryPolicy = Policy
                 .Handle<Exception>()
@@ -167,6 +170,7 @@ namespace PriceCompareCore.Services
                 }
             }
             await _dbContext.SaveChangesAsync();
+            await _ingestion.UpsertWwsAsync(allProducts);
 
             // 4. Cache the results
             await _cache.SetStringAsync(
