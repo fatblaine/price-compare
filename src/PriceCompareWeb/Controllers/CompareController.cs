@@ -93,6 +93,7 @@ namespace PriceCompareWeb.Controllers
                         t.Brand,
                         t.SizeValue,
                         t.SizeUnit,
+                        ShopType = t.ShopType,
                         price = tPrice,
                         pricePerUnit
                     };
@@ -107,6 +108,7 @@ namespace PriceCompareWeb.Controllers
                         s.Brand,
                         s.SizeValue,
                         s.SizeUnit,
+                        ShopType = s.ShopType,
                         price = sPrice,
                         pricePerUnit = (sPrice.HasValue && s.SizeValue.HasValue && s.SizeValue > 0)
                             ? sPrice / s.SizeValue
