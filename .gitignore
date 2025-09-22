@@ -37,6 +37,29 @@ client/.eslintcache
 # ==================================================
 # 3. .NET & VISUAL STUDIO CORE IGNORES (from template)
 # ==================================================
+# Build artifacts
+bin/
+obj/
+
+# Test artifacts
+TestResults/
+.coverage
+*.coverage
+*.coveragexml
+
+# Code coverage reports
+coveragereport/
+
+# VS Code / Rider / IDE settings
+.vscode/
+.idea/
+*.user
+*.suo
+*.vs/
+
+# Logs
+*.log
+
 # User-specific files
 *.suo
 *.user
