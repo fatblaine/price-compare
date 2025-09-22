@@ -60,6 +60,7 @@ namespace PriceCompareWeb.Controllers
                 // Try to find the exact match in the target shop
                 var q = _dbContext.Products.Where(p => p.ShopType == targetShop && p.CategoryId == s.CategoryId);
 
+                // Narrow down by size if available
                 if (s.SizeValue.HasValue && !string.IsNullOrWhiteSpace(s.SizeUnit))
                 {
                     var low = s.SizeValue.Value * 0.5m;
@@ -79,6 +80,8 @@ namespace PriceCompareWeb.Controllers
                         .ToListAsync();
                 }
                 var sPrice = GetLatestPrice(s.Name, sourceShop);
+
+                // Map the results to include latest prices
                 var mapped = targets.Select(t =>
                 {
                     var tPrice = GetLatestPrice(t.Name, targetShop);
