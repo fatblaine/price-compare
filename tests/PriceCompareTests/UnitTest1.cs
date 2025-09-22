@@ -65,6 +65,7 @@ public class UnitTest1
             httpClient: new HttpClient(),
             logger: NullLogger<ColesDownScraperService>.Instance,
             cache: null,
+            ingestion: null,
             dbContext: actContext);
 
         var result = await service.GetPriceHistoryAsync("Apple", 1, 1);
