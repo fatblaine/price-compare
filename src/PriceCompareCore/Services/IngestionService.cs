@@ -68,7 +68,7 @@ namespace PriceCompareCore.Services
             return new Product
             {
                 ShopType = ShopType.COLES,
-                SourceId = null,
+                SourceId = p.Id > 0 ? p.Id.ToString() : null,
                 Name = name,
                 Brand = null,
                 SizeValue = sv,
