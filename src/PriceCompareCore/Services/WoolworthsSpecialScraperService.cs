@@ -207,5 +207,18 @@ namespace PriceCompareCore.Services
 
             return q.ToList();
         }
+
+        internal List<WoolworthsSpecialProduct> ParseProducts(string json)
+        {
+            var data = JsonSerializer.Deserialize<List<WoolworthsSpecialProductDto>>(json, _jsonOptions);
+            return data?.Select(p => new WoolworthsSpecialProduct
+            {
+                Stockcode = p.Stockcode,
+                DisplayName = p.Name,
+                Price = p.Price,
+                WasPrice = p.WasPrice,
+                LargeImageFile = p.LargeImageFile
+            }).ToList() ?? new();
+        }
     }
 }
