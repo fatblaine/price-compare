@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless Price Compare Platform (.NET 8, Lambda, API Gateway, EventBridge, RDS, Redis)
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 1024
+    Runtime: dotnet8
+    Architectures:
+      - x86_64
+
+Parameters:
+  DbConnectionString:
+    Type: String
+    Description: RDS SQL Server connection string (e.g. Server=xxxx.rds.amazonaws.com;Database=PriceCompare;User Id=xxx;Password=xxx;)
+  RedisConnection:
+    Type: String
+    Description: ElastiCache Redis endpoint (e.g. pricecompare-redis.xxxxxx.apse2.cache.amazonaws.com:6379)
+
+Resources:
+  # -----------------------
+  # Main Web API
+  # -----------------------
+  PriceCompareApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PriceCompareApi
+      Handler: PriceCompareWeb
+      CodeUri: ./src/PriceCompareWeb/
+      PackageType: Zip
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+      Environment:
+        Variables:
+          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          Redis__ConnectionString: !Ref RedisConnection
+
+  # -----------------------
+  # Scheduled Jobs
+  # -----------------------
+
+  ColesRefreshJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ColesRefreshJob
+      Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.ColesRefreshLambda::Handler
+      CodeUri: ./src/PriceCompareWeb/
+      PackageType: Zip
+      Events:
+        WeeklyTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 2 ? * WED *) # 2am every Wednesday
+      Environment:
+        Variables:
+          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          Redis__ConnectionString: !Ref RedisConnection
+
+  ColesRefreshSpecialJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ColesRefreshSpecialJob
+      Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.ColesRefreshSpecialLambda::Handler
+      CodeUri: ./src/PriceCompareWeb/
+      PackageType: Zip
+      Events:
+        WeeklyTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 3 ? * WED *) # 3am every Wednesday
+      Environment:
+        Variables:
+          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          Redis__ConnectionString: !Ref RedisConnection
+
+  WwsRefreshSpecialJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WwsRefreshSpecialJob
+      Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.WwsRefreshSpecialLambda::Handler
+      CodeUri: ./src/PriceCompareWeb/
+      PackageType: Zip
+      Events:
+        WeeklyTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 4 ? * WED *) # 4am every Wednesday
+      Environment:
+        Variables:
+          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          Redis__ConnectionString: !Ref RedisConnection
+
+  CleanPriceHistoryJob:
+    Type: AWS::Serverless::Function
+    Propertie
