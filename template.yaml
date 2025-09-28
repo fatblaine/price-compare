@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: Serverless Price Compare Platform (.NET 8, Lambda, API Gateway, EventBridge, RDS, Redis)
 
@@ -13,10 +13,16 @@ Globals:
 Parameters:
   DbConnectionString:
     Type: String
-    Description: RDS SQL Server connection string (e.g. Server=xxxx.rds.amazonaws.com;Database=PriceCompare;User Id=xxx;Password=xxx;)
+    Description: RDS SQL Server connection string (e.g. Server=pricecomparedb.ctk02qc4co2i.ap-southeast-2.rds.amazonaws.com,1433;Database=PriceCompare;User Id=admin;Password=xxx;)
   RedisConnection:
     Type: String
-    Description: ElastiCache Redis endpoint (e.g. pricecompare-redis.xxxxxx.apse2.cache.amazonaws.com:6379)
+    Description: ElastiCache Redis endpoint (e.g. pricecompare-redis-xxxxx.serverless.apse2.cache.amazonaws.com:6379)
+  VpcSecurityGroupIds:
+    Type: CommaDelimitedList
+    Description: One or more VPC Security Group IDs (e.g. sg-0bb323e4786083c67)
+  VpcSubnetIds:
+    Type: CommaDelimitedList
+    Description: One or more VPC Subnet IDs (e.g. subnet-0ccb34c2f4deb9867,subnet-0d54cd1af9d5b030d,subnet-06e2bfa1e037baa22)
 
 Resources:
   # -----------------------
@@ -29,6 +35,9 @@ Resources:
       Handler: PriceCompareWeb
       CodeUri: ./src/PriceCompareWeb/
       PackageType: Zip
+      VpcConfig:
+        SecurityGroupIds: !Ref VpcSecurityGroupIds
+        SubnetIds: !Ref VpcSubnetIds
       Events:
         ApiEvent:
           Type: HttpApi
@@ -41,7 +50,7 @@ Resources:
           Redis__ConnectionString: !Ref RedisConnection
 
   # -----------------------
-  # Scheduled Jobs
+  # Scheduled Jobs (代替 Quartz)
   # -----------------------
 
   ColesRefreshJob:
@@ -51,11 +60,14 @@ Resources:
       Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.ColesRefreshLambda::Handler
       CodeUri: ./src/PriceCompareWeb/
       PackageType: Zip
+      VpcConfig:
+        SecurityGroupIds: !Ref VpcSecurityGroupIds
+        SubnetIds: !Ref VpcSubnetIds
       Events:
         WeeklyTrigger:
           Type: Schedule
           Properties:
-            Schedule: cron(0 2 ? * WED *) # 2am every Wednesday
+            Schedule: cron(0 2 ? * WED *) # 每周三 2am UTC
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
@@ -68,11 +80,14 @@ Resources:
       Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.ColesRefreshSpecialLambda::Handler
       CodeUri: ./src/PriceCompareWeb/
       PackageType: Zip
+      VpcConfig:
+        SecurityGroupIds: !Ref VpcSecurityGroupIds
+        SubnetIds: !Ref VpcSubnetIds
       Events:
         WeeklyTrigger:
           Type: Schedule
           Properties:
-            Schedule: cron(0 3 ? * WED *) # 3am every Wednesday
+            Schedule: cron(0 3 ? * WED *) # 每周三 3am UTC
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
@@ -85,11 +100,14 @@ Resources:
       Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.WwsRefreshSpecialLambda::Handler
       CodeUri: ./src/PriceCompareWeb/
       PackageType: Zip
+      VpcConfig:
+        SecurityGroupIds: !Ref VpcSecurityGroupIds
+        SubnetIds: !Ref VpcSubnetIds
       Events:
         WeeklyTrigger:
           Type: Schedule
           Properties:
-            Schedule: cron(0 4 ? * WED *) # 4am every Wednesday
+            Schedule: cron(0 4 ? * WED *) # 每周三 4am UTC
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
@@ -97,4 +115,25 @@ Resources:
 
   CleanPriceHistoryJob:
     Type: AWS::Serverless::Function
-    Propertie
+    Properties:
+      FunctionName: CleanPriceHistoryJob
+      Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.CleanPriceHistoryLambda::Handler
+      CodeUri: ./src/PriceCompareWeb/
+      PackageType: Zip
+      VpcConfig:
+        SecurityGroupIds: !Ref VpcSecurityGroupIds
+        SubnetIds: !Ref VpcSubnetIds
+      Events:
+        QuarterlyTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 1 ? 1/3 4#1 *) # 每季度第一周四 1am UTC
+      Environment:
+        Variables:
+          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          Redis__ConnectionString: !Ref RedisConnection
+
+Outputs:
+  ApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Ref PriceCompareApi
