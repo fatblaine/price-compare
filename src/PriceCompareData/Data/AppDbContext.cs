@@ -157,6 +157,134 @@ namespace PriceCompareData.Data
                 new CategoryKeyword { KeywordId = 191, CategoryId = 20, Keyword = "cornflakes" },
                 new CategoryKeyword { KeywordId = 192, CategoryId = 20, Keyword = "muesli" }
             );
+
+            // Category 
+            modelBuilder.Entity<Category>(entity =>
+            {
+                entity.ToTable("category");
+                entity.HasKey(e => e.CategoryId)
+                      .HasName("pk_category");
+
+                entity.Property(e => e.CategoryId)
+                      .HasColumnName("categoryid");
+
+                entity.Property(e => e.Name)
+                      .HasColumnName("name")
+                      .IsRequired();
+
+                entity.Property(e => e.ParentId)
+                      .HasColumnName("parentid");
+            });
+
+            // CategoryKeyword
+            modelBuilder.Entity<CategoryKeyword>(entity =>
+            {
+                entity.ToTable("categorykeyword");
+                entity.HasKey(e => e.KeywordId)
+                      .HasName("pk_categorykeyword");
+
+                entity.Property(e => e.KeywordId)
+                      .HasColumnName("keywordid");
+
+                entity.Property(e => e.CategoryId)
+                      .HasColumnName("categoryid");
+
+                entity.Property(e => e.Keyword)
+                      .HasColumnName("keyword")
+                      .IsRequired();
+
+                entity.Property(e => e.Weight)
+                      .HasColumnName("weight")
+                      .HasDefaultValue(1);
+
+                // foreign key to Category
+                entity.HasOne<Category>()
+                      .WithMany()
+                      .HasForeignKey(e => e.CategoryId)
+                      .HasConstraintName("fk_categorykeyword_category")
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Product
+            modelBuilder.Entity<Product>(entity =>
+            {
+                entity.ToTable("product");
+                entity.HasKey(e => e.ProductId)
+                      .HasName("pk_product");
+
+                entity.Property(e => e.ProductId)
+                      .HasColumnName("productid");
+
+                entity.Property(e => e.ShopType)
+                      .HasColumnName("shoptype");
+
+                entity.Property(e => e.SourceId)
+                      .HasColumnName("sourceid");
+
+                entity.Property(e => e.Name)
+                      .HasColumnName("name")
+                      .IsRequired();
+
+                entity.Property(e => e.Brand)
+                      .HasColumnName("brand");
+
+                entity.Property(e => e.SizeValue)
+                      .HasColumnName("sizevalue")
+                      .HasPrecision(18, 4);
+
+                entity.Property(e => e.SizeUnit)
+                      .HasColumnName("sizeunit");
+
+                entity.Property(e => e.PackageQty)
+                      .HasColumnName("packageqty");
+
+                entity.Property(e => e.CategoryId)
+                      .HasColumnName("categoryid");
+
+                entity.Property(e => e.ImageUrl)
+                      .HasColumnName("imageurl");
+
+                entity.Property(e => e.LastSeenAt)
+                      .HasColumnName("lastseenat");
+
+                // foreign key to Category
+                entity.HasOne<Category>()
+                      .WithMany()
+                      .HasForeignKey(e => e.CategoryId)
+                      .HasConstraintName("fk_product_category")
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // PriceHistory
+            modelBuilder.Entity<PriceHistory>(entity =>
+            {
+                entity.ToTable("pricehistory");
+                entity.HasKey(e => e.Id)
+                      .HasName("pk_pricehistory");
+
+                entity.Property(e => e.Id)
+                      .HasColumnName("id");
+
+                entity.Property(e => e.Name)
+                      .HasColumnName("name");
+
+                entity.Property(e => e.CurrentPrice)
+                      .HasColumnName("currentprice")
+                      .HasPrecision(18, 4);
+
+                entity.Property(e => e.ImageUrl)
+                      .HasColumnName("imageurl")
+                      .IsRequired();
+
+                entity.Property(e => e.ScrapedAt)
+                      .HasColumnName("scrapedat");
+
+                entity.Property(e => e.OfferType)
+                      .HasColumnName("offertype");
+
+                entity.Property(e => e.ShopType)
+                      .HasColumnName("shoptype");
+            });
         }
     }
 }

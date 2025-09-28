@@ -825,3 +825,15 @@ e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\.playwright\package\lib\vite\traceViewer\xtermModule.Beg8tuEN.css
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\.playwright\package\LICENSE
 e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\.playwright\package\NOTICE
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Amazon.Lambda.APIGatewayEvents.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Amazon.Lambda.ApplicationLoadBalancerEvents.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Amazon.Lambda.AspNetCoreServer.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Amazon.Lambda.AspNetCoreServer.Hosting.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Amazon.Lambda.Core.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Amazon.Lambda.Logging.AspNetCore.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Amazon.Lambda.RuntimeSupport.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\Amazon.Lambda.Serialization.SystemTextJson.dll
+e:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\SnapshotRestore.Registry.dll
+E:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\AWSSDK.Core.dll
+E:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\AWSSDK.DynamoDBv2.dll
+E:\USYD\training\project-1\price-compare\tests\PriceCompareTests\bin\Debug\net9.0\AWSSDK.Extensions.NETCore.Setup.dll
