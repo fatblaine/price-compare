@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PriceCompareData.Common;
 using PriceCompareData.Data;
+using PriceCompareData.Entities.Compare;
 
 namespace PriceCompareWeb.Controllers
 {
@@ -57,28 +58,43 @@ namespace PriceCompareWeb.Controllers
 
             foreach (var s in sourceList)
             {
-                // Try to find the exact match in the target shop
-                var q = _dbContext.Products.Where(p => p.ShopType == targetShop && p.CategoryId == s.CategoryId);
+                List<Product> targets = new();
 
-                // Narrow down by size if available
-                if (s.SizeValue.HasValue && !string.IsNullOrWhiteSpace(s.SizeUnit))
+                if (s.CategoryId != null)
                 {
-                    var low = s.SizeValue.Value * 0.5m;
-                    var high = s.SizeValue.Value * 1.5m;
-                    q = q.Where(p => p.SizeUnit == s.SizeUnit && p.SizeValue >= low && p.SizeValue <= high);
+                    // 1. Exact match by category + size
+                    var q = _dbContext.Products
+                        .Where(p => p.ShopType == targetShop && p.CategoryId == s.CategoryId);
+
+                    if (s.SizeValue.HasValue && !string.IsNullOrWhiteSpace(s.SizeUnit))
+                    {
+                        var low = s.SizeValue.Value * 0.5m;
+                        var high = s.SizeValue.Value * 1.5m;
+                        q = q.Where(p => p.SizeUnit == s.SizeUnit && p.SizeValue >= low && p.SizeValue <= high);
+                    }
+
+                    targets = await q.OrderBy(p => p.Brand).ThenBy(p => p.Name).Take(10).ToListAsync();
+
+                    // 2. Fallback to category (no name filtering, just take the first few in the category)
+                    if (targets.Count == 0)
+                    {
+                        targets = await _dbContext.Products
+                            .Where(p => p.ShopType == targetShop && p.CategoryId == s.CategoryId)
+                            .OrderBy(p => p.Name)
+                            .Take(10)
+                            .ToListAsync();
+                    }
                 }
-
-                var targets = await q.OrderBy(p => p.Brand).ThenBy(p => p.Name).Take(10).ToListAsync();
-
-                // If not found, try to find similar products
-                if (targets.Count == 0)
+                else
                 {
+                    // 3. Fuzzy match by name (when no category is available)
                     targets = await _dbContext.Products
-                        .Where(p => p.ShopType == targetShop && p.CategoryId == s.CategoryId)
+                        .Where(p => p.ShopType == targetShop && p.Name.Contains(s.Name))
                         .OrderBy(p => p.Name)
                         .Take(10)
                         .ToListAsync();
                 }
+
                 var sPrice = GetLatestPrice(s.Name, sourceShop);
 
                 // Map the results to include latest prices
