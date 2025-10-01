@@ -5,13 +5,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- AWS SDK for DynamoDB -->
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.6.3" />
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.3.1" />
+
+    <!-- Playwright -->
     <PackageReference Include="Microsoft.Playwright" Version="1.55.0" />
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
