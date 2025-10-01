@@ -164,6 +164,9 @@ ServiceFabricBackup/
 # Visual Studio History (VSHistory) files
 .vshistory/
 
+# AWS SAM build artifacts
+.aws-sam/
+
 # ==================================================
 # 4. IDE & EDITOR DIRECTORIES
 # ==================================================
