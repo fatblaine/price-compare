@@ -32,6 +32,12 @@ namespace PriceCompareCore.Services
 
         private readonly AppDbContext _dbContext;
 
+        public ColesSpecialScraperService(AppDbContext db, ILogger<ColesSpecialScraperService> logger)
+        {
+            _dbContext = db;
+            _logger = logger;
+        }
+
         public ColesSpecialScraperService(HttpClient httpClient,
         ILogger<ColesSpecialScraperService> logger, IDistributedCache cache, AppDbContext dbContext, IIngestionService ingestion)
         {

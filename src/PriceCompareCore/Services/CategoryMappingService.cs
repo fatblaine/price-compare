@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.Data;
 
@@ -12,9 +13,17 @@ namespace PriceCompareCore.Services
     public class CategoryMappingService : ICategoryMappingService
     {
         private readonly AppDbContext _dbContext;
+        private readonly ILogger<CategoryMappingService>? _logger;
+
         public CategoryMappingService(AppDbContext dbContext)
         {
             _dbContext = dbContext;
+        }
+
+        public CategoryMappingService(AppDbContext dbContext, ILogger<CategoryMappingService> logger)
+        {
+            _dbContext = dbContext;
+            _logger = logger;
         }
 
         // Parse size and package quantity from product name
