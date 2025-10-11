@@ -4,7 +4,9 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Playwright;
 using Polly;
 using Polly.Retry;
@@ -42,6 +44,16 @@ namespace PriceCompareCore.Services
         // Woolworths specials API 
         private const string SpecialsApiUrl =
             "https://www.woolworths.com.au/apis/ui/products/360740,307695,237418,35681,35694,218279,31727,123591,36033,158767,105785,384245,686461,320194,96190,752346,252640,511504,33964,763453?excludeUnavailable=true";
+
+        public WoolworthsSpecialScraperService(
+        AppDbContext db,
+        ILogger<WoolworthsSpecialScraperService> logger,
+        IDistributedCache? cache = null)
+        {
+            _dbContext = db;
+            _logger = logger;
+            _cache = cache ?? new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        }
 
         public WoolworthsSpecialScraperService(
             ILogger<WoolworthsSpecialScraperService> logger,
