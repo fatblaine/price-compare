@@ -53,6 +53,12 @@ namespace PriceCompareCore.Services
             _dbContext = db;
             _logger = logger;
             _cache = cache ?? new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+            _retryPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(2,
+                    attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
+                    (ex, ts, i, _) =>
+                        _logger.LogWarning(ex, "Playwright attempt {Attempt} failed, will retry.", i + 1));
         }
 
         public WoolworthsSpecialScraperService(
