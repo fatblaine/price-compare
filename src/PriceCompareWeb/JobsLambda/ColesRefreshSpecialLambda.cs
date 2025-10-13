@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Services;
+using PriceCompareCore.Utils;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
 
@@ -16,13 +18,7 @@ namespace PriceCompareWeb.JobsLambda
 
         public ColesRefreshSpecialLambda()
         {
-            var config = new ConfigurationBuilder()
-                .AddEnvironmentVariables()
-                .Build();
-
-            var conn = config.GetConnectionString("DefaultConnection")
-                       ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
-
+            var conn = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
             if (string.IsNullOrWhiteSpace(conn))
                 throw new InvalidOperationException("Missing database connection string.");
 
@@ -31,10 +27,23 @@ namespace PriceCompareWeb.JobsLambda
                 .Options;
             var db = new AppDbContext(options);
 
-            var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-            var logger = loggerFactory.CreateLogger<ColesSpecialScraperService>();
+            IDistributedCache cache = CacheFactory.Create();
 
-            _scraperService = new ColesSpecialScraperService(db, logger);
+            var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+            var scraperLogger = loggerFactory.CreateLogger<ColesSpecialScraperService>();
+            var mapperLogger = loggerFactory.CreateLogger<CategoryMappingService>();
+
+            var httpClient = new HttpClient();
+            var mapper = new CategoryMappingService(db, mapperLogger);
+            var ingestion = new IngestionService(db, mapper);
+
+            _scraperService = new ColesSpecialScraperService(
+                httpClient,
+                scraperLogger,
+                cache,
+                db,
+                ingestion
+            );
         }
 
         // AWS Lambda handler
