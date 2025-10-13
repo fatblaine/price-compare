@@ -64,6 +64,7 @@ Resources:
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          USE_REDIS: "false"
 
   WwsRefreshSpecialJob:
     Type: AWS::Serverless::Function
