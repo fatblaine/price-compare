@@ -84,7 +84,25 @@ namespace PriceCompareCore.Services
                     string url = $"https://www.coles.com.au/_next/data/{buildId}/en/on-special.json?page={page}";
                     _logger.LogInformation($"Fetching Coles specials page {page} with buildId={buildId}");
 
-                    string response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetStringAsync(url));
+                    string response = await _retryPolicy.ExecuteAsync(async () =>
+                    {
+                        var httpResponse = await _httpClient.GetAsync(url);
+                        var content = await httpResponse.Content.ReadAsStringAsync();
+
+                        if (!httpResponse.IsSuccessStatusCode)
+                        {
+                            _logger.LogError($"Coles API returned {httpResponse.StatusCode}: {content.Substring(0, Math.Min(200, content.Length))}");
+                            throw new HttpRequestException($"Coles API returned {httpResponse.StatusCode}");
+                        }
+
+                        if (content.TrimStart().StartsWith("<"))
+                        {
+                            _logger.LogError("Coles returned HTML (anti-bot or Cloudflare). Snippet: " + content.Substring(0, Math.Min(200, content.Length)));
+                            throw new Exception("HTML response instead of JSON.");
+                        }
+
+                        return content;
+                    });
                     var data = JsonSerializer.Deserialize<ColesApiResponse>(response, _jsonOptions);
 
                     var products = data?.PageProps?.SearchResults?.Results;
