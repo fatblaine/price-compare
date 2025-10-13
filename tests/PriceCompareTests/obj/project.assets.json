@@ -2808,6 +2808,7 @@
         "dependencies": {
           "AWSSDK.DynamoDBv2": "4.0.6.3",
           "AWSSDK.Extensions.NETCore.Setup": "4.0.3.1",
+          "Microsoft.Extensions.Caching.StackExchangeRedis": "8.0.0",
           "Microsoft.Playwright": "1.55.0",
           "PriceCompareData": "1.0.0"
         },

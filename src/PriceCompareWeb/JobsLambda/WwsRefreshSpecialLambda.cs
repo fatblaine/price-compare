@@ -8,6 +8,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Services;
+using PriceCompareCore.Utils;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
 
@@ -19,26 +20,38 @@ namespace PriceCompareWeb.JobsLambda
 
         public WwsRefreshSpecialLambda()
         {
-            // 1. Connection string from environment variable
+            // 1. Database context
             var conn = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+            if (string.IsNullOrWhiteSpace(conn))
+                throw new InvalidOperationException("Missing database connection string.");
+
             var options = new DbContextOptionsBuilder<AppDbContext>()
                 .UseNpgsql(conn)
                 .Options;
             var db = new AppDbContext(options);
 
-            // 2. Initialize in-memory cache (replace Redis)
-            var cacheOptions = Options.Create(new MemoryDistributedCacheOptions());
-            IDistributedCache cache = new MemoryDistributedCache(cacheOptions);
+            // 2. Cache factory (auto-select Redis or in-memory cache)
+            IDistributedCache cache = CacheFactory.Create();
 
-            // 3. Initialize Logger
+            // 3. Logger factory
             var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-            var logger = loggerFactory.CreateLogger<WoolworthsSpecialScraperService>();
+            var scraperLogger = loggerFactory.CreateLogger<WoolworthsSpecialScraperService>();
+            var mapperLogger = loggerFactory.CreateLogger<CategoryMappingService>();
 
-            // 4. Initialize the scraper service
-            _scraperService = new WoolworthsSpecialScraperService(db, logger, cache);
+            // 4. Dependency injection
+            var mapper = new CategoryMappingService(db, mapperLogger);
+            var ingestion = new IngestionService(db, mapper);
+
+            // 5. Initialize Scraper
+            _scraperService = new WoolworthsSpecialScraperService(
+                scraperLogger,
+                cache,
+                db,
+                ingestion
+                );
         }
 
-        // AWS Lambda handler
+        // Lambda handler
         public async Task Handler()
         {
             await _scraperService.GetAllOnSpecialProductsAsync(new WoolworthsSpecialProductRequest());
