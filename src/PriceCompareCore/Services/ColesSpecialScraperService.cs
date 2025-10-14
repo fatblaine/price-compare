@@ -5,6 +5,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using AngleSharp;
 using HtmlAgilityPack;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -219,82 +220,53 @@ namespace PriceCompareCore.Services
                 return await response.Content.ReadAsStringAsync();
             });
 
-            var doc = new HtmlDocument();
-            doc.LoadHtml(html);
-
-            var scriptNode = doc.DocumentNode.SelectSingleNode("//script[@id='__NEXT_DATA__']");
-            if (scriptNode == null)
+            // check for anti-bot
+            if (string.IsNullOrWhiteSpace(html) || html.Contains("Access denied", StringComparison.OrdinalIgnoreCase)
+                || html.Contains("captcha", StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogError("Could not find __NEXT_DATA__ script in Coles page. HTML content: {0}", html.Substring(0, Math.Min(500, html.Length)));
-                throw new Exception("Could not find __NEXT_DATA__ script in Coles page.");
+                _logger.LogWarning("Coles page might be blocked by anti-bot system.");
+                throw new Exception("Coles blocked request; HTML returned instead of content.");
             }
 
-            var json = scriptNode.InnerText;
+            // parse buildId from HTML using AngleSharp
+            string buildId = null;
             try
             {
-                using var docJson = JsonDocument.Parse(json);
-                var root = docJson.RootElement;
+                var config = Configuration.Default;
+                var context = BrowsingContext.New(config);
+                var doc = await context.OpenAsync(req => req.Content(html));
 
-                if (root.TryGetProperty("buildId", out var buildIdElement))
+                var scriptNode = doc.QuerySelector("#__NEXT_DATA__");
+                if (scriptNode != null && !string.IsNullOrEmpty(scriptNode.TextContent))
                 {
-                    string buildId = buildIdElement.GetString();
-
-                    if (string.IsNullOrEmpty(buildId))
+                    using var jsonDoc = JsonDocument.Parse(scriptNode.TextContent);
+                    if (jsonDoc.RootElement.TryGetProperty("buildId", out var buildElement))
                     {
-                        throw new Exception("BuildId is null or empty.");
+                        buildId = buildElement.GetString();
                     }
-
-                    // Cache the buildId
-                    await _cache.SetStringAsync(
-                        CacheKey.BUILD_ID,
-                        buildId,
-                        new DistributedCacheEntryOptions
-                        {
-                            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
-                        });
-
-                    _logger.LogInformation($"Fetched new Coles buildId: {buildId}");
-                    return buildId;
                 }
-                else
+
+                // Regex fallback
+                if (string.IsNullOrEmpty(buildId))
                 {
-                    _logger.LogWarning("buildId not found at root level, trying alternative paths...");
-
-                    if (root.TryGetProperty("runtimeConfig", out var runtimeConfig) &&
-                        runtimeConfig.TryGetProperty("buildId", out var runtimeBuildIdElement))
-                    {
-                        string buildId = runtimeBuildIdElement.GetString();
-
-                        if (!string.IsNullOrEmpty(buildId))
-                        {
-                            await _cache.SetStringAsync(CacheKey.BUILD_ID, buildId,
-                                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60) });
-                            _logger.LogInformation($"Fetched Coles buildId from runtimeConfig: {buildId}");
-                            return buildId;
-                        }
-                    }
-
-                    var match = Regex.Match(json, @"""buildId""\s*:\s*""([^""]+)""");
+                    var match = Regex.Match(html, @"""buildId""\s*:\s*""([^""]+)""");
                     if (match.Success)
-                    {
-                        string buildId = match.Groups[1].Value;
-
-                        if (!string.IsNullOrEmpty(buildId))
-                        {
-                            await _cache.SetStringAsync(CacheKey.BUILD_ID, buildId,
-                                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60) });
-                            _logger.LogInformation($"Fetched Coles buildId using regex: {buildId}");
-                            return buildId;
-                        }
-                    }
-
-                    throw new Exception("Could not extract buildId from Coles page using any method.");
+                        buildId = match.Groups[1].Value;
                 }
+
+                if (string.IsNullOrEmpty(buildId))
+                    throw new Exception("Failed to extract buildId via both AngleSharp and Regex.");
+
+                await _cache.SetStringAsync(CacheKey.BUILD_ID, buildId,
+                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60) });
+
+                _logger.LogInformation($"Fetched new Coles buildId: {buildId}");
+                return buildId;
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to parse __NEXT_DATA__ JSON. Content: {0}", json);
-                throw new Exception("Failed to parse __NEXT_DATA__ JSON.", ex);
+                _logger.LogError(ex, "Error while parsing buildId with AngleSharp.");
+                throw;
             }
         }
     }
