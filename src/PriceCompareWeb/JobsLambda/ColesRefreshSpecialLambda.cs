@@ -33,12 +33,10 @@ namespace PriceCompareWeb.JobsLambda
             var scraperLogger = loggerFactory.CreateLogger<ColesSpecialScraperService>();
             var mapperLogger = loggerFactory.CreateLogger<CategoryMappingService>();
 
-            var httpClient = new HttpClient();
             var mapper = new CategoryMappingService(db, mapperLogger);
             var ingestion = new IngestionService(db, mapper);
 
             _scraperService = new ColesSpecialScraperService(
-                httpClient,
                 scraperLogger,
                 cache,
                 db,

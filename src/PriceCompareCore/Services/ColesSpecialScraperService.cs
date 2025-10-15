@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using AngleSharp;
-using HtmlAgilityPack;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using Microsoft.Playwright;
 using Polly;
 using Polly.Retry;
 using PriceCompareCore.Interfaces;
@@ -21,287 +18,276 @@ using PriceCompareData.Entities.History;
 
 namespace PriceCompareCore.Services
 {
+    /// <summary>
+    /// ✅ Coles On-Special scraper powered by Playwright.
+    /// 
+    /// 关键步骤：
+    /// 1️⃣ 启动 headless Chromium（Lambda 兼容）。
+    /// 2️⃣ 打开 https://www.coles.com.au/on-special 页面，触发反爬验证脚本。
+    /// 3️⃣ 从页面 DOM 中提取 __NEXT_DATA__.buildId。
+    /// 4️⃣ 访问 JSON 接口 /_next/data/{buildId}/en/on-special.json?page={n}。
+    /// 5️⃣ 解析结果 → 缓存 → 写入数据库 → 调用 ingestion 更新产品表。
+    /// </summary>
     public class ColesSpecialScraperService : IColesSpecialScraperService
     {
-        private readonly HttpClient _httpClient;
         private readonly ILogger<ColesSpecialScraperService> _logger;
-        private readonly AsyncRetryPolicy _retryPolicy;
         private readonly IDistributedCache _cache;
-        private const string BaseUrl = WebInfo.COLES_BASE_URL;
-        private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
+        private readonly AppDbContext _db;
         private readonly IIngestionService _ingestion;
 
-        private readonly AppDbContext _dbContext;
+        private readonly AsyncRetryPolicy _retry;
+        private static readonly JsonSerializerOptions _jsonOpt = new() { PropertyNameCaseInsensitive = true };
 
-        public ColesSpecialScraperService(AppDbContext db, ILogger<ColesSpecialScraperService> logger)
-        {
-            _dbContext = db;
-            _logger = logger;
-        }
+        private const string BaseUrl = WebInfo.COLES_BASE_URL; // "https://www.coles.com.au"
+        private const string SpecialsPath = "/on-special";
 
-        public ColesSpecialScraperService(HttpClient httpClient,
-        ILogger<ColesSpecialScraperService> logger, IDistributedCache cache, AppDbContext dbContext, IIngestionService ingestion)
+        public ColesSpecialScraperService(
+            ILogger<ColesSpecialScraperService> logger,
+            IDistributedCache cache,
+            AppDbContext dbContext,
+            IIngestionService ingestion)
         {
-            _httpClient = httpClient;
-            _httpClient.DefaultRequestHeaders
-                .Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
             _logger = logger;
             _cache = cache;
-            _dbContext = dbContext;
+            _db = dbContext;
             _ingestion = ingestion;
 
-            // polly retry policy
-            _retryPolicy = Policy
-                .Handle<HttpRequestException>()
-                .Or<WebException>()
-                .WaitAndRetryAsync(3, retryAttempt =>
-                    TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                    onRetry: (exception, timeSpan, retryCount, context) =>
-                    {
-                        Console.WriteLine($"Retry {retryCount} after {timeSpan.TotalSeconds}s due to: {exception.Message}");
-                    });
+            // ✅ Retry 策略：失败后 1s, 2s 重试
+            _retry = Policy
+                .Handle<Exception>()
+                .WaitAndRetryAsync(2, i => TimeSpan.FromSeconds(Math.Pow(2, i)),
+                    (ex, ts, i, _) =>
+                        _logger.LogWarning(ex, "[Retry] attempt {Attempt} after {Delay}s.", i + 1, ts.TotalSeconds));
         }
 
         public async Task<List<ColesSpecialProduct>> GetAllOnSpecialProductsAsync(ColesSpecialProductRequest request = null)
         {
-            List<ColesSpecialProduct> allProducts;
-
-            var cachedData = await _cache.GetStringAsync(CacheKey.COLES_ON_SPECIAL_PRODUCTS);
-            if (!string.IsNullOrEmpty(cachedData))
+            // ✅ Step 1: 优先读取缓存
+            var cached = await _cache.GetStringAsync(CacheKey.COLES_ON_SPECIAL_PRODUCTS);
+            if (!string.IsNullOrWhiteSpace(cached))
             {
-                allProducts = JsonSerializer.Deserialize<List<ColesSpecialProduct>>(cachedData);
-                _logger.LogInformation($"Using cached Coles specials data.");
+                _logger.LogInformation("[Cache] Using cached Coles specials.");
+                var list = JsonSerializer.Deserialize<List<ColesSpecialProduct>>(cached, _jsonOpt) ?? new();
+                return request is null ? list : ApplyFilters(list, request);
             }
-            else
+
+            var all = new List<ColesSpecialProduct>();
+
+            // ✅ Step 2: 启动 Playwright，模拟真实浏览器
+            await _retry.ExecuteAsync(async () =>
             {
-                allProducts = new List<ColesSpecialProduct>();
-                string buildId = await GetBuildIdAsync();
-
-                int page = 1;
-                bool hasMorePages = true;
-
-                while (hasMorePages)
+                using var pw = await Playwright.CreateAsync();
+                await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
                 {
-                    string url = $"https://www.coles.com.au/_next/data/{buildId}/en/on-special.json?page={page}";
-                    _logger.LogInformation($"Fetching Coles specials page {page} with buildId={buildId}");
-
-                    string response = await _retryPolicy.ExecuteAsync(async () =>
+                    Headless = true,
+                    Args = new[]
                     {
-                        var httpResponse = await _httpClient.GetAsync(url);
-                        var content = await httpResponse.Content.ReadAsStringAsync();
-
-                        if (!httpResponse.IsSuccessStatusCode)
-                        {
-                            _logger.LogError($"Coles API returned {httpResponse.StatusCode}: {content.Substring(0, Math.Min(200, content.Length))}");
-                            throw new HttpRequestException($"Coles API returned {httpResponse.StatusCode}");
-                        }
-
-                        if (content.TrimStart().StartsWith("<"))
-                        {
-                            _logger.LogError("Coles returned HTML (anti-bot or Cloudflare). Snippet: " + content.Substring(0, Math.Min(200, content.Length)));
-                            throw new Exception("HTML response instead of JSON.");
-                        }
-
-                        return content;
-                    });
-                    var data = JsonSerializer.Deserialize<ColesApiResponse>(response, _jsonOptions);
-
-                    var products = data?.PageProps?.SearchResults?.Results;
-
-                    if (products == null || products.Count == 0)
-                    {
-                        hasMorePages = false;
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu",
+                        "--disable-setuid-sandbox"
                     }
-                    else
+                });
+
+                await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+                {
+                    UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                                "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                                "Chrome/124.0.0.0 Safari/537.36",
+                    Locale = "en-AU"
+                });
+
+                var page = await context.NewPageAsync();
+
+                var specialsUrl = $"{BaseUrl}{SpecialsPath}";
+                _logger.LogInformation("Navigating to {Url}", specialsUrl);
+
+                await page.GotoAsync(specialsUrl, new PageGotoOptions
+                {
+                    WaitUntil = WaitUntilState.DOMContentLoaded,
+                    Timeout = 45000
+                });
+
+                // 等待反爬脚本执行完成
+                await page.WaitForTimeoutAsync(2000);
+
+                // ✅ Step 3: 获取 buildId
+                var buildId = await GetBuildIdFromPageAsync(page);
+                _logger.LogInformation("Fetched buildId: {BuildId}", buildId);
+
+                // ✅ Step 4: 分页爬取 JSON
+                int pageNo = 1;
+                while (true)
+                {
+                    var dataUrl = $"{BaseUrl}/_next/data/{buildId}/en/on-special.json?page={pageNo}";
+                    _logger.LogInformation("Fetching JSON page {Page}: {Url}", pageNo, dataUrl);
+
+                    var resp = await page.APIRequest.GetAsync(dataUrl);
+                    if (!resp.Ok)
                     {
-                        // mapping to ColesSpecialProduct
-                        allProducts.AddRange(products
-                        .Where(p => p._type == "PRODUCT")
-                        .Select(p => new ColesSpecialProduct
+                        _logger.LogWarning("Non-OK ({Status}) for {Url}", resp.Status, dataUrl);
+                        break;
+                    }
+
+                    var text = await resp.TextAsync();
+                    if (text.TrimStart().StartsWith("<"))
+                    {
+                        _logger.LogWarning("HTML returned for JSON URL (anti-bot triggered). Stop scraping.");
+                        break;
+                    }
+
+                    var dto = JsonSerializer.Deserialize<ColesApiResponse>(text, _jsonOpt);
+                    var results = dto?.PageProps?.SearchResults?.Results;
+
+                    if (results == null || results.Count == 0)
+                    {
+                        _logger.LogInformation("No results on page {Page}, stop.", pageNo);
+                        break;
+                    }
+
+                    var mapped = results
+                        .Where(r => r._type.Equals("PRODUCT", StringComparison.OrdinalIgnoreCase))
+                        .Select(r => new ColesSpecialProduct
                         {
-                            Id = p.Id,
-                            Name = p.Name,
-                            CurrentPrice = p.Pricing?.Now ?? 0,
-                            OriginalPrice = p.Pricing?.Was ?? 0,
-                            PricePerUnit = p.Pricing?.Comparable,
-                            ImageUrl = p.ImageUris?.FirstOrDefault()?.Uri,
-                            IsSponsored = p._type != "PRODUCT",
+                            Id = (int)r.Id,
+                            Name = r.Name,
+                            CurrentPrice = r.Pricing?.Now ?? 0m,
+                            OriginalPrice = r.Pricing?.Was ?? 0m,
+                            PricePerUnit = r.Pricing?.Comparable,
+                            ImageUrl = r.ImageUris?.FirstOrDefault()?.Uri,
+                            IsSponsored = false,
                             ScrapedAt = DateTime.UtcNow
-                        }));
+                        })
+                        .ToList();
 
-                        _logger.LogInformation($"Scraped {products.Count} products from page {page}");
-                        page++;
-                    }
+                    _logger.LogInformation("Page {Page} -> {Count} products.", pageNo, mapped.Count);
+                    all.AddRange(mapped);
+                    pageNo++;
                 }
+            });
 
-                // Cache the results
-                await _cache.SetStringAsync(
-                    CacheKey.COLES_ON_SPECIAL_PRODUCTS,
-                    JsonSerializer.Serialize(allProducts),
-                    new DistributedCacheEntryOptions
-                    {
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
-                    });
-            }
-
-            // add price histories to database
-            foreach (var product in allProducts)
+            // ✅ Step 5: 写入价格历史
+            foreach (var p in all)
             {
                 var today = DateTime.UtcNow.Date;
-                bool alreadyExists = _dbContext.PriceHistory
-                .Any(ph => ph.Name == product.Name && ph.ScrapedAt >= today && ph.ScrapedAt < today.AddDays(1));
-                if (!alreadyExists)
+                bool exists = _db.PriceHistory.Any(ph =>
+                    ph.Name == p.Name &&
+                    ph.ShopType == ShopType.COLES &&
+                    ph.OfferType == OfferType.ON_SPECIAL &&
+                    ph.ScrapedAt >= today && ph.ScrapedAt < today.AddDays(1));
+
+                if (!exists)
                 {
-                    var priceHistory = new PriceHistory
+                    _db.PriceHistory.Add(new PriceHistory
                     {
-                        // Id = product.Id,
-                        Name = product.Name,
-                        ImageUrl = product.ImageUrl,
-                        CurrentPrice = product.CurrentPrice,
+                        Name = p.Name,
+                        ImageUrl = p.ImageUrl,
+                        CurrentPrice = p.CurrentPrice,
                         ScrapedAt = DateTime.UtcNow,
                         OfferType = OfferType.ON_SPECIAL,
                         ShopType = ShopType.COLES
-                    };
-                    _dbContext.PriceHistory.Add(priceHistory);
+                    });
                 }
             }
-            await _dbContext.SaveChangesAsync();
-            await _ingestion.UpsertColesSpecialAsync(allProducts);
+            await _db.SaveChangesAsync();
 
-            // filter
-            if (request != null)
-            {
-                allProducts = ApplyFilters(allProducts, request);
-            }
+            // ✅ Step 6: Upsert product base table
+            await _ingestion.UpsertColesSpecialAsync(all);
 
-            return allProducts;
-        }
-
-        private List<ColesSpecialProduct> ApplyFilters(List<ColesSpecialProduct> products, ColesSpecialProductRequest request)
-        {
-            var query = products.AsQueryable();
-            // product name
-            if (!string.IsNullOrWhiteSpace(request.Name))
-            {
-                query = query.Where(p => !string.IsNullOrEmpty(p.Name) && p.Name.Contains(request.Name, StringComparison.OrdinalIgnoreCase));
-            }
-            // isSponsored
-            if (request.IsSponsored)
-            {
-                query = query.Where(p => p.IsSponsored);
-            }
-            // current price
-            if (request.MinPrice.HasValue)
-            {
-                query = query.Where(p => p.CurrentPrice >= request.MinPrice.Value);
-            }
-            if (request.MaxPrice.HasValue)
-            {
-                query = query.Where(p => p.CurrentPrice <= request.MaxPrice.Value);
-            }
-
-            return query.ToList();
-        }
-
-        private async Task<string> GetBuildIdAsync()
-        {
-            // Check if we already have a cached buildId (valid for 1 hour)
-            var cachedBuildId = await _cache.GetStringAsync(CacheKey.BUILD_ID);
-            if (!string.IsNullOrEmpty(cachedBuildId))
-            {
-                _logger.LogInformation($"[Cache] Using cached Coles buildId: {cachedBuildId}");
-                return cachedBuildId;
-            }
-
-            // Target URL for Coles "On Special" page
-            string url = $"{BaseUrl}/on-special";
-
-            // Create an HTTP request with realistic browser headers
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-            request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-            request.Headers.Add("Accept-Language", "en-US,en;q=0.9");
-            request.Headers.Add("Accept-Encoding", "gzip, deflate, br");
-            request.Headers.Add("Referer", "https://www.google.com/");
-            request.Headers.Add("Sec-Fetch-Dest", "document");
-            request.Headers.Add("Sec-Fetch-Mode", "navigate");
-            request.Headers.Add("Sec-Fetch-Site", "none");
-            request.Headers.Add("Sec-Fetch-User", "?1");
-            request.Headers.Add("Upgrade-Insecure-Requests", "1");
-
-            // Optional cookie injection (if Cloudflare blocks AWS IPs)
-            var cookie = Environment.GetEnvironmentVariable("COLES_COOKIE");
-            if (!string.IsNullOrEmpty(cookie))
-            {
-                request.Headers.Add("Cookie", cookie);
-                _logger.LogInformation("[Cookie] Using COLES_COOKIE from environment variable.");
-            }
-
-            // Execute the request with retry (3 attempts, exponential backoff)
-            string html = await _retryPolicy.ExecuteAsync(async () =>
-            {
-                var response = await _httpClient.SendAsync(request);
-                var content = await response.Content.ReadAsStringAsync();
-
-                // Ensure successful response code
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogError($"[Coles] Returned {response.StatusCode}: {content[..Math.Min(200, content.Length)]}");
-                    throw new HttpRequestException($"Coles responded with {response.StatusCode}");
-                }
-
-                // Detect Cloudflare or Akamai anti-bot HTML pages
-                if (content.TrimStart().StartsWith("<") &&
-                    (content.Contains("Access Denied", StringComparison.OrdinalIgnoreCase)
-                     || content.Contains("verify you are human", StringComparison.OrdinalIgnoreCase)
-                     || content.Contains("cf-chl-bypass", StringComparison.OrdinalIgnoreCase)
-                     || content.Contains("Request unsuccessful", StringComparison.OrdinalIgnoreCase)))
-                {
-                    _logger.LogError("[AntiBot] Coles returned a Cloudflare/Akamai protection page. Snippet: " +
-                                     content[..Math.Min(300, content.Length)]);
-                    throw new Exception("Coles blocked request; HTML returned instead of JSON content.");
-                }
-
-                return content;
-            });
-
-            // Use AngleSharp to parse the HTML document
-            var config = Configuration.Default; // no network loader
-            var context = BrowsingContext.New(config);
-            var document = await context.OpenAsync(req => req.Content(html));
-
-            // Locate the embedded JSON data from Next.js
-            var scriptNode = document.QuerySelector("#__NEXT_DATA__");
-            if (scriptNode == null)
-            {
-                _logger.LogError("[ParseError] Missing __NEXT_DATA__ element in Coles page HTML.");
-                throw new Exception("Could not find __NEXT_DATA__ script in Coles page.");
-            }
-
-            // Extract buildId from the JSON inside __NEXT_DATA__
-            using var jsonDoc = JsonDocument.Parse(scriptNode.TextContent);
-            if (!jsonDoc.RootElement.TryGetProperty("buildId", out var buildIdElement))
-            {
-                _logger.LogError("[ParseError] buildId property missing in Coles page JSON.");
-                throw new Exception("Failed to extract buildId from Coles page.");
-            }
-
-            string buildId = buildIdElement.GetString();
-            if (string.IsNullOrEmpty(buildId))
-                throw new Exception("BuildId is null or empty.");
-
-            // Cache buildId for 60 minutes to minimize repeated scraping
+            // ✅ Step 7: Cache result
             await _cache.SetStringAsync(
-                CacheKey.BUILD_ID,
-                buildId,
+                CacheKey.COLES_ON_SPECIAL_PRODUCTS,
+                JsonSerializer.Serialize(all),
                 new DistributedCacheEntryOptions
                 {
                     AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
                 });
 
-            _logger.LogInformation($"✅ [Success] New Coles buildId fetched and cached: {buildId}");
-            return buildId;
+            // ✅ Step 8: Filtering
+            if (request != null)
+                all = ApplyFilters(all, request);
+
+            return all;
+        }
+
+        /// <summary>
+        /// Extracts Next.js buildId from __NEXT_DATA__ script after page JS execution.
+        /// </summary>
+        private async Task<string> GetBuildIdFromPageAsync(IPage page)
+        {
+            var node = await page.QuerySelectorAsync("script#__NEXT_DATA__");
+            if (node == null)
+            {
+                _logger.LogError("[ParseError] Missing __NEXT_DATA__ element in Coles page.");
+                throw new Exception("Could not find __NEXT_DATA__ script in Coles page.");
+            }
+
+            var json = await node.InnerTextAsync();
+            if (string.IsNullOrWhiteSpace(json))
+                throw new Exception("__NEXT_DATA__ content is empty.");
+
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("buildId", out var buildIdProp))
+                throw new Exception("buildId not found in __NEXT_DATA__.");
+
+            var buildId = buildIdProp.GetString();
+            if (string.IsNullOrWhiteSpace(buildId))
+                throw new Exception("buildId is null/empty.");
+
+            return buildId!;
+        }
+
+        private static List<ColesSpecialProduct> ApplyFilters(List<ColesSpecialProduct> src, ColesSpecialProductRequest req)
+        {
+            var q = src.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(req.Name))
+                q = q.Where(p => !string.IsNullOrEmpty(p.Name) &&
+                                 p.Name.Contains(req.Name, StringComparison.OrdinalIgnoreCase));
+            if (req.IsSponsored)
+                q = q.Where(p => p.IsSponsored);
+            if (req.MinPrice.HasValue)
+                q = q.Where(p => p.CurrentPrice >= req.MinPrice.Value);
+            if (req.MaxPrice.HasValue)
+                q = q.Where(p => p.CurrentPrice <= req.MaxPrice.Value);
+            return q.ToList();
         }
     }
+
+    #region DTOs (Coles JSON)
+    public class ColesApiResponse
+    {
+        public ColesPageProps PageProps { get; set; } = new();
+    }
+
+    public class ColesPageProps
+    {
+        public ColesSearchResults SearchResults { get; set; } = new();
+    }
+
+    public class ColesSearchResults
+    {
+        public List<ColesSearchItem> Results { get; set; } = new();
+    }
+
+    public class ColesSearchItem
+    {
+        public string _type { get; set; } = string.Empty;
+        public long Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public ColesPricing? Pricing { get; set; }
+        public List<ColesImage>? ImageUris { get; set; }
+    }
+
+    public class ColesPricing
+    {
+        public decimal? Now { get; set; }
+        public decimal? Was { get; set; }
+        public string? Comparable { get; set; }
+    }
+
+    public class ColesImage
+    {
+        public string? Uri { get; set; }
+    }
+    #endregion
 }
