@@ -205,69 +205,103 @@ namespace PriceCompareCore.Services
 
         private async Task<string> GetBuildIdAsync()
         {
-            string cachedBuildId = await _cache.GetStringAsync(CacheKey.BUILD_ID);
+            // Check if we already have a cached buildId (valid for 1 hour)
+            var cachedBuildId = await _cache.GetStringAsync(CacheKey.BUILD_ID);
             if (!string.IsNullOrEmpty(cachedBuildId))
             {
-                _logger.LogInformation($"Using cached Coles buildId: {cachedBuildId}");
+                _logger.LogInformation($"[Cache] Using cached Coles buildId: {cachedBuildId}");
                 return cachedBuildId;
             }
 
+            // Target URL for Coles "On Special" page
             string url = $"{BaseUrl}/on-special";
+
+            // Create an HTTP request with realistic browser headers
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            request.Headers.Add("Accept-Language", "en-US,en;q=0.9");
+            request.Headers.Add("Accept-Encoding", "gzip, deflate, br");
+            request.Headers.Add("Referer", "https://www.google.com/");
+            request.Headers.Add("Sec-Fetch-Dest", "document");
+            request.Headers.Add("Sec-Fetch-Mode", "navigate");
+            request.Headers.Add("Sec-Fetch-Site", "none");
+            request.Headers.Add("Sec-Fetch-User", "?1");
+            request.Headers.Add("Upgrade-Insecure-Requests", "1");
+
+            // Optional cookie injection (if Cloudflare blocks AWS IPs)
+            var cookie = Environment.GetEnvironmentVariable("COLES_COOKIE");
+            if (!string.IsNullOrEmpty(cookie))
+            {
+                request.Headers.Add("Cookie", cookie);
+                _logger.LogInformation("[Cookie] Using COLES_COOKIE from environment variable.");
+            }
+
+            // Execute the request with retry (3 attempts, exponential backoff)
             string html = await _retryPolicy.ExecuteAsync(async () =>
             {
-                var response = await _httpClient.GetAsync(url);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.SendAsync(request);
+                var content = await response.Content.ReadAsStringAsync();
+
+                // Ensure successful response code
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError($"[Coles] Returned {response.StatusCode}: {content[..Math.Min(200, content.Length)]}");
+                    throw new HttpRequestException($"Coles responded with {response.StatusCode}");
+                }
+
+                // Detect Cloudflare or Akamai anti-bot HTML pages
+                if (content.TrimStart().StartsWith("<") &&
+                    (content.Contains("Access Denied", StringComparison.OrdinalIgnoreCase)
+                     || content.Contains("verify you are human", StringComparison.OrdinalIgnoreCase)
+                     || content.Contains("cf-chl-bypass", StringComparison.OrdinalIgnoreCase)
+                     || content.Contains("Request unsuccessful", StringComparison.OrdinalIgnoreCase)))
+                {
+                    _logger.LogError("[AntiBot] Coles returned a Cloudflare/Akamai protection page. Snippet: " +
+                                     content[..Math.Min(300, content.Length)]);
+                    throw new Exception("Coles blocked request; HTML returned instead of JSON content.");
+                }
+
+                return content;
             });
 
-            // check for anti-bot
-            if (string.IsNullOrWhiteSpace(html) || html.Contains("Access denied", StringComparison.OrdinalIgnoreCase)
-                || html.Contains("captcha", StringComparison.OrdinalIgnoreCase))
+            // Use AngleSharp to parse the HTML document
+            var config = Configuration.Default; // no network loader
+            var context = BrowsingContext.New(config);
+            var document = await context.OpenAsync(req => req.Content(html));
+
+            // Locate the embedded JSON data from Next.js
+            var scriptNode = document.QuerySelector("#__NEXT_DATA__");
+            if (scriptNode == null)
             {
-                _logger.LogWarning("Coles page might be blocked by anti-bot system.");
-                throw new Exception("Coles blocked request; HTML returned instead of content.");
+                _logger.LogError("[ParseError] Missing __NEXT_DATA__ element in Coles page HTML.");
+                throw new Exception("Could not find __NEXT_DATA__ script in Coles page.");
             }
 
-            // parse buildId from HTML using AngleSharp
-            string buildId = null;
-            try
+            // Extract buildId from the JSON inside __NEXT_DATA__
+            using var jsonDoc = JsonDocument.Parse(scriptNode.TextContent);
+            if (!jsonDoc.RootElement.TryGetProperty("buildId", out var buildIdElement))
             {
-                var config = Configuration.Default;
-                var context = BrowsingContext.New(config);
-                var doc = await context.OpenAsync(req => req.Content(html));
+                _logger.LogError("[ParseError] buildId property missing in Coles page JSON.");
+                throw new Exception("Failed to extract buildId from Coles page.");
+            }
 
-                var scriptNode = doc.QuerySelector("#__NEXT_DATA__");
-                if (scriptNode != null && !string.IsNullOrEmpty(scriptNode.TextContent))
+            string buildId = buildIdElement.GetString();
+            if (string.IsNullOrEmpty(buildId))
+                throw new Exception("BuildId is null or empty.");
+
+            // Cache buildId for 60 minutes to minimize repeated scraping
+            await _cache.SetStringAsync(
+                CacheKey.BUILD_ID,
+                buildId,
+                new DistributedCacheEntryOptions
                 {
-                    using var jsonDoc = JsonDocument.Parse(scriptNode.TextContent);
-                    if (jsonDoc.RootElement.TryGetProperty("buildId", out var buildElement))
-                    {
-                        buildId = buildElement.GetString();
-                    }
-                }
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+                });
 
-                // Regex fallback
-                if (string.IsNullOrEmpty(buildId))
-                {
-                    var match = Regex.Match(html, @"""buildId""\s*:\s*""([^""]+)""");
-                    if (match.Success)
-                        buildId = match.Groups[1].Value;
-                }
-
-                if (string.IsNullOrEmpty(buildId))
-                    throw new Exception("Failed to extract buildId via both AngleSharp and Regex.");
-
-                await _cache.SetStringAsync(CacheKey.BUILD_ID, buildId,
-                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60) });
-
-                _logger.LogInformation($"Fetched new Coles buildId: {buildId}");
-                return buildId;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while parsing buildId with AngleSharp.");
-                throw;
-            }
+            _logger.LogInformation($"✅ [Success] New Coles buildId fetched and cached: {buildId}");
+            return buildId;
         }
     }
 }
