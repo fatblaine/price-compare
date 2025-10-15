@@ -55,7 +55,7 @@ builder.Services.AddQuartz(q =>
 
     // scrape data - wws
     var jobKeyWwsSpecial = new JobKey("WwsRefreshJobSpecial");
-    q.AddJob<ColesRefreshJobSpecial>(opts => opts.WithIdentity(jobKeyWwsSpecial));
+    q.AddJob<WwsRefreshJobSpecial>(opts => opts.WithIdentity(jobKeyWwsSpecial));
     q.AddTrigger(opts => opts
         .ForJob(jobKeyWwsSpecial)
         .WithIdentity("WwsRefreshJobSpecial-trigger")
@@ -77,10 +77,7 @@ builder.Services.AddHttpClient<IColesDownScraperService, ColesDownScraperService
         policy.WaitAndRetryAsync(3, retryAttempt =>
             TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
-builder.Services.AddHttpClient<IColesSpecialScraperService, ColesSpecialScraperService>()
-    .AddTransientHttpErrorPolicy(policy =>
-        policy.WaitAndRetryAsync(3, retryAttempt =>
-            TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
+builder.Services.AddScoped<IColesSpecialScraperService, ColesSpecialScraperService>();
 
 builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialScraperService>();
 
