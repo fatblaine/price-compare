@@ -19,14 +19,12 @@ using PriceCompareData.Entities.History;
 namespace PriceCompareCore.Services
 {
     /// <summary>
-    /// ✅ Coles On-Special scraper powered by Playwright.
-    /// 
-    /// 关键步骤：
-    /// 1️⃣ 启动 headless Chromium（Lambda 兼容）。
-    /// 2️⃣ 打开 https://www.coles.com.au/on-special 页面，触发反爬验证脚本。
-    /// 3️⃣ 从页面 DOM 中提取 __NEXT_DATA__.buildId。
-    /// 4️⃣ 访问 JSON 接口 /_next/data/{buildId}/en/on-special.json?page={n}。
-    /// 5️⃣ 解析结果 → 缓存 → 写入数据库 → 调用 ingestion 更新产品表。
+    /// Steps:
+    /// Start with cache. If hit, return directly.
+    /// Open https://www.coles.com.au/on-special page, trigger anti-scraping script.
+    /// Extract __NEXT_DATA__.buildId from page DOM.
+    /// Access JSON API /_next/data/{buildId}/en/on-special.json?page={n}.
+    /// Parse result → cache → write to database → call ingestion to update product table.
     /// </summary>
     public class ColesSpecialScraperService : IColesSpecialScraperService
     {
@@ -62,7 +60,7 @@ namespace PriceCompareCore.Services
 
         public async Task<List<ColesSpecialProduct>> GetAllOnSpecialProductsAsync(ColesSpecialProductRequest request = null)
         {
-            // ✅ Step 1: 优先读取缓存
+            // Step 1: cache first
             var cached = await _cache.GetStringAsync(CacheKey.COLES_ON_SPECIAL_PRODUCTS);
             if (!string.IsNullOrWhiteSpace(cached))
             {
@@ -73,7 +71,7 @@ namespace PriceCompareCore.Services
 
             var all = new List<ColesSpecialProduct>();
 
-            // ✅ Step 2: 启动 Playwright，模拟真实浏览器
+            // Step 2: scrape with Playwright + retry
             await _retry.ExecuteAsync(async () =>
             {
                 using var pw = await Playwright.CreateAsync();
@@ -108,14 +106,14 @@ namespace PriceCompareCore.Services
                     Timeout = 45000
                 });
 
-                // 等待反爬脚本执行完成
+                // wait for potential anti-bot JS to finish
                 await page.WaitForTimeoutAsync(2000);
 
-                // ✅ Step 3: 获取 buildId
+                // Step 3: Extract buildId
                 var buildId = await GetBuildIdFromPageAsync(page);
                 _logger.LogInformation("Fetched buildId: {BuildId}", buildId);
 
-                // ✅ Step 4: 分页爬取 JSON
+                // Step 4: Paginated fetch
                 int pageNo = 1;
                 while (true)
                 {
@@ -166,7 +164,7 @@ namespace PriceCompareCore.Services
                 }
             });
 
-            // ✅ Step 5: 写入价格历史
+            // Step 5: Write price history
             foreach (var p in all)
             {
                 var today = DateTime.UtcNow.Date;
@@ -191,10 +189,10 @@ namespace PriceCompareCore.Services
             }
             await _db.SaveChangesAsync();
 
-            // ✅ Step 6: Upsert product base table
+            // Step 6: Upsert product base table
             await _ingestion.UpsertColesSpecialAsync(all);
 
-            // ✅ Step 7: Cache result
+            // Step 7: Cache result
             await _cache.SetStringAsync(
                 CacheKey.COLES_ON_SPECIAL_PRODUCTS,
                 JsonSerializer.Serialize(all),
@@ -203,7 +201,7 @@ namespace PriceCompareCore.Services
                     AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
                 });
 
-            // ✅ Step 8: Filtering
+            // Step 8: Filtering
             if (request != null)
                 all = ApplyFilters(all, request);
 
