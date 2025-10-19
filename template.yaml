@@ -53,9 +53,9 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: ColesRefreshSpecialJob
-      Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.ColesRefreshSpecialLambda::Handler
-      CodeUri: ./src/PriceCompareWeb/
-      PackageType: Zip
+      PackageType: Image
+      ImageUri: !Sub "821791407699.dkr.ecr.ap-southeast-2.amazonaws.com/coles-special-job:latest"
+      Handler: PriceCompareWeb::PriceCompareWeb.LambdaEntryPoint::FunctionHandlerAsync
       Events:
         WeeklyTrigger:
           Type: Schedule
@@ -65,14 +65,15 @@ Resources:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
           USE_REDIS: "false"
+          TARGET_JOB: "COLES_SPECIAL"
 
   WwsRefreshSpecialJob:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: WwsRefreshSpecialJob
-      Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.WwsRefreshSpecialLambda::Handler
-      CodeUri: ./src/PriceCompareWeb/
-      PackageType: Zip
+      PackageType: Image
+      ImageUri: !Sub "821791407699.dkr.ecr.ap-southeast-2.amazonaws.com/wws-special-job:latest"
+      Handler: PriceCompareWeb::PriceCompareWeb.LambdaEntryPoint::FunctionHandlerAsync
       Events:
         WeeklyTrigger:
           Type: Schedule
@@ -81,6 +82,7 @@ Resources:
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          TARGET_JOB: "WWS_SPECIAL"
 
   CleanPriceHistoryJob:
     Type: AWS::Serverless::Function
