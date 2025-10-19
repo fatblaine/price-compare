@@ -46,4 +46,4 @@ FROM base AS final
 WORKDIR /var/task
 COPY --from=build /app/publish .
 
-CMD ["PriceCompareWeb.JobsLambda.ColesRefreshSpecialLambda::Handler"]
+CMD ["PriceCompareWeb::PriceCompareWeb.LambdaEntryPoint::FunctionHandlerAsync"]
