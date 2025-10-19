@@ -1,0 +1,49 @@
+# ===============================
+# ✅ Coles Special Job Lambda (.NET 8 + Playwright)
+# Base: Amazon Linux 2023
+# ===============================
+
+FROM public.ecr.aws/lambda/dotnet:8 AS base
+
+RUN set -eux; \
+    echo "🔧 Installing system dependencies..."; \
+    dnf -y update --refresh || true; \
+    dnf -y install tar gzip xz zip wget which shadow-utils nss \
+        atk at-spi2-atk cups-libs gtk3 \
+        libXcomposite libXcursor libXdamage libXext libXi libXtst pango \
+        alsa-lib cairo gdk-pixbuf2 libdrm libgbm freetype glib2 \
+        ca-certificates; \
+    echo "🔧 Installing Node.js 20..."; \
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -; \
+    dnf install -y nodejs; \
+    node -v && npm -v; \
+    npm install -g playwright-chromium@1.44.0; \
+    npx playwright install chromium; \
+    dnf clean all && rm -rf /var/cache/dnf
+
+# ===============================
+# Build .NET app
+# ===============================
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+COPY PriceCompareSolution.sln ./
+COPY src/PriceCompareCore/PriceCompareCore.csproj src/PriceCompareCore/
+COPY src/PriceCompareData/PriceCompareData.csproj src/PriceCompareData/
+COPY src/PriceCompareWeb/PriceCompareWeb.csproj src/PriceCompareWeb/
+
+RUN dotnet restore src/PriceCompareWeb/PriceCompareWeb.csproj
+
+COPY . .
+WORKDIR /src/src/PriceCompareWeb
+RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
+
+
+# ===============================
+# Runtime
+# ===============================
+FROM base AS final
+WORKDIR /var/task
+COPY --from=build /app/publish .
+
+CMD ["PriceCompareWeb.JobsLambda.ColesRefreshSpecialLambda::Handler"]

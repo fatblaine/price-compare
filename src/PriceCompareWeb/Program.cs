@@ -6,6 +6,7 @@ using PriceCompareCore.Interfaces;
 using PriceCompareCore.Jobs;
 using PriceCompareCore.Services;
 using PriceCompareData.Data;
+using PriceCompareWeb.JobsLambda;
 using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -110,3 +111,35 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// =========================================================
+// ✅ Glue code for Container Lambda execution
+// =========================================================
+
+namespace PriceCompareWeb
+{
+    public class LambdaEntryPoint
+    {
+        // AWS entry point
+        public async Task FunctionHandlerAsync()
+        {
+            var target = Environment.GetEnvironmentVariable("TARGET_JOB");
+
+            if (string.Equals(target, "COLES_SPECIAL", StringComparison.OrdinalIgnoreCase))
+            {
+                var job = new ColesRefreshSpecialLambda();
+                await job.Handler();
+            }
+            else if (string.Equals(target, "WWS_SPECIAL", StringComparison.OrdinalIgnoreCase))
+            {
+                var job = new WwsRefreshSpecialLambda();
+                await job.Handler();
+            }
+            else
+            {
+                Console.WriteLine("No valid TARGET_JOB environment variable found.");
+                Console.WriteLine("Available: COLES_SPECIAL | WWS_SPECIAL");
+            }
+        }
+    }
+}
