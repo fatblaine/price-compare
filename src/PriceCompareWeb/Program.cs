@@ -1,6 +1,9 @@
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
+using Amazon.Lambda.AspNetCoreServer.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Builder;
 using Polly;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Jobs;
