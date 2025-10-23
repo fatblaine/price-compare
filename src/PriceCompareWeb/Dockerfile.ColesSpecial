@@ -1,42 +1,72 @@
 # ===============================
-# ✅ Coles Special Job Lambda (.NET 8 + Playwright)
+# Coles Special Job Lambda (.NET 8 + Playwright)
 # Base: Amazon Linux 2023
 # ===============================
 
+# syntax=docker/dockerfile:1.6
+
 FROM public.ecr.aws/lambda/dotnet:8 AS base
 
-RUN set -eux; \
-    echo "🔧 Installing system dependencies..."; \
-    dnf -y update --refresh || true; \
-    dnf -y install tar gzip xz zip wget which shadow-utils nss \
+# Keep Chromium under a fixed path we can copy to the runtime
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# System dependencies required by Chromium on AL2023
+RUN --mount=type=cache,target=/var/cache/dnf set -eux; \
+    echo "Installing system dependencies (no full upgrade)..."; \
+    dnf -y install --setopt=install_weak_deps=0 tar gzip xz zip wget which shadow-utils nss \
         atk at-spi2-atk cups-libs gtk3 \
         libXcomposite libXcursor libXdamage libXext libXi libXtst pango \
         alsa-lib cairo gdk-pixbuf2 libdrm libgbm freetype glib2 \
         ca-certificates; \
-    echo "🔧 Installing Node.js 20..."; \
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -; \
-    dnf install -y nodejs; \
-    node -v && npm -v; \
-    npm install -g playwright-chromium@1.44.0; \
-    npx playwright install chromium; \
-    dnf clean all && rm -rf /var/cache/dnf
+    dnf clean all
+
 
 # ===============================
-# Build .NET app
+# Build .NET app and install Playwright browsers
 # ===============================
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
+ENV DOTNET_CLI_HOME=/tmp \
+    NUGET_PACKAGES=/root/.nuget/packages \
+    TMPDIR=/tmp \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    DOTNET_NOLOGO=1 \
+    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
+    PATH=/root/.dotnet/tools:/tmp/.dotnet/tools:$PATH
+
+RUN mkdir -p /ms-playwright
+
+# Copy solution and project files
 COPY PriceCompareSolution.sln ./
 COPY src/PriceCompareCore/PriceCompareCore.csproj src/PriceCompareCore/
 COPY src/PriceCompareData/PriceCompareData.csproj src/PriceCompareData/
 COPY src/PriceCompareWeb/PriceCompareWeb.csproj src/PriceCompareWeb/
 
-RUN dotnet restore src/PriceCompareWeb/PriceCompareWeb.csproj
+# Restore only the web project (reduce memory / avoid test projects)
+ARG NUGET_SOURCE=https://api.nuget.org/v3/index.json
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    --mount=type=cache,target=/root/.local/share/NuGet/v3-cache \
+    dotnet restore src/PriceCompareWeb/PriceCompareWeb.csproj \
+        --verbosity minimal \
+        --source $NUGET_SOURCE
 
+# Copy source and publish
 COPY . .
 WORKDIR /src/src/PriceCompareWeb
-RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
+
+# Restore (default obj path), then publish without restore.
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    --mount=type=cache,target=/root/.local/share/NuGet/v3-cache \
+    dotnet restore --verbosity minimal --source $NUGET_SOURCE \
+    && dotnet publish -c Release -o /app/publish --no-restore --verbosity minimal \
+        /p:UseAppHost=false
+
+# Install Playwright Chromium via global CLI (no version pin)
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    --mount=type=cache,target=/root/.local/share/NuGet/v3-cache \
+    dotnet tool install --global Microsoft.Playwright.CLI --add-source $NUGET_SOURCE \
+    && playwright install chromium
 
 
 # ===============================
@@ -44,6 +74,16 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 # ===============================
 FROM base AS final
 WORKDIR /var/task
-COPY --from=build /app/publish .
 
-CMD ["PriceCompareWeb::PriceCompareWeb.LambdaEntryPoint::FunctionHandlerAsync"]
+# Copy app and browsers
+COPY --from=build /app/publish .
+COPY --from=build /ms-playwright /ms-playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Ensure Playwright driver (Node binary) is executable without heavy recursion
+RUN if [ -d /var/task/.playwright ]; then \
+      find /var/task/.playwright -maxdepth 3 -type f -name node -exec chmod 755 {} +; \
+    fi || true
+
+# Lambda handler for Coles Special job
+CMD ["PriceCompareWeb::PriceCompareWeb.JobsLambda.ColesRefreshSpecialLambda::Handler"]
