@@ -62,7 +62,16 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
     && dotnet publish -c Release -o /app/publish --no-restore --verbosity minimal \
         /p:UseAppHost=false
 
-# Install Playwright Chromium via global CLI (no version pin)
+# Pre-generate .playwright for .NET driver in the publish output with correct exec perms
+WORKDIR /app/publish
+RUN set -eux; \
+    chmod +x ./playwright.sh; \
+    ./playwright.sh install chromium; \
+    if [ -d ./.playwright ]; then \
+      find ./.playwright -maxdepth 3 -type f -name node -exec chmod 755 {} +; \
+    fi
+
+# Install Playwright Chromium via global CLI as well (browsers to /ms-playwright)
 RUN --mount=type=cache,target=/root/.nuget/packages \
     --mount=type=cache,target=/root/.local/share/NuGet/v3-cache \
     dotnet tool install --global Microsoft.Playwright.CLI --add-source $NUGET_SOURCE \

@@ -65,6 +65,15 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
     && dotnet tool install --global Microsoft.Playwright.CLI --add-source $NUGET_SOURCE \
     && playwright install chromium
 
+# Pre-generate .playwright for .NET driver in the publish output with correct exec perms
+WORKDIR /app/publish
+RUN set -eux; \
+    chmod +x ./playwright.sh; \
+    ./playwright.sh install chromium; \
+    if [ -d ./.playwright ]; then \
+      find ./.playwright -maxdepth 3 -type f -name node -exec chmod 755 {} +; \
+    fi
+
 
 # ===============================
 
