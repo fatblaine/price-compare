@@ -89,6 +89,9 @@ builder.Services.AddScoped<ICategoryMappingService, CategoryMappingService>();
 
 builder.Services.AddScoped<IIngestionService, IngestionService>();
 
+// Products service
+builder.Services.AddScoped<PriceCompareCore.Interfaces.IProductService, PriceCompareCore.Services.ProductService>();
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 // builder.Services.AddDbContext<AppDbContext>(options =>
