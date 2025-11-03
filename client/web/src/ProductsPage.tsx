@@ -15,7 +15,7 @@ import type { SelectChangeEvent } from "@mui/material/Select";
 import { SHOP_OPTIONS, shopTypeName } from "./constants/shopTypes";
 import { fetchProducts, type ProductRow } from "./api/products";
 import { useDebounce } from "./hooks/useDebounce";
-import axios from "axios";
+import CompareDialog from "./components/CompareDialog";
 
 export default function ProductsPage() {
   const [rows, setRows] = useState<ProductRow[]>([]);
@@ -29,30 +29,28 @@ export default function ProductsPage() {
   });
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // Compare dialog state
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareKeyword, setCompareKeyword] = useState<string>("");
+  const [compareSourceShop, setCompareSourceShop] = useState<number | undefined>(
+    undefined
+  );
+
   const debouncedName = useDebounce(search, 350);
 
-  const handleCompare = async (
+  const handleCompare = (
     productId: string,
     name?: string,
     shopTypeValue?: number | string | null
   ) => {
-    try {
-      if (!name) {
-        alert("No product name available for comparison.");
-        return;
-      }
-
-      const sourceShop = Number(shopTypeValue ?? NaN);
-      const params: any = { keyword: name };
-      if (Number.isFinite(sourceShop)) params.sourceShop = sourceShop;
-
-      const res = await axios.get("/api/Compare", { params });
-      // Show matches in a readable alert for now
-      alert(JSON.stringify(res.data, null, 2));
-    } catch (error) {
-      alert("Compare failed, check console.");
-      console.error(error);
+    if (!name) {
+      alert("No product name available for comparison.");
+      return;
     }
+    setCompareKeyword(name);
+    const source = Number(shopTypeValue ?? NaN);
+    setCompareSourceShop(Number.isFinite(source) ? (source as number) : undefined);
+    setCompareOpen(true);
   };
 
   // Fetch when filters or pagination changes
@@ -182,6 +180,13 @@ export default function ProductsPage() {
         rowCount={rowCount}
         pageSizeOptions={[10, 20, 50]}
         disableRowSelectionOnClick
+      />
+
+      <CompareDialog
+        open={compareOpen}
+        keyword={compareKeyword}
+        sourceShop={compareSourceShop}
+        onClose={() => setCompareOpen(false)}
       />
     </Box>
   );
