@@ -1,5 +1,7 @@
 import axios from "axios";
 
+const API_BASE = process.env.REACT_APP_API_BASE?.trim() || ""; // e.g. https://lhpjjzns6f.execute-api.ap-southeast-2.amazonaws.com
+
 function read<T = any>(obj: any, ...keys: string[]): T | undefined {
   for (const k of keys) {
     if (obj && Object.prototype.hasOwnProperty.call(obj, k)) return obj[k] as T;
@@ -45,7 +47,8 @@ function normalizeProduct(raw: any): CompareProduct {
 
 export async function fetchCompareMatches(keyword: string, sourceShop: number): Promise<CompareMatches | null> {
   const params: any = { keyword, sourceShop };
-  const res = await axios.get("/api/Compare", { params });
+  const url = `${API_BASE}/api/Compare`;
+  const res = await axios.get(url, { params });
   const data = res.data ?? {};
   const matches: any[] = read<any[]>(data, "matches", "Matches") ?? [];
   if (!Array.isArray(matches) || matches.length === 0) return null;

@@ -1,5 +1,7 @@
 import axios from "axios";
 
+const API_BASE = process.env.REACT_APP_API_BASE?.trim() || ""; // e.g. https://lhpjjzns6f.execute-api.ap-southeast-2.amazonaws.com
+
 export interface ProductRow {
   productId: string;
   name: string;
@@ -26,7 +28,8 @@ export interface FetchProductsResult {
 export async function fetchProducts(
   params: FetchProductsParams
 ): Promise<FetchProductsResult> {
-  const res = await axios.get("/api/Products", { params });
+  const url = `${API_BASE}/api/Products`;
+  const res = await axios.get(url, { params });
   const data = res.data ?? {};
 
   // Support both camelCase and PascalCase payloads
