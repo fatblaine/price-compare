@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: Serverless Price Compare Platform (.NET 8, Lambda, API Gateway, EventBridge, Supabase)
+Description: PriceCompare API (Products + Compare only)
 
 Globals:
   Function:
@@ -13,9 +13,20 @@ Globals:
 Parameters:
   DbConnectionString:
     Type: String
-    Description: Supabase Postgres connection string
+    Description: PostgreSQL connection string for AppDbContext (Npgsql)
 
 Resources:
+  AppHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+        AllowHeaders:
+          - "*"
+
   PriceCompareApi:
     Type: AWS::Serverless::Function
     Properties:
@@ -24,83 +35,23 @@ Resources:
       CodeUri: ./src/PriceCompareWeb/
       PackageType: Zip
       Events:
-        ApiEvent:
+        ProductsGet:
           Type: HttpApi
           Properties:
-            Path: /{proxy+}
-            Method: ANY
-      Environment:
-        Variables:
-          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
-
-  ColesRefreshJob:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ColesRefreshJob
-      Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.ColesRefreshLambda::Handler
-      CodeUri: ./src/PriceCompareWeb/
-      PackageType: Zip
-      Events:
-        WeeklyTrigger:
-          Type: Schedule
+            ApiId: !Ref AppHttpApi
+            Path: /api/Products
+            Method: GET
+        CompareGet:
+          Type: HttpApi
           Properties:
-            Schedule: cron(0 2 ? * WED *) # 2am every Wednesday UTC
-      Environment:
-        Variables:
-          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
-
-  ColesRefreshSpecialJob:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ColesRefreshSpecialJob
-      PackageType: Image
-      ImageUri: !Sub "821791407699.dkr.ecr.ap-southeast-2.amazonaws.com/coles-special-job:latest"
-      Handler: PriceCompareWeb::PriceCompareWeb.LambdaEntryPoint::FunctionHandlerAsync
-      Events:
-        WeeklyTrigger:
-          Type: Schedule
-          Properties:
-            Schedule: cron(0 3 ? * WED *) # 3am every Wednesday UTC
-      Environment:
-        Variables:
-          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
-          USE_REDIS: "false"
-          TARGET_JOB: "COLES_SPECIAL"
-
-  WwsRefreshSpecialJob:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: WwsRefreshSpecialJob
-      PackageType: Image
-      ImageUri: !Sub "821791407699.dkr.ecr.ap-southeast-2.amazonaws.com/wws-special-job:latest"
-      Handler: PriceCompareWeb::PriceCompareWeb.LambdaEntryPoint::FunctionHandlerAsync
-      Events:
-        WeeklyTrigger:
-          Type: Schedule
-          Properties:
-            Schedule: cron(0 4 ? * WED *) # 4am every Wednesday UTC
-      Environment:
-        Variables:
-          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
-          TARGET_JOB: "WWS_SPECIAL"
-
-  CleanPriceHistoryJob:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: CleanPriceHistoryJob
-      Handler: PriceCompareWeb::PriceCompareWeb.JobsLambda.CleanPriceHistoryLambda::Handler
-      CodeUri: ./src/PriceCompareWeb/
-      PackageType: Zip
-      Events:
-        QuarterlyTrigger:
-          Type: Schedule
-          Properties:
-            Schedule: cron(0 1 ? 1/3 4#1 *) # 1am every first Thursday of the quarter
+            ApiId: !Ref AppHttpApi
+            Path: /api/Compare
+            Method: GET
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
 
 Outputs:
-  ApiUrl:
-    Description: "API Gateway endpoint URL"
-    Value: !Ref PriceCompareApi
+  ApiEndpoint:
+    Description: HTTP API invoke URL (no stage path)
+    Value: !Sub "https://${AppHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
