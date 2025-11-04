@@ -28,6 +28,17 @@ builder.Services.AddEndpointsApiExplorer();
 // Swagger
 builder.Services.AddSwaggerGen();
 
+// CORS
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                    ?? new[] { "http://localhost:3000" };
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Default", policy =>
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
 // Redis
 builder.Services.AddStackExchangeRedisCache(options =>
 {
@@ -111,6 +122,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("Default");
 
 app.UseAuthorization();
 
