@@ -76,7 +76,8 @@ export interface PriceHistoryPoint {
 
 export async function fetchPriceHistory(name: string, shopType: number, offerType: number): Promise<PriceHistoryPoint[]> {
   const params = { name, shopType, offerType };
-  const res = await axios.get("/api/Scraping/priceHistory", { params });
+  const url = `${API_BASE}/api/Scraping/priceHistory`;
+  const res = await axios.get(url, { params });
   const arr = Array.isArray(res.data) ? res.data : [];
   return arr
     .map((it: any) => ({
