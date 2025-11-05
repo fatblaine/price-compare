@@ -47,6 +47,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Compare
             Method: GET
+        PriceHistoryGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Scraping/priceHistory
+            Method: GET
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
