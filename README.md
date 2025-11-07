@@ -4,6 +4,8 @@ PriceCompare is a full‑stack app that tracks and compares grocery prices from 
 
 The backend is an ASP.NET Core Web API (net8.0) with EF Core and scheduled jobs; the frontend is React + TypeScript using MUI DataGrid. Scrapers ingest “Down Down” and “On Special” items and write both a product base table and price history.
 
+URL: <http://pricecompare-frontend-prod.s3-website-ap-southeast-2.amazonaws.com>
+
 ---
 
 ## Features
@@ -34,14 +36,14 @@ The backend is an ASP.NET Core Web API (net8.0) with EF Core and scheduled jobs;
 - .NET SDK 8.0+
 - Node.js 18+ and npm
 - PostgreSQL 14+ (or a PostgreSQL instance such as Supabase)
-- Redis (optional, for caching) 
+- Redis (optional, for caching)
 - Docker (optional, for Lambda container jobs)
 
 ---
 
 ## Quick Start (Local)
 
-1) Configure database connection
+1. Configure database connection
 
 - Set `ConnectionStrings__DefaultConnection` to a PostgreSQL connection string.
   - Option A (environment variable):
@@ -51,11 +53,11 @@ The backend is an ASP.NET Core Web API (net8.0) with EF Core and scheduled jobs;
 
 Important: Existing EF Core migrations under `src/PriceCompareData/Migrations` were generated for SQL Server, not PostgreSQL. If you use PostgreSQL locally, ensure the schema exists (manually or by regenerating migrations for Npgsql). Alternatively, switch back to SQL Server in `Program.cs` and use the provided migrations.
 
-2) (Optional) Enable Redis caching
+2. (Optional) Enable Redis caching
 
 - Set `Redis__ConnectionString` (e.g., `localhost:6379`). Some Lambda jobs read `USE_REDIS=true` and `Redis__ConnectionString` to decide between Redis and in‑memory cache.
 
-3) Run the backend API
+3. Run the backend API
 
 - `cd src/PriceCompareWeb`
 - `dotnet restore`
@@ -63,7 +65,7 @@ Important: Existing EF Core migrations under `src/PriceCompareData/Migrations` w
 
 The API listens on `http://localhost:5005` (see `Properties/launchSettings.json`). Swagger is available at `http://localhost:5005/swagger` in Development.
 
-4) Run the frontend (React)
+4. Run the frontend (React)
 
 - `cd client/web`
 - `npm install`
@@ -71,7 +73,7 @@ The API listens on `http://localhost:5005` (see `Properties/launchSettings.json`
 
 The app opens at `http://localhost:3000` and proxies API requests to `http://localhost:5005` (see `client/web/package.json` → `proxy`).
 
-5) Ingest sample data (via API)
+5. Ingest sample data (via API)
 
 Call any of these to seed products + price history:
 
@@ -86,16 +88,19 @@ These endpoints persist price history and upsert the products table. After inges
 ## API Overview
 
 - Products
+
   - `GET /api/Products`
     - Query: `page` (1‑based), `pageSize`, `name?`, `shopType?`, `categoryId?`
     - Returns: `{ Page, PageSize, Count, Products }`
 
 - Compare
+
   - `GET /api/Compare?keyword={name}&sourceShop={0|1}`
     - `sourceShop`: 0 = Coles, 1 = Woolworths
     - Returns: `{ matches: [ { source, targets[] } ] }` where each product includes fields like `name`, `shopType`, `size`, `price?`, `pricePerUnit?` (if available in history)
 
 - Price History
+
   - `GET /api/Scraping/priceHistory?name={name}&offerType={0|1}&shopType={0|1}`
     - `offerType`: 0 = Down Down, 1 = On Special
     - `shopType`: 0 = Coles, 1 = Woolworths
@@ -162,8 +167,8 @@ The `template.yaml` defines:
 
 Typical steps:
 
-1) `sam build`
-2) `sam deploy --guided --parameter-overrides DbConnectionString="<postgres-connection>"`
+1. `sam build`
+2. `sam deploy --guided --parameter-overrides DbConnectionString="<postgres-connection>"`
 
 Provide the PostgreSQL connection string via the `DbConnectionString` parameter.
 
