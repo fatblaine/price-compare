@@ -20,6 +20,7 @@ import {
 	Select,
 	MenuItem,
 } from "@mui/material";
+import { useMediaQuery, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import {
 	fetchCompareMatches,
@@ -119,6 +120,8 @@ function PriceCard({
 
 export default function CompareDialog(props: CompareDialogProps) {
 	const { open, keyword, sourceShop, onClose } = props;
+	const theme = useTheme();
+	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 	const { loading, data, error } = useCompare(keyword, sourceShop);
 
 	const source = data?.source;
@@ -173,7 +176,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 	]);
 
 	return (
-		<Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+		<Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isXs}>
 			<DialogTitle sx={{ pr: 6 }}>
 				Compare: {keyword}
 				<IconButton
