@@ -11,6 +11,7 @@ import {
 	Select,
 	MenuItem,
 } from "@mui/material";
+import { useMediaQuery, useTheme } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import { SHOP_OPTIONS, shopTypeName } from "./constants/shopTypes";
 import { fetchProducts, type ProductRow } from "./api/products";
@@ -18,6 +19,9 @@ import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
 
 export default function ProductsPage() {
+	const theme = useTheme();
+	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
+	const isMdDown = useMediaQuery(theme.breakpoints.down("md"));
 	const [rows, setRows] = useState<ProductRow[]>([]);
 	const [rowCount, setRowCount] = useState(0);
 	const [loading, setLoading] = useState(false);
@@ -90,16 +94,21 @@ export default function ProductsPage() {
 	]);
 
 	const columns: GridColDef<ProductRow>[] = [
-		{ field: "productId", headerName: "ID", width: 220 },
-		{ field: "name", headerName: "Product Name", width: 220 },
+		{ field: "productId", headerName: "ID", width: 200 },
+		{
+			field: "name",
+			headerName: "Product Name",
+			flex: 1,
+			minWidth: isXs ? 160 : 220,
+		},
 		{ field: "price", headerName: "Price", width: 100 },
 		{
 			field: "shopType",
 			headerName: "Shop",
-			width: 140,
+			width: 120,
 			renderCell: (params) => shopTypeName((params as any).row?.shopType),
 		},
-		{ field: "size", headerName: "Size", width: 140 },
+		{ field: "size", headerName: "Size", width: 120 },
 		{
 			field: "compare",
 			headerName: "Compare",
@@ -124,13 +133,22 @@ export default function ProductsPage() {
 		},
 	];
 
+	const columnVisibilityModel = React.useMemo(
+		() => ({
+			productId: !isMdDown, // 隐藏 ID 在中小屏
+			size: !isXs, // 超小屏隐藏 Size 列
+		}),
+		[isMdDown, isXs],
+	);
+
 	return (
-		<Box sx={{ height: 600, width: "100%", p: 3 }}>
-			<Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+		<Box sx={{ height: isXs ? "auto" : 600, width: "100%", p: { xs: 1.5, sm: 3 } }}>
+			<Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
 				<TextField
 					label="Search by name"
 					variant="outlined"
 					size="small"
+					fullWidth={isXs}
 					value={search}
 					onChange={(e) => {
 						setSearch(e.target.value);
@@ -139,7 +157,7 @@ export default function ProductsPage() {
 						);
 					}}
 				/>
-				<FormControl size="small" sx={{ minWidth: 160 }}>
+				<FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 160 } }} fullWidth={isXs}>
 					<InputLabel id="shop-type-label">Shop</InputLabel>
 					<Select
 						labelId="shop-type-label"
@@ -164,6 +182,7 @@ export default function ProductsPage() {
 				</FormControl>
 				<Button
 					variant="contained"
+					sx={{ width: { xs: "100%", sm: "auto" } }}
 					onClick={() => setRefreshTick((v) => v + 1)}
 				>
 					Search
@@ -173,6 +192,7 @@ export default function ProductsPage() {
 			<DataGrid
 				rows={rows}
 				columns={columns}
+				columnVisibilityModel={columnVisibilityModel}
 				getRowId={(row) => row.productId}
 				loading={loading}
 				pagination
@@ -182,6 +202,7 @@ export default function ProductsPage() {
 				rowCount={rowCount}
 				pageSizeOptions={[10, 20, 50]}
 				disableRowSelectionOnClick
+				autoHeight={isXs}
 			/>
 
 			<CompareDialog
