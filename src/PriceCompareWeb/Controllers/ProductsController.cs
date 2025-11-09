@@ -14,11 +14,16 @@ namespace PriceCompareWeb.Controllers
     {
         private readonly PriceCompareCore.Interfaces.IProductService _productService;
         private readonly ILogger<ProductsController> _logger;
+        private readonly AppDbContext _db;
 
-        public ProductsController(PriceCompareCore.Interfaces.IProductService productService, ILogger<ProductsController> logger)
+        public ProductsController(
+            PriceCompareCore.Interfaces.IProductService productService,
+            ILogger<ProductsController> logger,
+            AppDbContext db)
         {
             _productService = productService;
             _logger = logger;
+            _db = db;
         }
 
         /// <summary>
@@ -40,12 +45,64 @@ namespace PriceCompareWeb.Controllers
             {
                 var (total, items) = await _productService.GetProductsAsync(page, pageSize, name, shopType, categoryId);
 
+                // build latest price map from history by (Name, ShopType)
+                var names = items
+                    .Where(p => !string.IsNullOrEmpty(p.Name))
+                    .Select(p => p.Name!)
+                    .Distinct()
+                    .ToList();
+
+                var shopTypes = items
+                    .Where(p => p.ShopType.HasValue)
+                    .Select(p => p.ShopType!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var latestPrices = await _db.PriceHistory
+                    .AsNoTracking()
+                    .Where(ph => ph.Name != null
+                                 && names.Contains(ph.Name!)
+                                 && ph.ShopType.HasValue
+                                 && shopTypes.Contains(ph.ShopType!.Value))
+                    .GroupBy(ph => new { ph.Name, ph.ShopType })
+                    .Select(g => new
+                    {
+                        g.Key.Name,
+                        g.Key.ShopType,
+                        CurrentPrice = g
+                            .OrderByDescending(x => x.ScrapedAt)
+                            .Select(x => (decimal?)x.CurrentPrice)
+                            .FirstOrDefault()
+                    })
+                    .ToListAsync();
+
+                var priceMap = latestPrices
+                    .ToDictionary(
+                        k => (Name: k.Name!, ShopType: k.ShopType!.GetValueOrDefault()),
+                        v => v.CurrentPrice
+                    );
+
+                var shaped = items.Select(p => new
+                {
+                    productId = p.ProductId,
+                    name = p.Name,
+                    shopType = p.ShopType,
+                    sizeValue = p.SizeValue,
+                    sizeUnit = p.SizeUnit,
+                    brand = p.Brand,
+                    imageUrl = p.ImageUrl,
+                    price = (p.Name != null && p.ShopType.HasValue
+                        && priceMap.TryGetValue((p.Name, p.ShopType.Value), out var price)
+                        ? price
+                        : null)
+                }).ToList();
+
                 return Ok(new
                 {
                     Page = page,
                     PageSize = pageSize,
                     Count = total,
-                    Products = items
+                    Products = shaped
                 });
             }
             catch (Exception ex)
