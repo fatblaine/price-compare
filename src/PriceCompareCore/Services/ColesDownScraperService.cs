@@ -168,10 +168,11 @@ namespace PriceCompareCore.Services
 
         public async Task<List<PriceHistory>> GetPriceHistoryAsync(string name, int offerType, int shopType)
         {
-            var since = DateTime.UtcNow.AddDays(-7);
-            return await _dbContext.PriceHistory.Where(p => p.Name == name && p.ScrapedAt >= since && p.OfferType == offerType && p.ShopType == shopType)
-            .OrderBy(p => p.ScrapedAt)
-            .ToListAsync();
+            var since = DateTime.UtcNow.AddMonths(-1);
+            return await _dbContext.PriceHistory
+                .Where(p => p.Name == name && p.ScrapedAt >= since && p.OfferType == offerType && p.ShopType == shopType)
+                .OrderBy(p => p.ScrapedAt)
+                .ToListAsync();
         }
 
         public async Task CleanOldPriceHistoryAsync()
