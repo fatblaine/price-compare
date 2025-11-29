@@ -103,6 +103,9 @@ builder.Services.AddScoped<IIngestionService, IngestionService>();
 // Products service
 builder.Services.AddScoped<PriceCompareCore.Interfaces.IProductService, PriceCompareCore.Services.ProductService>();
 
+// Receipt service
+builder.Services.AddScoped<IReceiptService, ReceiptService>();
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 // builder.Services.AddDbContext<AppDbContext>(options =>
