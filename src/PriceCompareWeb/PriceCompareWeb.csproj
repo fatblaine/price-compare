@@ -11,6 +11,7 @@
     <!-- Use AWS SDK v3 which contains DataModel in the main package -->
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.*" />
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.8" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

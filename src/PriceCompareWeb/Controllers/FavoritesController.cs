@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using PriceCompareCore.Interfaces;
@@ -15,7 +16,7 @@ public class FavoritesController : ControllerBase
     private readonly IFavoriteService _service;
     private readonly IHttpContextAccessor _ctx;
 
-    private string UserId => _ctx.HttpContext!.User.Identity!.Name!;
+    private Guid UserId => Guid.Parse(_ctx.HttpContext!.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     public FavoritesController(IFavoriteService service, IHttpContextAccessor ctx)
     {
