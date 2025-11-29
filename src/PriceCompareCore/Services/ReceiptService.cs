@@ -18,7 +18,7 @@ namespace PriceCompareCore.Services
             _db = db;
         }
 
-        public async Task<int> CreateReceiptAsync(ReceiptDto dto, string userId)
+        public async Task<int> CreateReceiptAsync(ReceiptDto dto, Guid userId)
         {
             var receipt = new Receipt
             {
@@ -33,7 +33,7 @@ namespace PriceCompareCore.Services
             return receipt.Id;
         }
 
-        public async Task<ReceiptDto?> GetReceiptAsync(int id, string userId)
+        public async Task<ReceiptDto?> GetReceiptAsync(int id, Guid userId)
         {
             var receipt = await _db.Receipts.FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
             if (receipt == null)
@@ -49,7 +49,7 @@ namespace PriceCompareCore.Services
             );
         }
 
-        public async Task<IEnumerable<ReceiptDto>> GetReceiptsAsync(string userId)
+        public async Task<IEnumerable<ReceiptDto>> GetReceiptsAsync(Guid userId)
         {
             var receipts = await _db.Receipts.Where(r => r.UserId == userId).ToArrayAsync();
             var result = new List<ReceiptDto>();

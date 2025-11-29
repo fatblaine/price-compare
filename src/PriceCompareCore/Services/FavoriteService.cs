@@ -18,7 +18,7 @@ namespace PriceCompareCore.Services
             _db = db;
         }
 
-        public async Task<bool> AddFavoriteAsync(string userId, int productId)
+        public async Task<bool> AddFavoriteAsync(Guid userId, int productId)
         {
             var exists = await _db.FavoriteItems
             .AnyAsync(f => f.UserId == userId && f.ProductId == productId);
@@ -36,14 +36,14 @@ namespace PriceCompareCore.Services
             return true;
         }
 
-        public async Task<IEnumerable<FavoriteItem>> GetFavoritesAsync(string userId)
+        public async Task<IEnumerable<FavoriteItem>> GetFavoritesAsync(Guid userId)
         {
             return await _db.FavoriteItems
             .Where(f => f.UserId == userId)
             .ToListAsync();
         }
 
-        public async Task<bool> RemoveFavoriteAsync(string userId, int productId)
+        public async Task<bool> RemoveFavoriteAsync(Guid userId, int productId)
         {
             var fav = await _db.FavoriteItems
             .FirstOrDefaultAsync(f => f.UserId == userId && f.ProductId == productId);

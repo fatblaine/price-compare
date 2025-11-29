@@ -8,8 +8,8 @@ namespace PriceCompareCore.Interfaces
 {
     public interface IReceiptService
     {
-        Task<IEnumerable<ReceiptDto>> GetReceiptsAsync(string userId);
-        Task<ReceiptDto?> GetReceiptAsync(int id, string userId);
-        Task<int> CreateReceiptAsync(ReceiptDto dto, string userId);
+        Task<IEnumerable<ReceiptDto>> GetReceiptsAsync(Guid userId);
+        Task<ReceiptDto?> GetReceiptAsync(int id, Guid userId);
+        Task<int> CreateReceiptAsync(ReceiptDto dto, Guid userId);
     }
 }

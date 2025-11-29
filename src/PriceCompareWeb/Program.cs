@@ -1,13 +1,20 @@
+using System.Security.Claims;
+using System.Text;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.Lambda.AspNetCoreServer.Hosting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Builder;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Polly;
+using PriceCompareCore.Config;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Jobs;
 using PriceCompareCore.Services;
+using PriceCompareCore.Utils;
 using PriceCompareData.Data;
 using PriceCompareWeb.JobsLambda;
 using Quartz;
@@ -25,8 +32,31 @@ builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-// Swagger
-builder.Services.AddSwaggerGen();
+// Swagger with JWT support
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "PriceCompare API", Version = "v1" });
+
+    var scheme = new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Paste JWT access token (do NOT include the 'Bearer ' prefix)"
+    };
+
+    c.AddSecurityDefinition("Bearer", scheme);
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            scheme,
+            Array.Empty<string>()
+        }
+    });
+});
+builder.Services.AddHttpContextAccessor();
 
 // CORS
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
@@ -106,6 +136,31 @@ builder.Services.AddScoped<PriceCompareCore.Interfaces.IProductService, PriceCom
 // Receipt service
 builder.Services.AddScoped<IReceiptService, ReceiptService>();
 
+// Auth service
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
+if (jwtSettings == null || string.IsNullOrWhiteSpace(jwtSettings.Secret))
+{
+    throw new InvalidOperationException("JwtSettings:Secret is missing in configuration.");
+}
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
+builder.Services.AddSingleton<PasswordHasher>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            // Use UTF8 to avoid losing bytes if secret contains non-ASCII chars
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            NameClaimType = ClaimTypes.NameIdentifier,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+builder.Services.AddAuthorization();
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 // builder.Services.AddDbContext<AppDbContext>(options =>
@@ -128,6 +183,7 @@ app.UseHttpsRedirection();
 
 app.UseCors("Default");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
