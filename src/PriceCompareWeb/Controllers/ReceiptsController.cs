@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +24,7 @@ namespace PriceCompareWeb.Controllers
             _context = context;
         }
 
-        private string CurrentUserId => _context.HttpContext!.User.Identity!.Name!;
+        private Guid CurrentUserId => Guid.Parse(_context.HttpContext!.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         [HttpGet]
         public async Task<IActionResult> GetMyReceipts()

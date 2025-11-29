@@ -7,6 +7,7 @@ using PriceCompareData.Entities;
 using PriceCompareData.Entities.Compare;
 using PriceCompareData.Entities.History;
 using PriceCompareData.Entities.Receipts;
+using PriceCompareData.Entities.Users;
 
 namespace PriceCompareData.Data
 {
@@ -23,6 +24,8 @@ namespace PriceCompareData.Data
             public DbSet<Receipt> Receipts => Set<Receipt>();
             public DbSet<ReceiptItem> ReceiptItems => Set<ReceiptItem>();
             public DbSet<FavoriteItem> FavoriteItems => Set<FavoriteItem>();
+            public DbSet<User> Users { get { return Set<User>(); } }
+
 
             // Configure entity relationships and constraints
             protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -48,6 +51,57 @@ namespace PriceCompareData.Data
                   modelBuilder.Entity<FavoriteItem>()
                   .HasIndex(f => new { f.UserId, f.ProductId })
                   .IsUnique();
+
+                  // Receipt
+                  modelBuilder.Entity<Receipt>(entity =>
+                  {
+                        entity.ToTable("receipt");
+                        entity.HasKey(e => e.Id).HasName("pk_receipt");
+                        entity.Property(e => e.Id).HasColumnName("id");
+                        entity.Property(e => e.UserId).HasColumnName("userid");
+                        entity.Property(e => e.StoreName).HasColumnName("storename");
+                        entity.Property(e => e.PurchaseDate).HasColumnName("purchasedate");
+                        entity.Property(e => e.UploadUrl).HasColumnName("uploadurl");
+                        entity.Property(e => e.TotalAmount).HasColumnName("totalamount").HasPrecision(18, 4);
+                  });
+
+                  // ReceiptItem
+                  modelBuilder.Entity<ReceiptItem>(entity =>
+                  {
+                        entity.ToTable("receiptitem");
+                        entity.HasKey(e => e.Id).HasName("pk_receiptitem");
+                        entity.Property(e => e.Id).HasColumnName("id");
+                        entity.Property(e => e.ReceiptId).HasColumnName("receiptid");
+                        entity.Property(e => e.ProductName).HasColumnName("productname");
+                        entity.Property(e => e.Price).HasColumnName("price").HasPrecision(18, 4);
+                        entity.Property(e => e.Quantity).HasColumnName("quantity");
+                        entity.Property(e => e.MatchedProductId).HasColumnName("matchedproductid");
+                        entity.Property(e => e.Confidence).HasColumnName("confidence");
+                  });
+
+                  // FavoriteItem
+                  modelBuilder.Entity<FavoriteItem>(entity =>
+                  {
+                        entity.ToTable("favoriteitem");
+                        entity.HasKey(e => e.Id).HasName("pk_favoriteitem");
+                        entity.Property(e => e.Id).HasColumnName("id");
+                        entity.Property(e => e.UserId).HasColumnName("userid");
+                        entity.Property(e => e.ProductId).HasColumnName("productid");
+                        entity.Property(e => e.CreatedAt).HasColumnName("createdat");
+                  });
+
+                  // User
+                  modelBuilder.Entity<User>(entity =>
+                  {
+                        entity.ToTable("user");
+                        entity.HasKey(e => e.Id).HasName("pk_user");
+                        // Keep column names matching existing schema (likely quoted PascalCase).
+                        entity.Property(e => e.Id).HasColumnName("Id");
+                        entity.Property(e => e.Email).HasColumnName("Email");
+                        entity.Property(e => e.PasswordHash).HasColumnName("PasswordHash");
+                        entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt");
+                        entity.HasIndex(e => e.Email).IsUnique();
+                  });
 
                   // Seed initial categories
                   modelBuilder.Entity<Category>().HasData(
