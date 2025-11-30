@@ -136,6 +136,9 @@ builder.Services.AddScoped<PriceCompareCore.Interfaces.IProductService, PriceCom
 // Receipt service
 builder.Services.AddScoped<IReceiptService, ReceiptService>();
 
+// Favorite service
+builder.Services.AddScoped<IFavoriteService, FavoriteService>();
+
 // Auth service
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
 if (jwtSettings == null || string.IsNullOrWhiteSpace(jwtSettings.Secret))
