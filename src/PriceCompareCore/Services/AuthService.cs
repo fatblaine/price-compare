@@ -68,14 +68,14 @@ namespace PriceCompareCore.Services
             }
 
             User newUser = new User();
-            newUser.Id = Guid.NewGuid().ToString();
+            newUser.Id = Guid.NewGuid();
             newUser.Email = email;
             newUser.PasswordHash = _hasher.HashPassword(password);
             newUser.CreatedAt = DateTime.UtcNow;
 
             _db.Users.Add(newUser);
             await _db.SaveChangesAsync();
-            return newUser.Id;
+            return newUser.Id.ToString();
         }
 
         private string GenerateJwt(User user)
@@ -87,7 +87,7 @@ namespace PriceCompareCore.Services
             {
                 Subject = new ClaimsIdentity(new[]
                 {
-                    new Claim(ClaimTypes.NameIdentifier, user.Id),
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Email, user.Email)
                 }),
                 Expires = DateTime.UtcNow.AddMinutes(_jwt.ExpireMinutes),

@@ -33,19 +33,30 @@ namespace PriceCompareCore.Services
             return receipt.Id;
         }
 
-        public async Task<ReceiptDto?> GetReceiptAsync(int id, Guid userId)
+        public async Task<ReceiptDetailDto?> GetReceiptAsync(int id, Guid userId)
         {
-            var receipt = await _db.Receipts.FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
+            var receipt = await _db.Receipts
+                .Include(r => r.Items)
+                .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
             if (receipt == null)
             {
                 return null;
             }
-            return new ReceiptDto(
+            return new ReceiptDetailDto(
                 receipt.Id,
                 receipt.StoreName,
                 receipt.PurchaseDate,
                 receipt.TotalAmount,
-                receipt.UploadUrl
+                receipt.UploadUrl,
+                receipt.Items.Select(i => new ReceiptItemDto(
+                    i.Id,
+                    i.ReceiptId,
+                    i.ProductName,
+                    i.Price,
+                    i.Quantity,
+                    i.MatchedProductId,
+                    i.Confidence
+                )).ToList()
             );
         }
 
