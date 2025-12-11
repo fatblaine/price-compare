@@ -2717,6 +2717,7 @@
           "AWSSDK.DynamoDBv2": "3.7.0",
           "AWSSDK.Extensions.NETCore.Setup": "3.7.0",
           "AWSSDK.Rekognition": "3.7.0",
+          "AWSSDK.S3": "3.7.0",
           "AngleSharp": "1.1.2",
           "Microsoft.Extensions.Caching.StackExchangeRedis": "8.0.0",
           "Microsoft.Playwright": "1.55.0",
@@ -2727,7 +2728,10 @@
         },
         "runtime": {
           "bin/placeholder/PriceCompareCore.dll": {}
-        }
+        },
+        "frameworkReferences": [
+          "Microsoft.AspNetCore.App"
+        ]
       },
       "PriceCompareData/1.0.0": {
         "type": "project",
