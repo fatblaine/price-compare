@@ -55,13 +55,21 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "AWSSDK.Core": {
+              "target": "Package",
+              "version": "[3.7.*, )"
+            },
             "AWSSDK.DynamoDBv2": {
               "target": "Package",
-              "version": "[3.*, )"
+              "version": "[3.7.*, )"
             },
             "AWSSDK.Extensions.NETCore.Setup": {
               "target": "Package",
-              "version": "[3.*, )"
+              "version": "[3.7.*, )"
+            },
+            "AWSSDK.Rekognition": {
+              "target": "Package",
+              "version": "[3.7.*, )"
             },
             "AngleSharp": {
               "target": "Package",
@@ -264,13 +272,25 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "AWSSDK.Core": {
+              "target": "Package",
+              "version": "[3.7.*, )"
+            },
             "AWSSDK.DynamoDBv2": {
               "target": "Package",
-              "version": "[3.*, )"
+              "version": "[3.7.*, )"
             },
             "AWSSDK.Extensions.NETCore.Setup": {
               "target": "Package",
-              "version": "[3.*, )"
+              "version": "[3.7.*, )"
+            },
+            "AWSSDK.Rekognition": {
+              "target": "Package",
+              "version": "[3.7.*, )"
+            },
+            "AWSSDK.S3": {
+              "target": "Package",
+              "version": "[3.7.*, )"
             },
             "Amazon.Lambda.APIGatewayEvents": {
               "target": "Package",

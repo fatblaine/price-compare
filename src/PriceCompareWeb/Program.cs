@@ -21,6 +21,12 @@ using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.Configure<AwsOptions>(
+    builder.Configuration.GetSection("Aws"));
+
+builder.Services.Configure<RekognitionOptions>(
+    builder.Configuration.GetSection("Rekognition"));
+
 // Lambda Hosting
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
