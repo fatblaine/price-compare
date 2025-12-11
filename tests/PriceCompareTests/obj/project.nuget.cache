@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "rLWTCsOld3g=",
+  "dgSpecHash": "uD4cPEu14rI=",
   "success": true,
   "projectFilePath": "E:\\USYD\\training\\project-1\\price-compare\\tests\\PriceCompareTests\\PriceCompareTests.csproj",
   "expectedPackageFiles": [
@@ -13,9 +13,11 @@
     "C:\\Users\\Fan\\.nuget\\packages\\amazon.lambda.runtimesupport\\1.13.1\\amazon.lambda.runtimesupport.1.13.1.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\amazon.lambda.serialization.systemtextjson\\2.4.4\\amazon.lambda.serialization.systemtextjson.2.4.4.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\anglesharp\\1.1.2\\anglesharp.1.1.2.nupkg.sha512",
-    "C:\\Users\\Fan\\.nuget\\packages\\awssdk.core\\3.7.500.49\\awssdk.core.3.7.500.49.nupkg.sha512",
-    "C:\\Users\\Fan\\.nuget\\packages\\awssdk.dynamodbv2\\3.7.509.3\\awssdk.dynamodbv2.3.7.509.3.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\awssdk.core\\3.7.500.52\\awssdk.core.3.7.500.52.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\awssdk.dynamodbv2\\3.7.509.6\\awssdk.dynamodbv2.3.7.509.6.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\awssdk.extensions.netcore.setup\\3.7.400\\awssdk.extensions.netcore.setup.3.7.400.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\awssdk.rekognition\\3.7.502.14\\awssdk.rekognition.3.7.502.14.nupkg.sha512",
+    "C:\\Users\\Fan\\.nuget\\packages\\awssdk.s3\\3.7.507.2\\awssdk.s3.3.7.507.2.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\azure.core\\1.35.0\\azure.core.1.35.0.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\azure.identity\\1.10.3\\azure.identity.1.10.3.nupkg.sha512",
     "C:\\Users\\Fan\\.nuget\\packages\\castle.core\\5.1.1\\castle.core.5.1.1.nupkg.sha512",
