@@ -12,10 +12,15 @@
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.*" />
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.*" />
     <PackageReference Include="AWSSDK.Rekognition" Version="3.7.*" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.*" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.0" />
 
     <!-- Playwright -->
     <PackageReference Include="Microsoft.Playwright" Version="1.55.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <PropertyGroup>

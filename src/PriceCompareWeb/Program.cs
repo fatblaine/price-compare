@@ -21,6 +21,10 @@ using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddScoped<IReceiptOcrService, AwsRekognitionReceiptOcrService>();
+
+builder.Services.AddScoped<IReceiptStorageService, S3ReceiptStorageService>();
+
 builder.Services.Configure<AwsOptions>(
     builder.Configuration.GetSection("Aws"));
 
