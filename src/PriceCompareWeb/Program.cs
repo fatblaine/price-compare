@@ -21,6 +21,8 @@ using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddScoped<IReceiptProcessingService, ReceiptProcessingService>();
+
 builder.Services.AddScoped<IReceiptOcrService, AwsRekognitionReceiptOcrService>();
 
 builder.Services.AddScoped<IReceiptStorageService, S3ReceiptStorageService>();
