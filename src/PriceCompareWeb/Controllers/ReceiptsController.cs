@@ -17,11 +17,13 @@ namespace PriceCompareWeb.Controllers
     {
         private readonly IReceiptService _service;
         private readonly IHttpContextAccessor _context;
+        private readonly IReceiptProcessingService _processingService;
 
-        public ReceiptsController(IReceiptService service, IHttpContextAccessor context)
+        public ReceiptsController(IReceiptService service, IHttpContextAccessor context, IReceiptProcessingService processingService)
         {
             _service = service;
             _context = context;
+            _processingService = processingService;
         }
 
         private Guid CurrentUserId => Guid.Parse(_context.HttpContext!.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -42,6 +44,28 @@ namespace PriceCompareWeb.Controllers
         {
             var id = await _service.CreateReceiptAsync(dto, CurrentUserId);
             return CreatedAtAction(nameof(GetReceipt), new { id }, dto);
+        }
+
+        [HttpPost("{id:int}/upload")]
+        public async Task<IActionResult> Upload(int id, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("File is required");
+            }
+
+            // 简单类型检查
+            string contentType = file.ContentType;
+            if (contentType != "image/jpeg" &&
+                contentType != "image/png" &&
+                contentType != "application/pdf")
+            {
+                return BadRequest("Only jpg/png/pdf are supported");
+            }
+
+            await _processingService.ProcessUploadedReceiptAsync(id, CurrentUserId.ToString(), file);
+
+            return Ok(new { message = "Upload and OCR processing started/completed" });
         }
     }
 }
