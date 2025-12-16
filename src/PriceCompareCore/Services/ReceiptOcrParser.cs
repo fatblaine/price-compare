@@ -452,12 +452,16 @@ namespace PriceCompareCore.Services
                 }
 
                 // Woolworths 场景：行形如 "10 @ $3.95" 但不带 Qty 前缀
-                var qtyPriceItem = TryParseQtyAtPrice(text, lines[i].Confidence, pendingWooliesDesc);
-                if (qtyPriceItem != null)
+                // Coles 的优惠行也可能是 "2 @ $1.65 EACH 3.30"，为避免重复计数，只在 Woolworths 场景启用。
+                if (isWoolworths)
                 {
-                    items.Add(qtyPriceItem);
-                    pendingWooliesDesc = null;
-                    continue;
+                    var qtyPriceItem = TryParseQtyAtPrice(text, lines[i].Confidence, pendingWooliesDesc);
+                    if (qtyPriceItem != null)
+                    {
+                        items.Add(qtyPriceItem);
+                        pendingWooliesDesc = null;
+                        continue;
+                    }
                 }
 
                 // Coles 风格：尝试按末尾价格解析

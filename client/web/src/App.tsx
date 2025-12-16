@@ -3,6 +3,8 @@ import {
 	Box,
 	Button,
 	Container,
+	Tab,
+	Tabs,
 	Toolbar,
 	Typography,
 } from "@mui/material";
@@ -11,10 +13,13 @@ import ProductsPage from "./ProductsPage";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
 import { clearToken, getStoredToken } from "./api/auth";
+import MyReceiptsPage from "./MyReceiptsPage";
+import MyFavoritesPage from "./MyFavoritesPage";
 
 function App() {
 	const [token, setToken] = React.useState<string | null>(null);
 	const [authView, setAuthView] = React.useState<"login" | "register">("login");
+	const [mainTab, setMainTab] = React.useState<"products" | "receipts" | "favorites">("products");
 
 	React.useEffect(() => {
 		const stored = getStoredToken();
@@ -33,6 +38,32 @@ function App() {
 	};
 
 	const isAuthenticated = !!token;
+
+	const renderMainContent = () => {
+		if (!isAuthenticated) {
+			return authView === "login" ? (
+				<LoginPage
+					onLoggedIn={handleLoggedIn}
+					onSwitchToRegister={() => setAuthView("register")}
+				/>
+			) : (
+				<RegisterPage
+					onLoggedIn={handleLoggedIn}
+					onSwitchToLogin={() => setAuthView("login")}
+				/>
+			);
+		}
+
+		if (mainTab === "receipts") {
+			return <MyReceiptsPage />;
+		}
+
+		if (mainTab === "favorites") {
+			return <MyFavoritesPage />;
+		}
+
+		return <ProductsPage />;
+	};
 
 	return (
 		<Box sx={{ bgcolor: "background.default", minHeight: "100vh" }}>
@@ -64,10 +95,28 @@ function App() {
 							Price-Compare
 						</Typography>
 						{isAuthenticated && (
+							<Tabs
+								value={mainTab}
+								onChange={(_, val) => setMainTab(val)}
+								textColor="inherit"
+								indicatorColor="secondary"
+								sx={{
+									ml: 2,
+									minHeight: "auto",
+									"& .MuiTab-root": { minHeight: "auto" },
+									display: { xs: "none", md: "flex" },
+								}}
+							>
+								<Tab label="Products" value="products" />
+								<Tab label="My Receipts" value="receipts" />
+								<Tab label="My Favorites" value="favorites" />
+							</Tabs>
+						)}
+						{isAuthenticated && (
 							<Button
 								color="inherit"
 								onClick={handleLogout}
-								sx={{ fontWeight: 500 }}
+								sx={{ fontWeight: 500, ml: { xs: 0, md: 2 } }}
 							>
 								Log out
 							</Button>
@@ -77,19 +126,7 @@ function App() {
 			</AppBar>
 
 			<Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
-				{isAuthenticated ? (
-					<ProductsPage />
-				) : authView === "login" ? (
-					<LoginPage
-						onLoggedIn={handleLoggedIn}
-						onSwitchToRegister={() => setAuthView("register")}
-					/>
-				) : (
-					<RegisterPage
-						onLoggedIn={handleLoggedIn}
-						onSwitchToLogin={() => setAuthView("login")}
-					/>
-				)}
+				{renderMainContent()}
 			</Container>
 		</Box>
 	);
