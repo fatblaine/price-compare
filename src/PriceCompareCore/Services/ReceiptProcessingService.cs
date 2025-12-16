@@ -91,11 +91,24 @@ namespace PriceCompareCore.Services
             }
 
             // 5. 解析商品行（根据门店名称使用更精确的规则）
-            List<ReceiptItem> items = _parser.ExtractItems(ocrResult.Lines, storeName);
-            _logger.LogInformation("Parsed {ItemCount} items for receipt {ReceiptId}. Sample: {Sample}",
+            //    当前业务只需要“商品名”，数量和价格信息不再使用，因此在入库前统一丢弃数量/价格。
+            List<ReceiptItem> parsedItems = _parser.ExtractItems(ocrResult.Lines, storeName);
+            List<ReceiptItem> items = parsedItems
+                .Select(i => new ReceiptItem
+                {
+                    ProductName = i.ProductName,
+                    // 数量和价格对后续业务不再重要，这里统一设为默认值
+                    Quantity = 1,
+                    Price = 0m,
+                    Confidence = i.Confidence,
+                    MatchedProductId = null
+                })
+                .ToList();
+
+            _logger.LogInformation("Parsed {ItemCount} items for receipt {ReceiptId}. Sample names: {Sample}",
                 items.Count,
                 receiptId,
-                string.Join(" | ", items.Take(5).Select(i => $"{i.ProductName} {i.Quantity} x {i.Price}")));
+                string.Join(" | ", items.Take(5).Select(i => i.ProductName)));
 
             // 仅当解析到新商品时才替换旧商品，避免 OCR 失败时把已有数据清空
             if (items.Count > 0)
