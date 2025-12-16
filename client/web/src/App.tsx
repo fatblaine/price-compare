@@ -1,8 +1,39 @@
-import { AppBar, Box, Container, Toolbar, Typography } from "@mui/material";
+import {
+	AppBar,
+	Box,
+	Button,
+	Container,
+	Toolbar,
+	Typography,
+} from "@mui/material";
 import React from "react";
 import ProductsPage from "./ProductsPage";
+import LoginPage from "./LoginPage";
+import RegisterPage from "./RegisterPage";
+import { clearToken, getStoredToken } from "./api/auth";
 
 function App() {
+	const [token, setToken] = React.useState<string | null>(null);
+	const [authView, setAuthView] = React.useState<"login" | "register">("login");
+
+	React.useEffect(() => {
+		const stored = getStoredToken();
+		setToken(stored);
+	}, []);
+
+	const handleLoggedIn = () => {
+		const stored = getStoredToken();
+		setToken(stored);
+		setAuthView("login");
+	};
+
+	const handleLogout = () => {
+		clearToken();
+		setToken(null);
+	};
+
+	const isAuthenticated = !!token;
+
 	return (
 		<Box sx={{ bgcolor: "background.default", minHeight: "100vh" }}>
 			<AppBar
@@ -32,12 +63,33 @@ function App() {
 						>
 							Price-Compare
 						</Typography>
+						{isAuthenticated && (
+							<Button
+								color="inherit"
+								onClick={handleLogout}
+								sx={{ fontWeight: 500 }}
+							>
+								Log out
+							</Button>
+						)}
 					</Container>
 				</Toolbar>
 			</AppBar>
 
 			<Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
-				<ProductsPage />
+				{isAuthenticated ? (
+					<ProductsPage />
+				) : authView === "login" ? (
+					<LoginPage
+						onLoggedIn={handleLoggedIn}
+						onSwitchToRegister={() => setAuthView("register")}
+					/>
+				) : (
+					<RegisterPage
+						onLoggedIn={handleLoggedIn}
+						onSwitchToLogin={() => setAuthView("login")}
+					/>
+				)}
 			</Container>
 		</Box>
 	);
