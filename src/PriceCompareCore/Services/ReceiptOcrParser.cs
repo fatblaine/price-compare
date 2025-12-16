@@ -172,8 +172,21 @@ namespace PriceCompareCore.Services
         ///  2. Woolworths：商品描述行 + 下一行 "Qty ..." 是价格行
         ///  3. Coles：一行内直接是 "商品名   3.50" 这样的形式
         ///  4. 遇到 "TOTAL", "SUBTOTAL", "EFT", "GST", "Total savings" 等停止
+        ///
+        /// 为了让 Coles / Woolworths 的规则互不干扰，优先推荐使用带 storeName 的重载，
+        /// 若未指定则回退为通用逻辑。
         /// </summary>
         public List<ReceiptItem> ExtractItems(List<OcrTextLine> lines)
+        {
+            return ExtractItems(lines, storeName: null);
+        }
+
+        /// <summary>
+        /// 根据门店名使用更精确的解析规则：
+        ///  - Woolworths：更依赖 Qty 行，不做跨行价格配对；
+        ///  - Coles/其他：保持原有通用策略。
+        /// </summary>
+        public List<ReceiptItem> ExtractItems(List<OcrTextLine> lines, string storeName)
         {
             List<ReceiptItem> items = new List<ReceiptItem>();
 
@@ -183,6 +196,9 @@ namespace PriceCompareCore.Services
             }
 
             int count = lines.Count;
+
+            bool isWoolworths = !string.IsNullOrWhiteSpace(storeName) &&
+                                storeName.IndexOf("woolworths", StringComparison.OrdinalIgnoreCase) >= 0;
 
             bool inItemsSection = false;        // 是否已经进入“商品区”
             string pendingColesName = null;     // Coles：待配对的商品名
@@ -230,6 +246,8 @@ namespace PriceCompareCore.Services
                     if (l.StartsWith("total") || l.StartsWith("subtotal") || l.StartsWith("eft") || l.StartsWith("gst")) return false;
                     if (l.Contains("description")) return false;
                     if (l.Contains("tax invoice") || l.Contains("abn") || l.Contains("ph:")) return false;
+                    // POS/TRANS 等交易信息行，不应视为商品
+                    if (l.StartsWith("pos ") || l.Contains(" pos ") || l.Contains(" trans ")) return false;
                     return true;
                 }
 
@@ -335,7 +353,7 @@ namespace PriceCompareCore.Services
                 // 2. 商品区结束条件：遇到各种 "Total..."、"Subtotal"、"EFT"、"GST" 等
                 if (lower.StartsWith("total for") ||
                     lower.StartsWith("total ") ||
-                    lower.StartsWith("subtotal") ||
+                    lower.Contains("subtotal") ||
                     lower.StartsWith("eft") ||
                     lower.StartsWith("gst ") ||
                     lower.StartsWith("you saved") ||
@@ -346,7 +364,9 @@ namespace PriceCompareCore.Services
                 }
 
                 // 2.x 如果已有 pendingColesName，尝试在当前行/后续一行中解析价格（Coles 被拆成单独的金额）
-                if (!string.IsNullOrWhiteSpace(pendingColesName) &&
+                // Woolworths 使用 Qty 行模式，不走跨行价格配对，避免把 POS/交易行误当商品
+                if (!isWoolworths &&
+                    !string.IsNullOrWhiteSpace(pendingColesName) &&
                     TryParsePriceFromLines(i, out var pendingPrice, out var consumed))
                 {
                     items.Add(new ReceiptItem
@@ -362,7 +382,8 @@ namespace PriceCompareCore.Services
                 }
 
                 // 2.y 如果当前行看起来是价格，且下一行是商品描述（OCR 顺序颠倒），也尝试配对
-                if (string.IsNullOrWhiteSpace(pendingColesName) &&
+                if (!isWoolworths &&
+                    string.IsNullOrWhiteSpace(pendingColesName) &&
                     TryParsePriceFromLines(i, out var priceAhead, out var consumedPrice) &&
                     i + 1 + consumedPrice < count &&
                     IsLikelyProductLine(lines[i + 1 + consumedPrice].Text) &&

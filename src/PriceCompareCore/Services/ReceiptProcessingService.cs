@@ -90,8 +90,8 @@ namespace PriceCompareCore.Services
                 _logger.LogInformation("Detected purchase date {Date} (UTC) for receipt {ReceiptId}", receipt.PurchaseDate, receiptId);
             }
 
-            // 5. 解析商品行
-            List<ReceiptItem> items = _parser.ExtractItems(ocrResult.Lines);
+            // 5. 解析商品行（根据门店名称使用更精确的规则）
+            List<ReceiptItem> items = _parser.ExtractItems(ocrResult.Lines, storeName);
             _logger.LogInformation("Parsed {ItemCount} items for receipt {ReceiptId}. Sample: {Sample}",
                 items.Count,
                 receiptId,
