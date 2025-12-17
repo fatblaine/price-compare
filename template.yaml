@@ -37,6 +37,36 @@ Resources:
       CodeUri: ./src/PriceCompareWeb/
       PackageType: Zip
       Events:
+        ReceiptsGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Receipts
+            Method: GET
+        ReceiptsPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Receipts
+            Method: POST
+        ReceiptDetailGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Receipts/{id}
+            Method: GET
+        ReceiptUploadPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Receipts/{id}/upload
+            Method: POST
+        ReceiptUploadAndParsePost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Receipts/upload-and-parse
+            Method: POST
         ProductsGet:
           Type: HttpApi
           Properties:
