@@ -25,6 +25,11 @@ export interface ReceiptDetail {
 	items: ReceiptItem[];
 }
 
+export interface UploadAndParseResponse {
+	receiptId: number;
+	productNames: string[];
+}
+
 export async function fetchMyReceipts(): Promise<ReceiptSummary[]> {
 	const url = `${API_BASE}/api/Receipts`;
 	const res = await axios.get(url);
@@ -39,3 +44,18 @@ export async function fetchReceiptDetail(
 	return res.data ?? null;
 }
 
+export async function uploadAndParseReceipt(
+	file: File,
+): Promise<UploadAndParseResponse> {
+	const url = `${API_BASE}/api/Receipts/upload-and-parse`;
+	const formData = new FormData();
+	formData.append("file", file);
+
+	const res = await axios.post(url, formData, {
+		headers: {
+			"Content-Type": "multipart/form-data",
+		},
+	});
+
+	return res.data;
+}
