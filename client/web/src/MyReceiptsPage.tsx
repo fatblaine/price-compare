@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
 	Box,
+	Button,
 	Card,
 	CardActionArea,
 	CardContent,
@@ -16,8 +17,10 @@ import { useTheme, useMediaQuery } from "@mui/material";
 import {
 	fetchMyReceipts,
 	fetchReceiptDetail,
+	uploadAndParseReceipt,
 	type ReceiptDetail,
 	type ReceiptSummary,
+	type UploadAndParseResponse,
 } from "./api/receipts";
 
 // Basic list-and-detail page to browse user's receipts.
@@ -30,6 +33,9 @@ export default function MyReceiptsPage() {
 	const [detail, setDetail] = React.useState<ReceiptDetail | null>(null);
 	const [loadingList, setLoadingList] = React.useState(false);
 	const [loadingDetail, setLoadingDetail] = React.useState(false);
+	const [uploading, setUploading] = React.useState(false);
+	const [uploadError, setUploadError] = React.useState<string | null>(null);
+	const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
 	// Load receipt list once on mount.
 	React.useEffect(() => {
@@ -88,15 +94,92 @@ export default function MyReceiptsPage() {
 		setSelectedId(id);
 	};
 
+	const handleUploadClick = () => {
+		if (fileInputRef.current) {
+			fileInputRef.current.click();
+		}
+	};
+
+	const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (
+		event,
+	) => {
+		const file = event.target.files?.[0];
+		if (!file) return;
+
+		setUploadError(null);
+		setUploading(true);
+
+		try {
+			const result: UploadAndParseResponse = await uploadAndParseReceipt(file);
+
+			setLoadingList(true);
+			const data = await fetchMyReceipts();
+			setReceipts(data);
+			setSelectedId(result.receiptId);
+		} catch (e: any) {
+			// eslint-disable-next-line no-console
+			console.error("Failed to upload and parse receipt", e);
+			const message: string | undefined =
+				e?.response?.data && typeof e.response.data === "string"
+					? e.response.data
+					: e?.message;
+			setUploadError(message || "Upload failed. Please try again.");
+		} finally {
+			setUploading(false);
+			setLoadingList(false);
+			// reset file input so the same file can be selected again if needed
+			event.target.value = "";
+		}
+	};
+
 	return (
 		<Box>
-			<Typography
-				variant={isXs ? "h5" : "h4"}
-				fontWeight={800}
+			<Stack
+				direction={{ xs: "column", sm: "row" }}
+				alignItems={{ xs: "flex-start", sm: "center" }}
+				justifyContent="space-between"
+				spacing={2}
 				sx={{ mb: 2 }}
 			>
-				My Receipts
-			</Typography>
+				<Typography
+					variant={isXs ? "h5" : "h4"}
+					fontWeight={800}
+				>
+					My Receipts
+				</Typography>
+				<Box>
+					<input
+						ref={fileInputRef}
+						type="file"
+						accept="image/jpeg,image/png,application/pdf"
+						style={{ display: "none" }}
+						onChange={handleFileChange}
+					/>
+					<Button
+						variant="contained"
+						onClick={handleUploadClick}
+						disabled={uploading}
+						sx={{
+							width: { xs: "100%", sm: "auto" },
+						}}
+					>
+						{uploading ? (
+							<CircularProgress size={20} sx={{ color: "white" }} />
+						) : (
+							"Upload receipt"
+						)}
+					</Button>
+					{uploadError && (
+						<Typography
+							variant="body2"
+							color="error"
+							sx={{ mt: 0.5 }}
+						>
+							{uploadError}
+						</Typography>
+					)}
+				</Box>
+			</Stack>
 
 			<Stack
 				direction={{ xs: "column", md: "row" }}
