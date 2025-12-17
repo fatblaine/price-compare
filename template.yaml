@@ -24,6 +24,8 @@ Resources:
           - "*"
         AllowMethods:
           - GET
+          - POST
+          - OPTIONS
         AllowHeaders:
           - "*"
 
@@ -53,6 +55,18 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Scraping/priceHistory
             Method: GET
+        AuthLoginPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Auth/login
+            Method: POST
+        AuthRegisterPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Auth/register
+            Method: POST
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
