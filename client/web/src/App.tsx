@@ -12,29 +12,35 @@ import React from "react";
 import ProductsPage from "./ProductsPage";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
-import { clearToken, getStoredToken } from "./api/auth";
+import { clearToken, getStoredEmail, getStoredToken } from "./api/auth";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
 
 function App() {
 	const [token, setToken] = React.useState<string | null>(null);
+	const [userEmail, setUserEmail] = React.useState<string | null>(null);
 	const [authView, setAuthView] = React.useState<"login" | "register">("login");
 	const [mainTab, setMainTab] = React.useState<"products" | "receipts" | "favorites">("products");
 
 	React.useEffect(() => {
 		const stored = getStoredToken();
 		setToken(stored);
+		const storedEmail = getStoredEmail();
+		setUserEmail(storedEmail);
 	}, []);
 
 	const handleLoggedIn = () => {
 		const stored = getStoredToken();
 		setToken(stored);
+		const storedEmail = getStoredEmail();
+		setUserEmail(storedEmail);
 		setAuthView("login");
 	};
 
 	const handleLogout = () => {
 		clearToken();
 		setToken(null);
+		setUserEmail(null);
 	};
 
 	const isAuthenticated = !!token;
@@ -97,7 +103,10 @@ function App() {
 						{isAuthenticated && (
 							<Tabs
 								value={mainTab}
-								onChange={(_, val) => setMainTab(val)}
+								onChange={(
+									_,
+									val: "products" | "receipts" | "favorites",
+								) => setMainTab(val)}
 								textColor="inherit"
 								indicatorColor="secondary"
 								sx={{
@@ -111,6 +120,22 @@ function App() {
 								<Tab label="My Receipts" value="receipts" />
 								<Tab label="My Favorites" value="favorites" />
 							</Tabs>
+						)}
+						{isAuthenticated && userEmail && (
+							<Typography
+								variant="body2"
+								sx={{
+									ml: { xs: 1, md: 2 },
+									fontWeight: 500,
+									maxWidth: { xs: 140, sm: 200 },
+									overflow: "hidden",
+									textOverflow: "ellipsis",
+									whiteSpace: "nowrap",
+									textShadow: "0 1px 1px rgba(0,0,0,0.25)",
+								}}
+							>
+								{userEmail}
+							</Typography>
 						)}
 						{isAuthenticated && (
 							<Button
