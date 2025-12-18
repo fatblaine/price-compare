@@ -73,6 +73,7 @@ namespace PriceCompareData.Data
                         entity.Property(e => e.Id).HasColumnName("id");
                         entity.Property(e => e.ReceiptId).HasColumnName("receiptid");
                         entity.Property(e => e.ProductName).HasColumnName("productname");
+                        entity.Property(e => e.OriginalName).HasColumnName("originalname");
                         entity.Property(e => e.Price).HasColumnName("price").HasPrecision(18, 4);
                         entity.Property(e => e.Quantity).HasColumnName("quantity");
                         entity.Property(e => e.MatchedProductId).HasColumnName("matchedproductid");
