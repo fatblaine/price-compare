@@ -51,7 +51,10 @@ namespace PriceCompareCore.Services
                 receipt.Items.Select(i => new ReceiptItemDto(
                     i.Id,
                     i.ReceiptId,
-                    i.ProductName
+                    i.ProductName,
+                    i.OriginalName,
+                    i.MatchedProductId,
+                    i.Confidence
                 )).ToList()
             );
         }
