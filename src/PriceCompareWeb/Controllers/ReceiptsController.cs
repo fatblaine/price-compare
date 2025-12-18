@@ -69,15 +69,15 @@ namespace PriceCompareWeb.Controllers
         }
 
         /// <summary>
-        /// One-step endpoint: create a receipt, upload the image, run OCR + parsing,
-        /// and return parsed product names for the client to filter on.
+        /// One-step endpoint: create a receipt, upload the image, run OCR + parsing + initial product matching,
+        /// and return parsed items (including OCR name, final name, matched product id and confidence).
         /// </summary>
         /// <remarks>
         /// This endpoint will:
         ///  1) create a new receipt record for the current user;
         ///  2) upload the provided file to S3 and run OCR + parsing;
-        ///  3) persist store / date / items into the database;
-        ///  4) return only the parsed product names (plus the new receipt id).
+        ///  3) persist store / date / items (with OriginalName / MatchedProductId) into the database;
+        ///  4) return parsed items plus the new receipt id (and keep a flat productNames array for backward compatibility).
         /// </remarks>
         [HttpPost("upload-and-parse")]
         public async Task<IActionResult> UploadAndParse(IFormFile file)
@@ -119,10 +119,20 @@ namespace PriceCompareWeb.Controllers
 
             var productNames = detail.Items.Select(i => i.ProductName).ToArray();
 
+            var items = detail.Items.Select(i => new
+            {
+                receiptItemId = i.Id,
+                ocrName = i.OriginalName ?? i.ProductName,
+                finalName = i.ProductName,
+                matchedProductId = i.MatchedProductId,
+                confidence = i.Confidence
+            }).ToArray();
+
             return Ok(new
             {
                 receiptId = detail.Id,
-                productNames
+                productNames,
+                items
             });
         }
     }
