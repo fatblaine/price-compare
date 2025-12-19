@@ -84,18 +84,23 @@ function App() {
 				<Toolbar sx={{ py: { xs: 1, sm: 1.5 } }}>
 					<Container
 						maxWidth="lg"
-						sx={{ display: "flex", alignItems: "center" }}
+						sx={{
+							display: "flex",
+							alignItems: { xs: "flex-start", md: "center" },
+							flexDirection: { xs: "column", md: "row" },
+						}}
 					>
 						<Typography
 							variant="h4"
 							component="h1"
 							sx={{
-								flexGrow: 1,
+								flexGrow: { xs: 0, md: 1 },
 								fontWeight: 800,
 								letterSpacing: 0.5,
 								textShadow: "0 1px 2px rgba(0,0,0,.25)",
 								fontSize: { xs: 22, sm: 26, md: 30, lg: 34 },
 								textAlign: { xs: "center", sm: "left" },
+								width: { xs: "100%", md: "auto" },
 							}}
 						>
 							Price-Compare
@@ -110,10 +115,15 @@ function App() {
 								textColor="inherit"
 								indicatorColor="secondary"
 								sx={{
-									ml: 2,
+									ml: { xs: 0, md: 2 },
+									mt: { xs: 1, md: 0 },
 									minHeight: "auto",
-									"& .MuiTab-root": { minHeight: "auto" },
-									display: { xs: "none", md: "flex" },
+									width: { xs: "100%", md: "auto" },
+									justifyContent: { xs: "center", md: "flex-start" },
+									"& .MuiTab-root": {
+										minHeight: "auto",
+										fontSize: { xs: 12, sm: 13, md: 14 },
+									},
 								}}
 							>
 								<Tab label="Products" value="products" />
@@ -125,7 +135,8 @@ function App() {
 							<Typography
 								variant="body2"
 								sx={{
-									ml: { xs: 1, md: 2 },
+									ml: { xs: 0, md: 2 },
+									mt: { xs: 1, md: 0 },
 									fontWeight: 500,
 									maxWidth: { xs: 140, sm: 200 },
 									overflow: "hidden",
@@ -141,7 +152,11 @@ function App() {
 							<Button
 								color="inherit"
 								onClick={handleLogout}
-								sx={{ fontWeight: 500, ml: { xs: 0, md: 2 } }}
+								sx={{
+									fontWeight: 500,
+									ml: { xs: 0, md: 2 },
+									mt: { xs: 1, md: 0 },
+								}}
 							>
 								Log out
 							</Button>
