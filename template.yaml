@@ -25,6 +25,8 @@ Resources:
         AllowMethods:
           - GET
           - POST
+          - PUT
+          - DELETE
           - OPTIONS
         AllowHeaders:
           - "*"
@@ -61,6 +63,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Receipts/{id}/upload
             Method: POST
+        ReceiptItemsPut:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Receipts/{id}/items
+            Method: PUT
         ReceiptUploadAndParsePost:
           Type: HttpApi
           Properties:
