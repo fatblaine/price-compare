@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.DTOs;
+using PriceCompareWeb.Controllers.Models;
 
 namespace PriceCompareWeb.Controllers
 {
@@ -134,6 +135,33 @@ namespace PriceCompareWeb.Controllers
                 productNames,
                 items
             });
+        }
+
+        /// <summary>
+        /// Replace the items of a receipt with the list provided by the client.
+        /// Existing items are updated when an id is supplied; new items are created when id is null or &lt;= 0;
+        /// items that were previously present but not included in the payload are deleted.
+        /// </summary>
+        [HttpPut("{id:int}/items")]
+        public async Task<IActionResult> UpdateItems(int id, [FromBody] List<UpdateReceiptItemRequest> items)
+        {
+            if (items == null)
+            {
+                return BadRequest("Items payload is required");
+            }
+
+            var models = items.Select(r => r == null
+                ? null
+                : new UpdateReceiptItemModel
+                {
+                    Id = r.Id,
+                    FinalName = r.FinalName,
+                    MatchedProductId = r.MatchedProductId
+                }).Where(m => m != null)!;
+
+            await _service.UpdateReceiptItemsAsync(id, CurrentUserId, models!);
+
+            return NoContent();
         }
     }
 }
