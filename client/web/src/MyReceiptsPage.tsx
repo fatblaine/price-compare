@@ -10,6 +10,14 @@ import {
 	List,
 	ListItem,
 	ListItemText,
+	Dialog,
+	DialogTitle,
+	DialogContent,
+	DialogActions,
+	IconButton,
+	TextField,
+	Checkbox,
+	FormControlLabel,
 	Stack,
 	Typography,
 } from "@mui/material";
@@ -18,10 +26,29 @@ import {
 	fetchMyReceipts,
 	fetchReceiptDetail,
 	uploadAndParseReceipt,
+	updateReceiptItems,
+	type ParsedReceiptItem,
+	type UpdateReceiptItemPayload,
 	type ReceiptDetail,
 	type ReceiptSummary,
 	type UploadAndParseResponse,
 } from "./api/receipts";
+import { addFavorite } from "./api/favorites";
+import CloseIcon from "@mui/icons-material/Close";
+
+interface EditableReceiptItem {
+	id?: number | null;
+	ocrName: string;
+	finalName: string;
+	matchedProductId: string | null;
+	confidence: number;
+}
+
+interface FavoriteSelectionItem {
+	name: string;
+	matchedProductId: string | null;
+	selected: boolean;
+}
 
 // Basic list-and-detail page to browse user's receipts.
 export default function MyReceiptsPage() {
@@ -36,6 +63,19 @@ export default function MyReceiptsPage() {
 	const [uploading, setUploading] = React.useState(false);
 	const [uploadError, setUploadError] = React.useState<string | null>(null);
 	const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+	const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+	const [editingReceiptId, setEditingReceiptId] = React.useState<number | null>(
+		null,
+	);
+	const [editingItems, setEditingItems] = React.useState<EditableReceiptItem[]>(
+		[],
+	);
+	const [savingEdit, setSavingEdit] = React.useState(false);
+	const [favoriteDialogOpen, setFavoriteDialogOpen] = React.useState(false);
+	const [favoriteItems, setFavoriteItems] = React.useState<FavoriteSelectionItem[]>(
+		[],
+	);
+	const [addingFavorites, setAddingFavorites] = React.useState(false);
 
 	// Load receipt list once on mount.
 	React.useEffect(() => {
@@ -112,10 +152,47 @@ export default function MyReceiptsPage() {
 		try {
 			const result: UploadAndParseResponse = await uploadAndParseReceipt(file);
 
+			// Refresh list and select the new receipt in the sidebar.
 			setLoadingList(true);
 			const data = await fetchMyReceipts();
 			setReceipts(data);
 			setSelectedId(result.receiptId);
+
+			// Prepare editable items for the dialog.
+			const editable: EditableReceiptItem[] = [];
+
+			if (result.items && result.items.length > 0) {
+				result.items.forEach((it: ParsedReceiptItem) => {
+					const ocrName = it.ocrName || it.finalName || "";
+					const finalName = it.finalName || it.ocrName || "";
+					if (!finalName.trim()) {
+						return;
+					}
+					editable.push({
+						id: it.receiptItemId,
+						ocrName,
+						finalName,
+						matchedProductId: it.matchedProductId,
+						confidence: it.confidence,
+					});
+				});
+			} else if (result.productNames && result.productNames.length > 0) {
+				// Fallback for older backend payloads: only productNames are available.
+				result.productNames.forEach((name) => {
+					if (!name) return;
+					editable.push({
+						id: null,
+						ocrName: name,
+						finalName: name,
+						matchedProductId: null,
+						confidence: 1.0,
+					});
+				});
+			}
+
+			setEditingReceiptId(result.receiptId);
+			setEditingItems(editable);
+			setEditDialogOpen(true);
 		} catch (e: any) {
 			// eslint-disable-next-line no-console
 			console.error("Failed to upload and parse receipt", e);
@@ -129,6 +206,142 @@ export default function MyReceiptsPage() {
 			setLoadingList(false);
 			// reset file input so the same file can be selected again if needed
 			event.target.value = "";
+		}
+	};
+
+	const handleCloseEditDialog = () => {
+		if (savingEdit) return;
+		setEditDialogOpen(false);
+	};
+
+	const handleChangeItemName = (index: number, value: string) => {
+		setEditingItems((prev) =>
+			prev.map((item, i) =>
+				i === index
+					? {
+							...item,
+							finalName: value,
+					  }
+					: item,
+			),
+		);
+	};
+
+	const handleRemoveItem = (index: number) => {
+		setEditingItems((prev) => prev.filter((_, i) => i !== index));
+	};
+
+	const handleAddItem = () => {
+		setEditingItems((prev) => [
+			...prev,
+			{
+				id: null,
+				ocrName: "",
+				finalName: "",
+				matchedProductId: null,
+				confidence: 1.0,
+			},
+		]);
+	};
+
+	const guidToNumericId = (id: string): number => {
+		const hex = id.replace(/[^0-9a-fA-F]/g, "").slice(0, 8);
+		if (!hex) return 0;
+		return Number.parseInt(hex, 16);
+	};
+
+	const saveEditedItems = async () => {
+		if (!editingReceiptId) return;
+
+		const payload: UpdateReceiptItemPayload[] = editingItems
+			.map((item) => ({
+				id: item.id ?? undefined,
+				finalName: item.finalName.trim(),
+				matchedProductId: item.matchedProductId ?? null,
+			}))
+			.filter((p) => p.finalName !== "");
+
+		if (payload.length === 0) {
+			// Nothing meaningful to save.
+			setEditDialogOpen(false);
+			return;
+		}
+
+		setSavingEdit(true);
+		try {
+			await updateReceiptItems(editingReceiptId, payload);
+
+			// Refresh detail for the currently selected receipt.
+			if (selectedId != null) {
+				const d = await fetchReceiptDetail(selectedId);
+				setDetail(d);
+			}
+
+			// Prepare a separate list for favorites selection.
+			const favItems: FavoriteSelectionItem[] = editingItems
+				.filter((item) => !!item.matchedProductId)
+				.map((item) => ({
+					name: (item.finalName || item.ocrName).trim(),
+					matchedProductId: item.matchedProductId,
+					selected: false,
+				}))
+				.filter((f) => f.name !== "");
+
+			setEditDialogOpen(false);
+
+			if (favItems.length > 0) {
+				setFavoriteItems(favItems);
+				setFavoriteDialogOpen(true);
+			}
+		} catch (e) {
+			// eslint-disable-next-line no-console
+			console.error("Failed to save edited receipt items", e);
+		} finally {
+			setSavingEdit(false);
+		}
+	};
+
+	const handleToggleFavoriteSelection = (index: number, checked: boolean) => {
+		setFavoriteItems((prev) =>
+			prev.map((item, i) =>
+				i === index
+					? {
+							...item,
+							selected: checked,
+					  }
+					: item,
+			),
+		);
+	};
+
+	const handleSkipFavorites = () => {
+		if (addingFavorites) return;
+		setFavoriteDialogOpen(false);
+	};
+
+	const handleConfirmFavorites = async () => {
+		setAddingFavorites(true);
+		try {
+			const tasks: Promise<void>[] = [];
+			favoriteItems.forEach((item) => {
+				if (item.selected && item.matchedProductId) {
+					const numericId = guidToNumericId(item.matchedProductId);
+					if (numericId > 0) {
+						tasks.push(addFavorite(numericId));
+					}
+				}
+			});
+
+			if (tasks.length > 0) {
+				await Promise.allSettled(tasks);
+			}
+
+			setFavoriteDialogOpen(false);
+		} catch (e) {
+			// eslint-disable-next-line no-console
+			console.error("Failed to add favorites from receipt", e);
+		} finally {
+			setAddingFavorites(false);
 		}
 	};
 
@@ -344,6 +557,185 @@ export default function MyReceiptsPage() {
 					</CardContent>
 				</Card>
 			</Stack>
+
+			<Dialog
+				open={editDialogOpen}
+				onClose={handleCloseEditDialog}
+				fullWidth
+				maxWidth="md"
+			>
+				<DialogTitle
+					sx={{
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "space-between",
+						pr: 2,
+					}}
+				>
+					<Typography variant="h6" fontWeight={700}>
+						Review parsed items
+					</Typography>
+					<IconButton
+						onClick={handleCloseEditDialog}
+						size="small"
+						disabled={savingEdit}
+					>
+						<CloseIcon fontSize="small" />
+					</IconButton>
+				</DialogTitle>
+				<DialogContent dividers>
+					<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+						Check the recognized products and adjust names if needed. These
+						changes will be saved to this receipt.
+					</Typography>
+					{editingItems.length === 0 ? (
+						<Typography variant="body2" color="text.secondary">
+							No items were detected for this receipt.
+						</Typography>
+					) : (
+						<Stack spacing={1.5}>
+							{editingItems.map((item, index) => (
+								<Box
+									key={index}
+									sx={{
+										display: "flex",
+										gap: 2,
+										alignItems: "flex-start",
+									}}
+								>
+									<Box sx={{ flex: 1 }}>
+										{item.ocrName && (
+											<Typography
+												variant="caption"
+												color="text.secondary"
+												sx={{ display: "block" }}
+											>
+												OCR: {item.ocrName}
+											</Typography>
+										)}
+										<TextField
+											fullWidth
+											size="small"
+											margin="dense"
+											label="Final name"
+											value={item.finalName}
+											onChange={(e) =>
+												handleChangeItemName(index, e.target.value)
+											}
+										/>
+									</Box>
+									<Box
+										sx={{
+											display: "flex",
+											flexDirection: "column",
+											alignItems: "flex-end",
+											gap: 0.5,
+										}}
+									>
+										<IconButton
+											size="small"
+											onClick={() => handleRemoveItem(index)}
+										>
+											<CloseIcon fontSize="small" />
+										</IconButton>
+									</Box>
+								</Box>
+							))}
+						</Stack>
+					)}
+					<Box sx={{ mt: 2 }}>
+						<Button variant="text" onClick={handleAddItem}>
+							Add item
+						</Button>
+					</Box>
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={handleCloseEditDialog} disabled={savingEdit}>
+						Cancel
+					</Button>
+					<Button
+						onClick={() => void saveEditedItems()}
+						disabled={savingEdit || !editingReceiptId}
+					>
+						{savingEdit ? "Saving..." : "Save items"}
+					</Button>
+				</DialogActions>
+			</Dialog>
+
+			<Dialog
+				open={favoriteDialogOpen}
+				onClose={handleSkipFavorites}
+				fullWidth
+				maxWidth="sm"
+			>
+				<DialogTitle
+					sx={{
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "space-between",
+						pr: 2,
+					}}
+				>
+					<Typography variant="h6" fontWeight={700}>
+						Add to My Favorites
+					</Typography>
+					<IconButton
+						onClick={handleSkipFavorites}
+						size="small"
+						disabled={addingFavorites}
+					>
+						<CloseIcon fontSize="small" />
+					</IconButton>
+				</DialogTitle>
+				<DialogContent dividers>
+					<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+						Select the products from this receipt that you want to track in My
+						Favorites.
+					</Typography>
+					{favoriteItems.length === 0 ? (
+						<Typography variant="body2" color="text.secondary">
+							No matched products are available to add as favorites.
+						</Typography>
+					) : (
+						<List dense>
+							{favoriteItems.map((item, index) => (
+								<ListItem key={index} disableGutters>
+									<FormControlLabel
+										control={
+											<Checkbox
+												checked={item.selected}
+												onChange={(e) =>
+													handleToggleFavoriteSelection(
+														index,
+														e.target.checked,
+													)
+												}
+											/>
+										}
+										label={item.name}
+									/>
+								</ListItem>
+							))}
+						</List>
+					)}
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={handleSkipFavorites} disabled={addingFavorites}>
+						Skip
+					</Button>
+					<Button
+						variant="contained"
+						onClick={() => void handleConfirmFavorites()}
+						disabled={addingFavorites || favoriteItems.length === 0}
+					>
+						{addingFavorites ? (
+							<CircularProgress size={20} sx={{ color: "white" }} />
+						) : (
+							"Add to favorites"
+						)}
+					</Button>
+				</DialogActions>
+			</Dialog>
 		</Box>
 	);
 }
