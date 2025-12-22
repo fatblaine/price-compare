@@ -333,12 +333,6 @@ export default function MyReceiptsPage() {
 		]);
 	};
 
-	const guidToNumericId = (id: string): number => {
-		const hex = id.replace(/[^0-9a-fA-F]/g, "").slice(0, 8);
-		if (!hex) return 0;
-		return Number.parseInt(hex, 16);
-	};
-
 	const saveEditedItems = async () => {
 		if (!editingReceiptId) return;
 
@@ -414,10 +408,7 @@ export default function MyReceiptsPage() {
 			const tasks: Promise<void>[] = [];
 			favoriteItems.forEach((item) => {
 				if (item.selected && item.matchedProductId) {
-					const numericId = guidToNumericId(item.matchedProductId);
-					if (numericId > 0) {
-						tasks.push(addFavorite(numericId));
-					}
+					tasks.push(addFavorite(item.matchedProductId));
 				}
 			});
 

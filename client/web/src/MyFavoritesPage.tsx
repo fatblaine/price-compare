@@ -56,9 +56,9 @@ export default function MyFavoritesPage() {
 					<Typography variant="subtitle1" fontWeight={600} gutterBottom>
 						Favorite products
 					</Typography>
-					<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-						This basic view shows the product IDs you have favorited.
-					</Typography>
+	<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+		This view shows the product names you have favorited.
+	</Typography>
 
 					{loading ? (
 						<Box
@@ -82,18 +82,18 @@ export default function MyFavoritesPage() {
 									? new Date(fav.createdAt).toLocaleString()
 									: "";
 								return (
-									<ListItem key={fav.id}>
-										<ListItemText
-											primary={`Product #${fav.productId}`}
-											secondary={
-												createdText
-													? `Added at ${createdText}`
-													: undefined
-											}
-										/>
-									</ListItem>
-								);
-							})}
+							<ListItem key={fav.id}>
+								<ListItemText
+									primary={fav.productName || `Product ${fav.productId}`}
+									secondary={
+										createdText
+											? `Added at ${createdText}`
+											: undefined
+									}
+								/>
+							</ListItem>
+						);
+					})}
 						</List>
 					)}
 				</CardContent>
@@ -101,4 +101,3 @@ export default function MyFavoritesPage() {
 		</Box>
 	);
 }
-

@@ -2,14 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using PriceCompareData.Entities.Receipts;
+using PriceCompareData.DTOs;
 
 namespace PriceCompareCore.Interfaces
 {
     public interface IFavoriteService
     {
-        Task<IEnumerable<FavoriteItem>> GetFavoritesAsync(Guid userId);
-        Task<bool> AddFavoriteAsync(Guid userId, int productId);
-        Task<bool> RemoveFavoriteAsync(Guid userId, int productId);
+        Task<IEnumerable<FavoriteItemDto>> GetFavoritesAsync(Guid userId);
+        Task<bool> AddFavoriteAsync(Guid userId, Guid productId);
+        Task<bool> RemoveFavoriteAsync(Guid userId, Guid productId);
     }
 }
