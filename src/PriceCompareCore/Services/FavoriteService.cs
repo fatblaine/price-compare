@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.Data;
 using PriceCompareData.Entities.Receipts;
+using PriceCompareData.DTOs;
 
 namespace PriceCompareCore.Services
 {
@@ -18,7 +19,7 @@ namespace PriceCompareCore.Services
             _db = db;
         }
 
-        public async Task<bool> AddFavoriteAsync(Guid userId, int productId)
+        public async Task<bool> AddFavoriteAsync(Guid userId, Guid productId)
         {
             var exists = await _db.FavoriteItems
             .AnyAsync(f => f.UserId == userId && f.ProductId == productId);
@@ -36,14 +37,24 @@ namespace PriceCompareCore.Services
             return true;
         }
 
-        public async Task<IEnumerable<FavoriteItem>> GetFavoritesAsync(Guid userId)
+        public async Task<IEnumerable<FavoriteItemDto>> GetFavoritesAsync(Guid userId)
         {
-            return await _db.FavoriteItems
-            .Where(f => f.UserId == userId)
-            .ToListAsync();
+            return await (
+                from fav in _db.FavoriteItems
+                join prod in _db.Products on fav.ProductId equals prod.ProductId into prodJoin
+                from prod in prodJoin.DefaultIfEmpty()
+                where fav.UserId == userId
+                orderby fav.CreatedAt descending
+                select new FavoriteItemDto(
+                    fav.Id,
+                    fav.ProductId,
+                    prod != null ? prod.Name : $"Product {fav.ProductId}",
+                    fav.CreatedAt
+                )
+            ).ToListAsync();
         }
 
-        public async Task<bool> RemoveFavoriteAsync(Guid userId, int productId)
+        public async Task<bool> RemoveFavoriteAsync(Guid userId, Guid productId)
         {
             var fav = await _db.FavoriteItems
             .FirstOrDefaultAsync(f => f.UserId == userId && f.ProductId == productId);

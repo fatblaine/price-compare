@@ -31,8 +31,8 @@ public class FavoritesController : ControllerBase
         return Ok(list);
     }
 
-    [HttpPost("{productId:int}")]
-    public async Task<IActionResult> Add(int productId)
+    [HttpPost("{productId:guid}")]
+    public async Task<IActionResult> Add(Guid productId)
     {
         var ok = await _service.AddFavoriteAsync(UserId, productId);
 
@@ -42,8 +42,8 @@ public class FavoritesController : ControllerBase
         return Ok();
     }
 
-    [HttpDelete("{productId:int}")]
-    public async Task<IActionResult> Remove(int productId)
+    [HttpDelete("{productId:guid}")]
+    public async Task<IActionResult> Remove(Guid productId)
     {
         var ok = await _service.RemoveFavoriteAsync(UserId, productId);
 
