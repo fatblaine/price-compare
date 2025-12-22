@@ -6,6 +6,7 @@ import {
 	CardActionArea,
 	CardContent,
 	CircularProgress,
+	Autocomplete,
 	Divider,
 	List,
 	ListItem,
@@ -21,6 +22,7 @@ import {
 	Stack,
 	Typography,
 } from "@mui/material";
+import type { AutocompleteInputChangeReason } from "@mui/material/Autocomplete";
 import { useTheme, useMediaQuery } from "@mui/material";
 import {
 	fetchMyReceipts,
@@ -34,6 +36,8 @@ import {
 	type UploadAndParseResponse,
 } from "./api/receipts";
 import { addFavorite } from "./api/favorites";
+import { fetchProducts, type ProductRow } from "./api/products";
+import { useDebounce } from "./hooks/useDebounce";
 import CloseIcon from "@mui/icons-material/Close";
 
 interface EditableReceiptItem {
@@ -76,6 +80,10 @@ export default function MyReceiptsPage() {
 		[],
 	);
 	const [addingFavorites, setAddingFavorites] = React.useState(false);
+	const [productSearchQuery, setProductSearchQuery] = React.useState("");
+	const [productOptions, setProductOptions] = React.useState<ProductRow[]>([]);
+	const [productSearchLoading, setProductSearchLoading] = React.useState(false);
+	const debouncedProductQuery = useDebounce(productSearchQuery, 350);
 
 	// Load receipt list once on mount.
 	React.useEffect(() => {
@@ -129,6 +137,45 @@ export default function MyReceiptsPage() {
 			cancelled = true;
 		};
 	}, [selectedId]);
+
+	React.useEffect(() => {
+		let active = true;
+
+		const run = async () => {
+			const q = debouncedProductQuery.trim();
+			if (!q) {
+				setProductOptions([]);
+				return;
+			}
+
+			setProductSearchLoading(true);
+			try {
+				const { items } = await fetchProducts({
+					page: 1,
+					pageSize: 10,
+					name: q,
+				});
+				if (active) {
+					setProductOptions(items);
+				}
+			} catch (e) {
+				// eslint-disable-next-line no-console
+				console.error("Failed to search products", e);
+				if (active) {
+					setProductOptions([]);
+				}
+			} finally {
+				if (active) {
+					setProductSearchLoading(false);
+				}
+			}
+		};
+
+		void run();
+		return () => {
+			active = false;
+		};
+	}, [debouncedProductQuery]);
 
 	const handleSelect = (id: number) => {
 		setSelectedId(id);
@@ -214,16 +261,58 @@ export default function MyReceiptsPage() {
 		setEditDialogOpen(false);
 	};
 
-	const handleChangeItemName = (index: number, value: string) => {
+	const handleItemInputChange = (
+		index: number,
+		value: string,
+		reason: AutocompleteInputChangeReason,
+	) => {
 		setEditingItems((prev) =>
 			prev.map((item, i) =>
 				i === index
 					? {
 							...item,
 							finalName: value,
+							matchedProductId:
+								reason === "input" || reason === "clear"
+									? null
+									: item.matchedProductId,
 					  }
 					: item,
 			),
+		);
+
+		if (reason === "input") {
+			setProductSearchQuery(value);
+		}
+
+		if (reason === "clear") {
+			setProductSearchQuery("");
+		}
+	};
+
+	const handleItemSelect = (
+		index: number,
+		value: ProductRow | string | null,
+	) => {
+		setEditingItems((prev) =>
+			prev.map((item, i) => {
+				if (i !== index) return item;
+				if (typeof value === "string") {
+					return {
+						...item,
+						finalName: value,
+						matchedProductId: null,
+					};
+				}
+				if (value) {
+					return {
+						...item,
+						finalName: value.name,
+						matchedProductId: value.productId,
+					};
+				}
+				return item;
+			}),
 		);
 	};
 
@@ -613,15 +702,47 @@ export default function MyReceiptsPage() {
 												OCR: {item.ocrName}
 											</Typography>
 										)}
-										<TextField
-											fullWidth
-											size="small"
-											margin="dense"
-											label="Final name"
-											value={item.finalName}
-											onChange={(e) =>
-												handleChangeItemName(index, e.target.value)
+										<Autocomplete
+											freeSolo
+											options={productOptions}
+											loading={productSearchLoading}
+											filterOptions={(opts) => opts}
+											getOptionLabel={(option) =>
+												typeof option === "string" ? option : option.name
 											}
+											inputValue={item.finalName}
+											onInputChange={(_, value, reason) =>
+												handleItemInputChange(index, value, reason)
+											}
+											onChange={(_, value) => handleItemSelect(index, value)}
+											renderOption={(props, option) => (
+												<li {...props}>
+													{typeof option === "string" ? option : option.name}
+												</li>
+											)}
+											renderInput={(params) => (
+												<TextField
+													{...params}
+													fullWidth
+													size="small"
+													margin="dense"
+													label="Final name"
+													InputProps={{
+														...params.InputProps,
+														endAdornment: (
+															<>
+																{productSearchLoading ? (
+																	<CircularProgress
+																		size={18}
+																		sx={{ mr: 1 }}
+																	/>
+																) : null}
+																{params.InputProps.endAdornment}
+															</>
+														),
+													}}
+												/>
+											)}
 										/>
 									</Box>
 									<Box
