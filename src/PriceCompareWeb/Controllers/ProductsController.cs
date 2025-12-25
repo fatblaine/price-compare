@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -34,16 +35,20 @@ namespace PriceCompareWeb.Controllers
         /// <param name="name">partial match on product name</param>
         /// <param name="shopType">shop type (optional)</param>
         /// <param name="categoryId">category id (optional)</param>
+        /// <param name="includePrice">include latest price from history</param>
         [HttpGet]
         public async Task<IActionResult> GetProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20,
-            [FromQuery] string? name = null, [FromQuery] int? shopType = null, [FromQuery] int? categoryId = null)
+            [FromQuery] string? name = null, [FromQuery] int? shopType = null, [FromQuery] int? categoryId = null,
+            [FromQuery] bool includePrice = true)
         {
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 20;
 
             try
             {
+                _logger.LogInformation("GetProducts start page={Page} pageSize={PageSize} includePrice={IncludePrice}", page, pageSize, includePrice);
                 var (total, items) = await _productService.GetProductsAsync(page, pageSize, name, shopType, categoryId);
+                _logger.LogInformation("GetProducts items={Count}", items.Count);
 
                 // build latest price map from history by (Name, ShopType)
                 var names = items
@@ -58,29 +63,47 @@ namespace PriceCompareWeb.Controllers
                     .Distinct()
                     .ToList();
 
-                var latestPrices = await _db.PriceHistory
-                    .AsNoTracking()
-                    .Where(ph => ph.Name != null
-                                 && names.Contains(ph.Name!)
-                                 && ph.ShopType.HasValue
-                                 && shopTypes.Contains(ph.ShopType!.Value))
-                    .GroupBy(ph => new { ph.Name, ph.ShopType })
-                    .Select(g => new
+                var priceMap = new System.Collections.Generic.Dictionary<(string Name, int ShopType), decimal?>();
+                if (includePrice && names.Count > 0 && shopTypes.Count > 0)
+                {
+                    try
                     {
-                        g.Key.Name,
-                        g.Key.ShopType,
-                        CurrentPrice = g
-                            .OrderByDescending(x => x.ScrapedAt)
-                            .Select(x => (decimal?)x.CurrentPrice)
-                            .FirstOrDefault()
-                    })
-                    .ToListAsync();
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        var latestPrices = await _db.PriceHistory
+                            .AsNoTracking()
+                            .Where(ph => ph.Name != null
+                                         && names.Contains(ph.Name!)
+                                         && ph.ShopType.HasValue
+                                         && shopTypes.Contains(ph.ShopType!.Value))
+                            .GroupBy(ph => new { ph.Name, ph.ShopType })
+                            .Select(g => new
+                            {
+                                g.Key.Name,
+                                g.Key.ShopType,
+                                CurrentPrice = g
+                                    .OrderByDescending(x => x.ScrapedAt)
+                                    .Select(x => (decimal?)x.CurrentPrice)
+                                    .FirstOrDefault()
+                            })
+                            .ToListAsync(cts.Token);
 
-                var priceMap = latestPrices
-                    .ToDictionary(
-                        k => (Name: k.Name!, ShopType: k.ShopType!.GetValueOrDefault()),
-                        v => v.CurrentPrice
-                    );
+                        _logger.LogInformation("PriceHistory rows={Count}", latestPrices.Count);
+
+                        priceMap = latestPrices
+                            .ToDictionary(
+                                k => (Name: k.Name!, ShopType: k.ShopType!.GetValueOrDefault()),
+                                v => v.CurrentPrice
+                            );
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        _logger.LogWarning(ex, "PriceHistory query timed out; returning products without price.");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "PriceHistory query failed; returning products without price.");
+                    }
+                }
 
                 var shaped = items.Select(p => new
                 {

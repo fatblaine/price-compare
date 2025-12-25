@@ -24,10 +24,18 @@ namespace PriceCompareCore.Services
             AmazonS3Config config = new AmazonS3Config();
             config.RegionEndpoint = RegionEndpoint.GetBySystemName(_aws.Region);
 
-            _s3 = new AmazonS3Client(
-                _aws.AccessKeyId,
-                _aws.SecretAccessKey,
-                config);
+            if (!string.IsNullOrWhiteSpace(_aws.AccessKeyId) && !string.IsNullOrWhiteSpace(_aws.SecretAccessKey))
+            {
+                _s3 = new AmazonS3Client(
+                    _aws.AccessKeyId,
+                    _aws.SecretAccessKey,
+                    config);
+            }
+            else
+            {
+                // Fall back to default AWS credentials (IAM role, env, etc.).
+                _s3 = new AmazonS3Client(config);
+            }
         }
 
         public async Task<string> UploadAsync(IFormFile file, string userId, int receiptId)
