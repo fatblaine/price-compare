@@ -11,6 +11,13 @@ Globals:
       - x86_64
 
 Parameters:
+  Environment:
+    Type: String
+    Description: Deployment environment (dev or prod)
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
   DbConnectionString:
     Type: String
     Description: PostgreSQL connection string for AppDbContext (Npgsql)
@@ -31,13 +38,35 @@ Resources:
         AllowHeaders:
           - "*"
 
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "pricecompare-frontend-${Environment}"
+
+  ReceiptsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "pricecompare-receipts-${Environment}"
+
   PriceCompareApi:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: PriceCompareApi
+      FunctionName: !Sub "price-compare-api-${Environment}"
       Handler: PriceCompareWeb
       CodeUri: ./src/PriceCompareWeb/
       PackageType: Zip
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref ReceiptsBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rekognition:DetectText
+              Resource: "*"
       Events:
         ReceiptsGet:
           Type: HttpApi
@@ -105,11 +134,36 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Auth/register
             Method: POST
+        FavoritesGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Favorites
+            Method: GET
+        FavoritesPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Favorites/{productId}
+            Method: POST
+        FavoritesDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Favorites/{productId}
+            Method: DELETE
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          Aws__ReceiptBucket: !Ref ReceiptsBucket
 
 Outputs:
+  FrontendBucketName:
+    Description: S3 bucket for frontend static hosting
+    Value: !Ref FrontendBucket
+  ReceiptsBucketName:
+    Description: S3 bucket for receipt images
+    Value: !Ref ReceiptsBucket
   ApiEndpoint:
     Description: HTTP API invoke URL (no stage path)
     Value: !Sub "https://${AppHttpApi}.execute-api.${AWS::Region}.amazonaws.com"

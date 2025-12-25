@@ -39,4 +39,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <Target Name="RemovePlaywrightWindowsDriver" AfterTargets="Publish">
+    <RemoveDir Directories="$(PublishDir).playwright\node\win32_x64"
+               Condition="Exists('$(PublishDir).playwright\node\win32_x64')" />
+  </Target>
+
 </Project>

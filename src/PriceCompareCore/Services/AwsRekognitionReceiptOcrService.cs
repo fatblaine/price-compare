@@ -23,8 +23,15 @@ namespace PriceCompareCore.Services
             {
                 RegionEndpoint = RegionEndpoint.GetBySystemName(_aws.Region)
             };
-
-            _rekognition = new AmazonRekognitionClient(_aws.AccessKeyId, _aws.SecretAccessKey, config);
+            if (!string.IsNullOrWhiteSpace(_aws.AccessKeyId) && !string.IsNullOrWhiteSpace(_aws.SecretAccessKey))
+            {
+                _rekognition = new AmazonRekognitionClient(_aws.AccessKeyId, _aws.SecretAccessKey, config);
+            }
+            else
+            {
+                // Fall back to default AWS credentials (IAM role, env, etc.).
+                _rekognition = new AmazonRekognitionClient(config);
+            }
         }
 
         public async Task<ReceiptOcrResult> AnalyzeAsync(string imageKey)
