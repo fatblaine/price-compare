@@ -97,46 +97,54 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = "PriceCompare_";
 });
 
-// Quartz
-builder.Services.AddQuartz(q =>
+var enableQuartzJobs = builder.Configuration.GetValue<bool?>("Scraping:EnableQuartz") ?? false;
+if (enableQuartzJobs)
 {
-    q.UseMicrosoftDependencyInjectionJobFactory();
-    q.AddJobListener<LoggingJobListener>();
+    // Quartz
+    builder.Services.AddQuartz(q =>
+    {
+        q.UseMicrosoftDependencyInjectionJobFactory();
+        q.AddJobListener<LoggingJobListener>();
 
-    // scrape data - coles down down
-    var jobKey = new JobKey("ColesRefreshJob");
-    q.AddJob<ColesRefreshJob>(opts => opts.WithIdentity(jobKey));
-    q.AddTrigger(opts => opts
-        .ForJob(jobKey)
-        .WithIdentity("ColesRefreshJob-trigger")
-        .WithCronSchedule("0 0 2 ? * WED"));
+        // scrape data - coles down down
+        var jobKey = new JobKey("ColesRefreshJob");
+        q.AddJob<ColesRefreshJob>(opts => opts.WithIdentity(jobKey));
+        q.AddTrigger(opts => opts
+            .ForJob(jobKey)
+            .WithIdentity("ColesRefreshJob-trigger")
+            .WithCronSchedule("0 0 2 ? * WED"));
 
-    // scrape data - coles on special
-    var jobKeySpecial = new JobKey("ColesRefreshJobSpecial");
-    q.AddJob<ColesRefreshJobSpecial>(opts => opts.WithIdentity(jobKeySpecial));
-    q.AddTrigger(opts => opts
-        .ForJob(jobKeySpecial)
-        .WithIdentity("ColesRefreshJobSpecial-trigger")
-        .WithCronSchedule("0 0 3 ? * WED"));
+        // scrape data - coles on special
+        var jobKeySpecial = new JobKey("ColesRefreshJobSpecial");
+        q.AddJob<ColesRefreshJobSpecial>(opts => opts.WithIdentity(jobKeySpecial));
+        q.AddTrigger(opts => opts
+            .ForJob(jobKeySpecial)
+            .WithIdentity("ColesRefreshJobSpecial-trigger")
+            .WithCronSchedule("0 0 3 ? * WED"));
 
-    // scrape data - wws
-    var jobKeyWwsSpecial = new JobKey("WwsRefreshJobSpecial");
-    q.AddJob<WwsRefreshJobSpecial>(opts => opts.WithIdentity(jobKeyWwsSpecial));
-    q.AddTrigger(opts => opts
-        .ForJob(jobKeyWwsSpecial)
-        .WithIdentity("WwsRefreshJobSpecial-trigger")
-        .WithCronSchedule("0 0 4 ? * WED"));
+        // scrape data - wws
+        var jobKeyWwsSpecial = new JobKey("WwsRefreshJobSpecial");
+        q.AddJob<WwsRefreshJobSpecial>(opts => opts.WithIdentity(jobKeyWwsSpecial));
+        q.AddTrigger(opts => opts
+            .ForJob(jobKeyWwsSpecial)
+            .WithIdentity("WwsRefreshJobSpecial-trigger")
+            .WithCronSchedule("0 0 4 ? * WED"));
 
-    // delete data
-    var cleanJobKey = new JobKey("CleanPriceHistoryJob");
-    q.AddJob<CleanPriceHistoryJob>(opts => opts.WithIdentity(cleanJobKey));
-    q.AddTrigger(opts => opts
-        .ForJob(cleanJobKey)
-        .WithIdentity("CleanPriceHistoryJob-trigger")
-        .WithCronSchedule("0 0 1 ? 1/3 4#1"));
-});
+        // delete data
+        var cleanJobKey = new JobKey("CleanPriceHistoryJob");
+        q.AddJob<CleanPriceHistoryJob>(opts => opts.WithIdentity(cleanJobKey));
+        q.AddTrigger(opts => opts
+            .ForJob(cleanJobKey)
+            .WithIdentity("CleanPriceHistoryJob-trigger")
+            .WithCronSchedule("0 0 1 ? 1/3 4#1"));
+    });
 
-builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
+    builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
+}
+else
+{
+    builder.Services.AddLogging();
+}
 
 builder.Services.AddHttpClient<IColesDownScraperService, ColesDownScraperService>()
     .AddTransientHttpErrorPolicy(policy =>
@@ -192,9 +200,32 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 // use PostgreSQL instead of SQL Server
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+        npgsqlOptions.CommandTimeout(120)));
 
 var app = builder.Build();
+
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    try
+    {
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+        var safe = $"Host={csb.Host};Port={csb.Port};Database={csb.Database};Username={csb.Username};SslMode={csb.SslMode};TrustServerCertificate={csb.TrustServerCertificate};Pooling={csb.Pooling};";
+        app.Logger.LogInformation("DB connection (sanitized): {ConnectionString}", safe);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Failed to parse DB connection string for logging.");
+    }
+}
+else
+{
+    app.Logger.LogWarning("DefaultConnection is empty or missing.");
+}
+
+var envOverride = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+app.Logger.LogInformation("Env override set for ConnectionStrings__DefaultConnection: {IsSet}", !string.IsNullOrWhiteSpace(envOverride));
+app.Logger.LogInformation("Environment: {EnvironmentName}", app.Environment.EnvironmentName);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
