@@ -24,6 +24,7 @@ namespace PriceCompareData.Data
             public DbSet<Receipt> Receipts => Set<Receipt>();
             public DbSet<ReceiptItem> ReceiptItems => Set<ReceiptItem>();
             public DbSet<FavoriteItem> FavoriteItems => Set<FavoriteItem>();
+            public DbSet<FavoritePriceAlert> FavoritePriceAlerts => Set<FavoritePriceAlert>();
             public DbSet<User> Users { get { return Set<User>(); } }
 
 
@@ -88,7 +89,33 @@ namespace PriceCompareData.Data
                         entity.Property(e => e.Id).HasColumnName("id");
                         entity.Property(e => e.UserId).HasColumnName("userid");
                         entity.Property(e => e.ProductId).HasColumnName("productid");
+                        entity.Property(e => e.IsActive).HasColumnName("isactive").HasDefaultValue(true);
+                        entity.Property(e => e.TargetPrice).HasColumnName("targetprice").HasPrecision(18, 4);
+                        entity.Property(e => e.NotifyOnAnyDrop).HasColumnName("notifyonanydrop").HasDefaultValue(true);
+                        entity.Property(e => e.LastSeenPrice).HasColumnName("lastseenprice").HasPrecision(18, 4);
+                        entity.Property(e => e.LastNotifiedPrice).HasColumnName("lastnotifiedprice").HasPrecision(18, 4);
+                        entity.Property(e => e.LastNotifiedAt).HasColumnName("lastnotifiedat");
                         entity.Property(e => e.CreatedAt).HasColumnName("createdat");
+                  });
+
+                  // FavoritePriceAlert
+                  modelBuilder.Entity<FavoritePriceAlert>(entity =>
+                  {
+                        entity.ToTable("favoritepricealert");
+                        entity.HasKey(e => e.Id).HasName("pk_favoritepricealert");
+                        entity.Property(e => e.Id).HasColumnName("id");
+                        entity.Property(e => e.FavoriteItemId).HasColumnName("favoriteitemid");
+                        entity.Property(e => e.OldPrice).HasColumnName("oldprice").HasPrecision(18, 4);
+                        entity.Property(e => e.NewPrice).HasColumnName("newprice").HasPrecision(18, 4);
+                        entity.Property(e => e.TriggeredAt).HasColumnName("triggeredat");
+                        entity.Property(e => e.Status).HasColumnName("status");
+                        entity.Property(e => e.ErrorMessage).HasColumnName("errormessage");
+
+                        entity.HasOne<FavoriteItem>()
+                              .WithMany()
+                              .HasForeignKey(e => e.FavoriteItemId)
+                              .HasConstraintName("fk_favoritepricealert_favoriteitem")
+                              .OnDelete(DeleteBehavior.Cascade);
                   });
 
                   // User
