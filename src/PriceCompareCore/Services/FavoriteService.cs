@@ -49,6 +49,7 @@ namespace PriceCompareCore.Services
                     fav.Id,
                     fav.ProductId,
                     prod != null ? prod.Name : $"Product {fav.ProductId}",
+                    fav.IsActive,
                     fav.CreatedAt
                 )
             ).ToListAsync();
@@ -63,6 +64,19 @@ namespace PriceCompareCore.Services
                 return false;
 
             _db.FavoriteItems.Remove(fav);
+            await _db.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> SetFavoriteActiveAsync(Guid userId, Guid productId, bool isActive)
+        {
+            var fav = await _db.FavoriteItems
+                .FirstOrDefaultAsync(f => f.UserId == userId && f.ProductId == productId);
+
+            if (fav == null)
+                return false;
+
+            fav.IsActive = isActive;
             await _db.SaveChangesAsync();
             return true;
         }

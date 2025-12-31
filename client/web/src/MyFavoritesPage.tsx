@@ -1,16 +1,23 @@
 import * as React from "react";
 import {
 	Box,
+	Button,
 	Card,
 	CardContent,
 	CircularProgress,
 	List,
 	ListItem,
 	ListItemText,
+	Stack,
 	Typography,
 } from "@mui/material";
 import { useTheme, useMediaQuery } from "@mui/material";
-import { fetchFavorites, type FavoriteItem } from "./api/favorites";
+import {
+	fetchFavorites,
+	removeFavorite,
+	updateFavorite,
+	type FavoriteItem,
+} from "./api/favorites";
 
 // Basic page listing user's favorite products by ID.
 // The backend currently returns product IDs only; name/price lookup can be added later.
@@ -20,6 +27,16 @@ export default function MyFavoritesPage() {
 
 	const [items, setItems] = React.useState<FavoriteItem[]>([]);
 	const [loading, setLoading] = React.useState(false);
+	const [busyIds, setBusyIds] = React.useState<number[]>([]);
+
+	const setBusy = React.useCallback((id: number, busy: boolean) => {
+		setBusyIds((prev) => {
+			if (busy) {
+				return prev.includes(id) ? prev : [...prev, id];
+			}
+			return prev.filter((item) => item !== id);
+		});
+	}, []);
 
 	React.useEffect(() => {
 		let cancelled = false;
@@ -40,6 +57,45 @@ export default function MyFavoritesPage() {
 			cancelled = true;
 		};
 	}, []);
+
+	const handleRemove = React.useCallback(
+		async (fav: FavoriteItem) => {
+			setBusy(fav.id, true);
+			try {
+				await removeFavorite(fav.productId);
+				setItems((prev) => prev.filter((item) => item.id !== fav.id));
+			} catch (e) {
+				// eslint-disable-next-line no-console
+				console.error("Failed to remove favorite", e);
+			} finally {
+				setBusy(fav.id, false);
+			}
+		},
+		[setBusy],
+	);
+
+	const handleToggleAlerts = React.useCallback(
+		async (fav: FavoriteItem) => {
+			const nextActive = !fav.isActive;
+			setBusy(fav.id, true);
+			try {
+				await updateFavorite(fav.productId, nextActive);
+				setItems((prev) =>
+					prev.map((item) =>
+						item.id === fav.id
+							? { ...item, isActive: nextActive }
+							: item,
+					),
+				);
+			} catch (e) {
+				// eslint-disable-next-line no-console
+				console.error("Failed to update favorite alerts", e);
+			} finally {
+				setBusy(fav.id, false);
+			}
+		},
+		[setBusy],
+	);
 
 	return (
 		<Box>
@@ -81,19 +137,53 @@ export default function MyFavoritesPage() {
 								const createdText = fav.createdAt
 									? new Date(fav.createdAt).toLocaleString()
 									: "";
+								const statusText = fav.isActive
+									? "Alerts on"
+									: "Alerts off";
+								const secondaryParts = [];
+								if (createdText) {
+									secondaryParts.push(`Added at ${createdText}`);
+								}
+								secondaryParts.push(statusText);
+								const secondaryText = secondaryParts.join(" • ");
+								const isBusy = busyIds.includes(fav.id);
 								return (
-							<ListItem key={fav.id}>
-								<ListItemText
-									primary={fav.productName || `Product ${fav.productId}`}
-									secondary={
-										createdText
-											? `Added at ${createdText}`
-											: undefined
-									}
-								/>
-							</ListItem>
-						);
-					})}
+									<ListItem
+										key={fav.id}
+										secondaryAction={
+											<Stack direction="row" spacing={1}>
+												<Button
+													size="small"
+													variant="contained"
+													onClick={() => void handleToggleAlerts(fav)}
+													disabled={isBusy}
+												>
+													{fav.isActive
+														? "Disable alerts"
+														: "Enable alerts"}
+												</Button>
+												<Button
+													size="small"
+													variant="text"
+													color="error"
+													sx={{ textTransform: "uppercase" }}
+													onClick={() => void handleRemove(fav)}
+													disabled={isBusy}
+												>
+													Delete
+												</Button>
+											</Stack>
+										}
+									>
+										<ListItemText
+											primary={
+												fav.productName || `Product ${fav.productId}`
+											}
+											secondary={secondaryText}
+										/>
+									</ListItem>
+								);
+							})}
 						</List>
 					)}
 				</CardContent>
