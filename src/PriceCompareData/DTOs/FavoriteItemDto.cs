@@ -6,7 +6,7 @@ namespace PriceCompareData.DTOs
         int Id,
         Guid ProductId,
         string ProductName,
+        bool IsActive,
         DateTime CreatedAt
     );
 }
-
