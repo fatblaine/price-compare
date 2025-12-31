@@ -13,6 +13,7 @@
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.*" />
     <PackageReference Include="AWSSDK.Rekognition" Version="3.7.*" />
     <PackageReference Include="AWSSDK.S3" Version="3.7.*" />
+    <PackageReference Include="MailKit" Version="4.14.1" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.0" />
 
     <!-- Playwright -->
