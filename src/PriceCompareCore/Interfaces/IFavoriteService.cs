@@ -11,5 +11,6 @@ namespace PriceCompareCore.Interfaces
         Task<IEnumerable<FavoriteItemDto>> GetFavoritesAsync(Guid userId);
         Task<bool> AddFavoriteAsync(Guid userId, Guid productId);
         Task<bool> RemoveFavoriteAsync(Guid userId, Guid productId);
+        Task<bool> SetFavoriteActiveAsync(Guid userId, Guid productId, bool isActive);
     }
 }

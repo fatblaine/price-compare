@@ -7,6 +7,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using PriceCompareCore.Interfaces;
+using PriceCompareWeb.Controllers.Models;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -50,6 +51,19 @@ public class FavoritesController : ControllerBase
     {
         var ok = await _service.RemoveFavoriteAsync(UserId, productId);
 
+        if (!ok)
+            return NotFound();
+
+        return NoContent();
+    }
+
+    [HttpPut("{productId:guid}")]
+    public async Task<IActionResult> Update(Guid productId, [FromBody] UpdateFavoriteRequest request)
+    {
+        if (request == null)
+            return BadRequest("Request body is required");
+
+        var ok = await _service.SetFavoriteActiveAsync(UserId, productId, request.IsActive);
         if (!ok)
             return NotFound();
 

@@ -6,6 +6,7 @@ export interface FavoriteItem {
 	id: number;
 	productId: string;
 	productName: string;
+	isActive: boolean;
 	createdAt: string;
 }
 
@@ -23,4 +24,12 @@ export async function addFavorite(productId: string): Promise<void> {
 export async function removeFavorite(productId: string): Promise<void> {
 	const url = `${API_BASE}/api/Favorites/${productId}`;
 	await axios.delete(url);
+}
+
+export async function updateFavorite(
+	productId: string,
+	isActive: boolean,
+): Promise<void> {
+	const url = `${API_BASE}/api/Favorites/${productId}`;
+	await axios.put(url, { isActive });
 }
