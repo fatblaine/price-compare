@@ -22,6 +22,8 @@ using PriceCompareCore.Config;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddScoped<IFavoritePriceTrackingService, FavoritePriceTrackingService>();
+
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
