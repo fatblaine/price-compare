@@ -16,12 +16,15 @@ public class FavoritesController : ControllerBase
     private readonly IFavoriteService _service;
     private readonly IHttpContextAccessor _ctx;
 
+    private readonly IFavoritePriceTrackingService _trackingService;
+
     private Guid UserId => Guid.Parse(_ctx.HttpContext!.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    public FavoritesController(IFavoriteService service, IHttpContextAccessor ctx)
+    public FavoritesController(IFavoriteService service, IHttpContextAccessor ctx, IFavoritePriceTrackingService trackingService)
     {
         _service = service;
         _ctx = ctx;
+        _trackingService = trackingService;
     }
 
     [HttpGet]
@@ -52,4 +55,12 @@ public class FavoritesController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPost("price-check")]
+    public async Task<IActionResult> PriceCheck()
+    {
+        var result = await _trackingService.CheckAndNotifyAsync();
+        return Ok(result);
+    }
+
 }

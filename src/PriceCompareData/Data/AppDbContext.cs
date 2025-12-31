@@ -111,7 +111,7 @@ namespace PriceCompareData.Data
                         entity.Property(e => e.Status).HasColumnName("status");
                         entity.Property(e => e.ErrorMessage).HasColumnName("errormessage");
 
-                        entity.HasOne<FavoriteItem>()
+                        entity.HasOne(e => e.FavoriteItem)
                               .WithMany()
                               .HasForeignKey(e => e.FavoriteItemId)
                               .HasConstraintName("fk_favoritepricealert_favoriteitem")
