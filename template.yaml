@@ -152,6 +152,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Favorites/{productId}
             Method: DELETE
+        FavoritesPut:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Favorites/{productId}
+            Method: PUT
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString

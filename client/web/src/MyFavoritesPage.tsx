@@ -5,6 +5,11 @@ import {
 	Card,
 	CardContent,
 	CircularProgress,
+	Dialog,
+	DialogActions,
+	DialogContent,
+	DialogContentText,
+	DialogTitle,
 	List,
 	ListItem,
 	ListItemText,
@@ -28,6 +33,9 @@ export default function MyFavoritesPage() {
 	const [items, setItems] = React.useState<FavoriteItem[]>([]);
 	const [loading, setLoading] = React.useState(false);
 	const [busyIds, setBusyIds] = React.useState<number[]>([]);
+	const [pendingDelete, setPendingDelete] = React.useState<FavoriteItem | null>(
+		null,
+	);
 
 	const setBusy = React.useCallback((id: number, busy: boolean) => {
 		setBusyIds((prev) => {
@@ -74,6 +82,20 @@ export default function MyFavoritesPage() {
 		[setBusy],
 	);
 
+	const handleRequestRemove = React.useCallback((fav: FavoriteItem) => {
+		setPendingDelete(fav);
+	}, []);
+
+	const handleCloseDelete = React.useCallback(() => {
+		setPendingDelete(null);
+	}, []);
+
+	const handleConfirmRemove = React.useCallback(async () => {
+		if (!pendingDelete) return;
+		await handleRemove(pendingDelete);
+		setPendingDelete(null);
+	}, [handleRemove, pendingDelete]);
+
 	const handleToggleAlerts = React.useCallback(
 		async (fav: FavoriteItem) => {
 			const nextActive = !fav.isActive;
@@ -96,6 +118,10 @@ export default function MyFavoritesPage() {
 		},
 		[setBusy],
 	);
+
+	const confirmBusy = pendingDelete
+		? busyIds.includes(pendingDelete.id)
+		: false;
 
 	return (
 		<Box>
@@ -155,6 +181,7 @@ export default function MyFavoritesPage() {
 												<Button
 													size="small"
 													variant="contained"
+													color={fav.isActive ? "warning" : "success"}
 													onClick={() => void handleToggleAlerts(fav)}
 													disabled={isBusy}
 												>
@@ -167,7 +194,7 @@ export default function MyFavoritesPage() {
 													variant="text"
 													color="error"
 													sx={{ textTransform: "uppercase" }}
-													onClick={() => void handleRemove(fav)}
+													onClick={() => handleRequestRemove(fav)}
 													disabled={isBusy}
 												>
 													Delete
@@ -188,6 +215,35 @@ export default function MyFavoritesPage() {
 					)}
 				</CardContent>
 			</Card>
+			<Dialog
+				open={Boolean(pendingDelete)}
+				onClose={confirmBusy ? undefined : handleCloseDelete}
+				aria-labelledby="confirm-delete-title"
+				aria-describedby="confirm-delete-description"
+			>
+				<DialogTitle id="confirm-delete-title">
+					Remove favorite?
+				</DialogTitle>
+				<DialogContent>
+					<DialogContentText id="confirm-delete-description">
+						This will remove the item from your favorites list. You can add
+						it again later if needed.
+					</DialogContentText>
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={handleCloseDelete} disabled={confirmBusy}>
+						Cancel
+					</Button>
+					<Button
+						onClick={() => void handleConfirmRemove()}
+						color="error"
+						variant="contained"
+						disabled={confirmBusy}
+					>
+						Delete
+					</Button>
+				</DialogActions>
+			</Dialog>
 		</Box>
 	);
 }
