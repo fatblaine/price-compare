@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using PriceCompareCore.Config;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
@@ -18,6 +22,28 @@ namespace PriceCompareCore.Services
         private readonly ILogger<FavoritePriceTrackingService> _logger;
 
         private static readonly TimeSpan NotifyCooldown = TimeSpan.FromHours(6);
+        private readonly FavoriteAlertSettings _settings;
+
+        private record PendingFavoriteAlert(
+            FavoriteItem Favorite,
+            string Email,
+            string ProductName,
+            int ShopType,
+            decimal OldPrice,
+            decimal NewPrice,
+            decimal DropAmount,
+            decimal? DropPercent,
+            string FavoritesUrl,
+            FavoritePriceAlert Alert);
+
+        private string BuildFavoritesUrl()
+        {
+            var baseUrl = _settings.BaseUrl?.TrimEnd('/') ?? string.Empty;
+            var path = _settings.FavoritesPath ?? "/";
+            if (!path.StartsWith("/")) path = "/" + path;
+            return baseUrl + path;
+        }
+
 
         private static string GetShopLabel(int shopType)
         {
@@ -32,16 +58,20 @@ namespace PriceCompareCore.Services
         public FavoritePriceTrackingService(
             AppDbContext db,
             IEmailSender emailSender,
-            ILogger<FavoritePriceTrackingService> logger)
+            ILogger<FavoritePriceTrackingService> logger,
+            IOptions<FavoriteAlertSettings> settings)
         {
             _db = db;
             _emailSender = emailSender;
             _logger = logger;
+            _settings = settings.Value;
         }
 
         public async Task<FavoritePriceTrackingResult> CheckAndNotifyAsync()
         {
             var result = new FavoritePriceTrackingResult();
+
+            var pendingAlerts = new List<PendingFavoriteAlert>();
 
             var favorites = await _db.FavoriteItems
                 .Where(f => f.IsActive)
@@ -179,39 +209,117 @@ namespace PriceCompareCore.Services
                     Status = "Pending"
                 };
 
-                try
+                var dropAmount = oldPrice.Value - latestPrice;
+                decimal? dropPercent = null;
+                if (oldPrice.Value > 0)
                 {
-                    var shopLabel = GetShopLabel(product.ShopType.Value);
-                    var subject = $"Good news: {product.Name} is cheaper now";
-                    var body = $@"
-                    <p>Hello!</p>
-                    <p>This is a friendly PriceCompare reminder that a favorite item dropped in price.</p>
-                    <p><strong>{product.Name}</strong></p>
-                    <p>Old price: {oldPrice.Value:F2}</p>
-                    <p>New price: {latestPrice:F2}</p>
-                    <p>Shop: {shopLabel}</p>
-                    <p>If you no longer want these alerts, you can remove the item from favorites.</p>";
-
-                    await _emailSender.SendAsync(email, subject, body);
-
-                    alert.Status = "Sent";
-                    fav.LastNotifiedPrice = latestPrice;
-                    fav.LastNotifiedAt = DateTime.UtcNow;
-                    result.Sent++;
+                    dropPercent = (dropAmount / oldPrice.Value) * 100m;
                 }
-                catch (Exception ex)
-                {
-                    alert.Status = "Failed";
-                    alert.ErrorMessage = ex.Message;
-                    result.Failed++;
-                    _logger.LogError(ex, "Failed to send price alert email for favorite {FavoriteId}", fav.Id);
-                }
+
+                var favoritesUrl = BuildFavoritesUrl();
+
+                pendingAlerts.Add(new PendingFavoriteAlert(
+                    fav,
+                    email,
+                    product.Name!,
+                    product.ShopType.Value,
+                    oldPrice.Value,
+                    latestPrice,
+                    dropAmount,
+                    dropPercent,
+                    favoritesUrl,
+                    alert));
 
                 _db.FavoritePriceAlerts.Add(alert);
             }
 
+            var groups = pendingAlerts.GroupBy(x => x.Email);
+
+            foreach (var group in groups)
+            {
+                var ordered = group
+                    .OrderByDescending(x => x.DropPercent ?? decimal.MinValue)
+                    .ThenByDescending(x => x.DropAmount)
+                    .ToList();
+
+                var email = group.Key;
+                var subject = BuildDigestSubject(ordered);
+                var body = BuildDigestBody(ordered);
+
+                try
+                {
+                    await _emailSender.SendAsync(email, subject, body);
+
+                    var now = DateTime.UtcNow;
+                    foreach (var item in ordered)
+                    {
+                        item.Alert.Status = "Sent";
+                        item.Favorite.LastNotifiedPrice = item.NewPrice;
+                        item.Favorite.LastNotifiedAt = now;
+                        result.Sent++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    foreach (var item in ordered)
+                    {
+                        item.Alert.Status = "Failed";
+                        item.Alert.ErrorMessage = ex.Message;
+                        result.Failed++;
+                    }
+
+                    _logger.LogError(ex, "Failed to send price alert digest email to {Email}", email);
+                }
+            }
+
             await _db.SaveChangesAsync();
             return result;
+        }
+
+        private static string BuildDigestSubject(IReadOnlyList<PendingFavoriteAlert> items)
+        {
+            if (items.Count == 0)
+            {
+                return "Price drops for your favorites";
+            }
+
+            var top = items[0];
+            return $"Price drops for {items.Count} favorites (Top: {top.ProductName})";
+        }
+
+        private static string BuildDigestBody(IReadOnlyList<PendingFavoriteAlert> items)
+        {
+            var sb = new StringBuilder();
+
+            sb.AppendLine("<p>Hello!</p>");
+            sb.AppendLine($"<p>{items.Count} of your favorites dropped in price.</p>");
+
+            var top = items[0];
+            var topPercent = top.DropPercent.HasValue ? $"{top.DropPercent.Value:F1}%" : "-";
+            sb.AppendLine("<h3>Biggest drop</h3>");
+            sb.AppendLine(
+                $"<p><strong>{WebUtility.HtmlEncode(top.ProductName)}</strong><br/>" +
+                $"Old: {top.OldPrice:F2} -> New: {top.NewPrice:F2}<br/>" +
+                $"Drop: {topPercent} ({top.DropAmount:F2})<br/>" +
+                $"Shop: {GetShopLabel(top.ShopType)}<br/>" +
+                $"<a href=\"{top.FavoritesUrl}\">View favorites</a></p>");
+
+            sb.AppendLine("<hr/>");
+            sb.AppendLine("<h4>All price drops</h4>");
+            sb.AppendLine("<ul>");
+            foreach (var item in items)
+            {
+                var percent = item.DropPercent.HasValue ? $"{item.DropPercent.Value:F1}%" : "-";
+                sb.AppendLine(
+                    $"<li><strong>{WebUtility.HtmlEncode(item.ProductName)}</strong> - " +
+                    $"Old {item.OldPrice:F2}, New {item.NewPrice:F2}, " +
+                    $"Drop {percent} ({item.DropAmount:F2}), " +
+                    $"Shop {GetShopLabel(item.ShopType)} - " +
+                    $"<a href=\"{item.FavoritesUrl}\">View</a></li>");
+            }
+            sb.AppendLine("</ul>");
+
+            return sb.ToString();
         }
     }
 }
