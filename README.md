@@ -10,6 +10,7 @@ URL: <http://pricecompare-frontend-prod.s3-website-ap-southeast-2.amazonaws.com>
 
 ## Features
 
+- Favorite price tracking with digest email alerts (per user, biggest drop first)
 - List and filter products by name and shop (server‑side pagination)
 - Compare a selected product with similar items from the other shop
 - 7‑day price trend chart (Coles and Woolworths)
@@ -105,6 +106,20 @@ These endpoints persist price history and upsert the products table. After inges
     - `offerType`: 0 = Down Down, 1 = On Special
     - `shopType`: 0 = Coles, 1 = Woolworths
 
+- Favorites and Price Alerts
+  - `GET /api/Favorites`
+    - Returns the current user’s favorite items.
+  - `POST /api/Favorites/{productId}`
+    - Adds a product to favorites.
+  - `DELETE /api/Favorites/{productId}`
+    - Removes a product from favorites.
+  - `PUT /api/Favorites/{productId}`
+    - Updates favorite state (active/inactive).
+  - `POST /api/Favorites/price-check`
+    - Runs the price tracking job and sends a single digest email per user.
+    - Items are sorted by percentage drop (desc), then amount drop (desc).
+    - Each email links back to the favorites page.
+
 - Scraping (ingestion)
   - `GET /api/Scraping/coles/down-down/all`
     - Query: `Name?`, `MinPrice?`, `MaxPrice?`, `IsSponsored?`
@@ -138,6 +153,8 @@ AWS Lambda jobs are available for “On Special” scrapers and cleanup (see `te
 Environment variables and settings
 
 - `ConnectionStrings__DefaultConnection`: PostgreSQL connection string
+- `FavoriteAlerts__BaseUrl`: frontend base URL for email links
+- `FavoriteAlerts__FavoritesPath`: favorites page path (e.g., `/` or `/favorites`)
 - `Redis__ConnectionString` (optional): Redis endpoint for API caching
 - `USE_REDIS` (optional, jobs): set to `true` to force Redis in Lambda jobs
 - `ASPNETCORE_ENVIRONMENT`: set `Development` to enable Swagger
