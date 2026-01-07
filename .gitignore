@@ -17,6 +17,8 @@ appsecrets.json
 appsecrets.*.json
 *.env.local
 *.env.development.local
+samconfig.toml
+tools/KeywordMiner/appsettings.json
 
 # Local DB files (if you ever use LocalDB or SQL Express files)
 *.mdf
