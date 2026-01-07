@@ -7,7 +7,7 @@ s3_prefix = "price-compare"
 region = "ap-southeast-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "DbConnectionString=\"Host=aws-1-ap-southeast-2.pooler.supabase.com;Port=5432;Database=postgres;User Id=postgres.awegqbemxepbfoxnvztn;Password=Fch36910213#;Ssl Mode=Require;Trust Server Certificate=true\""
+parameter_overrides = "DbConnectionString=\"__REPLACE_ME__\""
 image_repositories = []
 
 [dev.deploy.parameters]
@@ -17,7 +17,7 @@ s3_prefix = "price-compare-dev"
 region = "ap-southeast-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=dev DbConnectionString=\"Host=aws-1-ap-southeast-2.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.yzagmuljbiijblfcmzsw;Password=Fch36910213#;Ssl Mode=Require;Trust Server Certificate=true;Pooling=false;Timeout=15;CommandTimeout=15;Max Auto Prepare=0;Auto Prepare Min Usages=1;\""
+parameter_overrides = "Environment=dev DbConnectionString=\"__REPLACE_ME__\""
 image_repositories = []
 
 [prod.deploy.parameters]
@@ -27,5 +27,5 @@ s3_prefix = "price-compare-prod"
 region = "ap-southeast-2"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=prod DbConnectionString=\"Host=aws-1-ap-southeast-2.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.awegqbemxepbfoxnvztn;Password=Fch36910213#;Ssl Mode=Require;Trust Server Certificate=true;Pooling=false;Timeout=15;CommandTimeout=15;Max Auto Prepare=0;Auto Prepare Min Usages=1;\""
+parameter_overrides = "Environment=prod DbConnectionString=\"__REPLACE_ME__\""
 image_repositories = []

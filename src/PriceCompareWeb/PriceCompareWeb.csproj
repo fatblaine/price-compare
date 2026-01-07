@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
     <ProjectReference Include="..\PriceCompareCore\PriceCompareCore.csproj" />
@@ -37,11 +37,11 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>02447f8d-a506-4b0e-961a-67b9f444fe3b</UserSecretsId>
   </PropertyGroup>
 
   <Target Name="RemovePlaywrightWindowsDriver" AfterTargets="Publish">
-    <RemoveDir Directories="$(PublishDir).playwright\node\win32_x64"
-               Condition="Exists('$(PublishDir).playwright\node\win32_x64')" />
+    <RemoveDir Directories="$(PublishDir).playwright\node\win32_x64" Condition="Exists('$(PublishDir).playwright\node\win32_x64')" />
   </Target>
 
 </Project>
