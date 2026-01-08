@@ -16,10 +16,11 @@ import { login } from "./api/auth";
 export interface LoginPageProps {
 	onLoggedIn?: () => void;
 	onSwitchToRegister?: () => void;
+	onGuestLogin?: () => void;
 }
 
 export default function LoginPage(props: LoginPageProps) {
-	const { onLoggedIn, onSwitchToRegister } = props;
+	const { onLoggedIn, onSwitchToRegister, onGuestLogin } = props;
 	const theme = useTheme();
 	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -152,6 +153,22 @@ export default function LoginPage(props: LoginPageProps) {
 								</Button>
 							</Stack>
 						</Box>
+
+						{onGuestLogin && (
+							<Stack spacing={1} sx={{ textAlign: "center" }}>
+								<Typography variant="body2" color="text.secondary">
+									Continue as a guest to browse products. Favorites and receipts
+									require a full sign-in.
+								</Typography>
+								<Button
+									variant="outlined"
+									onClick={onGuestLogin}
+									sx={{ textTransform: "none", fontWeight: 600 }}
+								>
+									Continue as guest
+								</Button>
+							</Stack>
+						)}
 
 						{onSwitchToRegister && (
 							<Button
