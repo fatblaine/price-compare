@@ -3,6 +3,11 @@ import {
 	Box,
 	Button,
 	Container,
+	Dialog,
+	DialogActions,
+	DialogContent,
+	DialogContentText,
+	DialogTitle,
 	Tab,
 	Tabs,
 	Toolbar,
@@ -12,45 +17,122 @@ import React from "react";
 import ProductsPage from "./ProductsPage";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
-import { clearToken, getStoredEmail, getStoredToken } from "./api/auth";
+import {
+	clearGuestSession,
+	clearToken,
+	getStoredEmail,
+	getStoredGuest,
+	getStoredToken,
+	setGuestSession,
+} from "./api/auth";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
 
 function App() {
 	const [token, setToken] = React.useState<string | null>(null);
 	const [userEmail, setUserEmail] = React.useState<string | null>(null);
+	const [guestMode, setGuestMode] = React.useState(false);
 	const [authView, setAuthView] = React.useState<"login" | "register">("login");
 	const [mainTab, setMainTab] = React.useState<"products" | "receipts" | "favorites">("products");
+	const [restrictedDialogOpen, setRestrictedDialogOpen] = React.useState(false);
+	const [pendingProtectedTab, setPendingProtectedTab] = React.useState<"receipts" | "favorites" | null>(null);
 
 	React.useEffect(() => {
 		const stored = getStoredToken();
-		setToken(stored);
-		const storedEmail = getStoredEmail();
-		setUserEmail(storedEmail);
+		if (stored) {
+			setToken(stored);
+			const storedEmail = getStoredEmail();
+			setUserEmail(storedEmail);
+			setGuestMode(false);
+			clearGuestSession();
+			return;
+		}
+		setToken(null);
+		setUserEmail(null);
+		setGuestMode(getStoredGuest());
 	}, []);
+
+	const isAuthenticated = !!token;
+	const isGuest = guestMode && !isAuthenticated;
+	const showTabs = isAuthenticated || isGuest;
 
 	const handleLoggedIn = () => {
 		const stored = getStoredToken();
 		setToken(stored);
 		const storedEmail = getStoredEmail();
 		setUserEmail(storedEmail);
+		setGuestMode(false);
+		clearGuestSession();
 		setAuthView("login");
+		setMainTab(pendingProtectedTab ?? "products");
+		setPendingProtectedTab(null);
 	};
 
 	const handleLogout = () => {
 		clearToken();
+		clearGuestSession();
 		setToken(null);
 		setUserEmail(null);
+		setGuestMode(false);
+		setMainTab("products");
 	};
 
-	const isAuthenticated = !!token;
+	const handleGuestLogin = () => {
+		clearToken();
+		setGuestSession();
+		setToken(null);
+		setUserEmail(null);
+		setGuestMode(true);
+		setAuthView("login");
+		setMainTab("products");
+		setPendingProtectedTab(null);
+	};
+
+	const handleStartSignIn = () => {
+		clearGuestSession();
+		setGuestMode(false);
+		setAuthView("login");
+	};
+
+	const handleTabChange = (
+		_: React.SyntheticEvent,
+		val: "products" | "receipts" | "favorites",
+	) => {
+		if (val !== "products" && !isAuthenticated) {
+			setPendingProtectedTab(val);
+			setRestrictedDialogOpen(true);
+			return;
+		}
+		setMainTab(val);
+	};
+
+	const handleCloseRestrictedDialog = () => {
+		setRestrictedDialogOpen(false);
+		setPendingProtectedTab(null);
+	};
+
+	const handleRestrictedSignIn = () => {
+		setRestrictedDialogOpen(false);
+		handleStartSignIn();
+	};
+
+	const restrictedTarget =
+		pendingProtectedTab === "receipts"
+			? "My Receipts"
+			: pendingProtectedTab === "favorites"
+				? "My Favorites"
+				: "this section";
 
 	const renderMainContent = () => {
 		if (!isAuthenticated) {
+			if (isGuest) {
+				return <ProductsPage />;
+			}
 			return authView === "login" ? (
 				<LoginPage
 					onLoggedIn={handleLoggedIn}
 					onSwitchToRegister={() => setAuthView("register")}
+					onGuestLogin={handleGuestLogin}
 				/>
 			) : (
 				<RegisterPage
@@ -105,13 +187,10 @@ function App() {
 						>
 							Price-Compare
 						</Typography>
-						{isAuthenticated && (
+						{showTabs && (
 							<Tabs
 								value={mainTab}
-								onChange={(
-									_,
-									val: "products" | "receipts" | "favorites",
-								) => setMainTab(val)}
+								onChange={handleTabChange}
 								textColor="inherit"
 								indicatorColor="secondary"
 								sx={{
@@ -148,6 +227,19 @@ function App() {
 								{userEmail}
 							</Typography>
 						)}
+						{isGuest && (
+							<Typography
+								variant="body2"
+								sx={{
+									ml: { xs: 0, md: 2 },
+									mt: { xs: 1, md: 0 },
+									fontWeight: 500,
+									textShadow: "0 1px 1px rgba(0,0,0,0.25)",
+								}}
+							>
+								Guest access
+							</Typography>
+						)}
 						{isAuthenticated && (
 							<Button
 								color="inherit"
@@ -161,6 +253,19 @@ function App() {
 								Log out
 							</Button>
 						)}
+						{isGuest && (
+							<Button
+								color="inherit"
+								onClick={handleStartSignIn}
+								sx={{
+									fontWeight: 500,
+									ml: { xs: 0, md: 2 },
+									mt: { xs: 1, md: 0 },
+								}}
+							>
+								Sign in
+							</Button>
+						)}
 					</Container>
 				</Toolbar>
 			</AppBar>
@@ -168,6 +273,29 @@ function App() {
 			<Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
 				{renderMainContent()}
 			</Container>
+
+			<Dialog
+				open={restrictedDialogOpen}
+				onClose={handleCloseRestrictedDialog}
+				aria-labelledby="signin-required-title"
+				aria-describedby="signin-required-description"
+			>
+				<DialogTitle id="signin-required-title">
+					Sign in required
+				</DialogTitle>
+				<DialogContent>
+					<DialogContentText id="signin-required-description">
+						{restrictedTarget} is only available after signing in. Guests can
+						view products only.
+					</DialogContentText>
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={handleCloseRestrictedDialog}>Keep browsing</Button>
+					<Button variant="contained" onClick={handleRestrictedSignIn}>
+						Sign in
+					</Button>
+				</DialogActions>
+			</Dialog>
 		</Box>
 	);
 }
