@@ -1,0 +1,39 @@
+name: Deploy Frontend (S3)
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - "client/web/**"
+            - ".github/workflows/deploy-frontend.yml"
+    workflow_dispatch:
+
+jobs:
+    deploy-frontend:
+        runs-on: ubuntu-latest
+        env:
+            AWS_REGION: ${{ secrets.AWS_REGION }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install dependencies
+              working-directory: client/web
+              run: npm ci
+
+            - name: Build frontend
+              working-directory: client/web
+              run: npm run build
+
+            - name: Upload to S3
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+              run: |
+                  aws s3 sync client/web/build s3://${{ secrets.S3_BUCKET_NAME }} --delete --region $AWS_REGION

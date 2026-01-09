@@ -4,8 +4,28 @@
     <ProjectReference Include="..\PriceCompareData\PriceCompareData.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- AWS SDK for DynamoDB -->
+    <PackageReference Include="AngleSharp" Version="1.1.2" />
+    <!-- Use AWS SDK v3 which contains DynamoDB DataModel in the main package -->
+    <PackageReference Include="AWSSDK.Core" Version="3.7.*" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.*" />
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.*" />
+    <PackageReference Include="AWSSDK.Rekognition" Version="3.7.*" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.*" />
+    <PackageReference Include="MailKit" Version="4.14.1" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.0" />
+
+    <!-- Playwright -->
+    <PackageReference Include="Microsoft.Playwright" Version="1.55.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
