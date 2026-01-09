@@ -22,7 +22,6 @@
       }
     },
     "environmentVariables": {
-      "ConnectionStrings__DefaultConnection": "Host=localhost;Port=5432;Database=pricecompare;Username=postgres;Password=Fch36910213#",
       "USE_REDIS": "true",
       "Redis__ConnectionString": "localhost:6379"
     }
