@@ -11,12 +11,18 @@
 # DO NOT COMMIT SENSITIVE CONFIG FILES!
 # appsettings.json is for shared, non-sensitive settings.
 # Development configs with connection strings, keys, etc. must be ignored.
-appsettings.*.json # <-- IGNORES ALL environment-specific files (e.g., appsettings.Production.json)
-appsettings.Development.json # <-- Explicitly ignore dev config (DO NOT COMMIT SECRETS HERE)
+# IGNORES ALL environment-specific files (e.g., appsettings.Production.json)
+appsettings.*.json
+# Explicitly ignore dev config (DO NOT COMMIT SECRETS HERE)
+appsettings.Development.json
 appsecrets.json
 appsecrets.*.json
-*.env.local
-*.env.development.local
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+**/Properties/launchSettings.json
 samconfig.toml
 tools/KeywordMiner/appsettings.json
 
@@ -82,7 +88,8 @@ x86/
 bld/
 [Bb]in/
 [Oo]bj/
-[Ll]og/ # <-- Added for any custom log folders
+# Added for any custom log folders
+[Ll]og/
 
 # Visual Studio cache/options directory
 .vs/
@@ -100,7 +107,8 @@ nunit-*.xml
 project.lock.json
 project.fragment.lock.json
 artifacts/
-**/publish/ # <-- Ignore publish outputs anywhere in the project
+# Ignore publish outputs anywhere in the project
+**/publish/
 
 # Tye
 .tye/
@@ -209,6 +217,7 @@ $RECYCLE.BIN/
 
 # DO NOT ignore the main appsettings.json (only ignore environment-specific ones)
 !appsettings.json
+tools/KeywordMiner/appsettings.json
 
 # DO NOT ignore solution/project files
 !*.sln
