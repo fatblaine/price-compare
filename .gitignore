@@ -11,12 +11,20 @@
 # DO NOT COMMIT SENSITIVE CONFIG FILES!
 # appsettings.json is for shared, non-sensitive settings.
 # Development configs with connection strings, keys, etc. must be ignored.
-appsettings.*.json # <-- IGNORES ALL environment-specific files (e.g., appsettings.Production.json)
-appsettings.Development.json # <-- Explicitly ignore dev config (DO NOT COMMIT SECRETS HERE)
+# IGNORES ALL environment-specific files (e.g., appsettings.Production.json)
+appsettings.*.json
+# Explicitly ignore dev config (DO NOT COMMIT SECRETS HERE)
+appsettings.Development.json
 appsecrets.json
 appsecrets.*.json
-*.env.local
-*.env.development.local
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+**/Properties/launchSettings.json
+samconfig.toml
+tools/KeywordMiner/appsettings.json
 
 # Local DB files (if you ever use LocalDB or SQL Express files)
 *.mdf
@@ -28,6 +36,7 @@ appsecrets.*.json
 # ==================================================
 # Ignore Node.js dependencies and build outputs
 # These are in the `client/` directory but the pattern applies to any node_modules
+**/node_modules/
 client/node_modules/
 client/dist/
 client/build/
@@ -37,6 +46,29 @@ client/.eslintcache
 # ==================================================
 # 3. .NET & VISUAL STUDIO CORE IGNORES (from template)
 # ==================================================
+# Build artifacts
+bin/
+obj/
+
+# Test artifacts
+TestResults/
+.coverage
+*.coverage
+*.coveragexml
+
+# Code coverage reports
+coveragereport/
+
+# VS Code / Rider / IDE settings
+.vscode/
+.idea/
+*.user
+*.suo
+*.vs/
+
+# Logs
+*.log
+
 # User-specific files
 *.suo
 *.user
@@ -56,7 +88,8 @@ x86/
 bld/
 [Bb]in/
 [Oo]bj/
-[Ll]og/ # <-- Added for any custom log folders
+# Added for any custom log folders
+[Ll]og/
 
 # Visual Studio cache/options directory
 .vs/
@@ -74,7 +107,8 @@ nunit-*.xml
 project.lock.json
 project.fragment.lock.json
 artifacts/
-**/publish/ # <-- Ignore publish outputs anywhere in the project
+# Ignore publish outputs anywhere in the project
+**/publish/
 
 # Tye
 .tye/
@@ -141,6 +175,9 @@ ServiceFabricBackup/
 # Visual Studio History (VSHistory) files
 .vshistory/
 
+# AWS SAM build artifacts
+.aws-sam/
+
 # ==================================================
 # 4. IDE & EDITOR DIRECTORIES
 # ==================================================
@@ -180,6 +217,7 @@ $RECYCLE.BIN/
 
 # DO NOT ignore the main appsettings.json (only ignore environment-specific ones)
 !appsettings.json
+tools/KeywordMiner/appsettings.json
 
 # DO NOT ignore solution/project files
 !*.sln
@@ -194,3 +232,4 @@ $RECYCLE.BIN/
 !README
 !.gitignore
 !.gitattributes
+.fake

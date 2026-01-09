@@ -1,0 +1,80 @@
+# AI Development Instruction File
+# Author: Chenghao Fan
+# Project: PriceCompare Platform (Frontend)
+# Purpose: Provide unified design and coding standards for AI-assisted feature generation
+
+project:
+  name: PriceCompare Platform
+  module: Frontend (React + TypeScript)
+  description: |
+    A web application to compare product prices between Woolworths and Coles.
+    The frontend communicates with a .NET 8 backend deployed on AWS Lambda via API Gateway.
+
+tech_stack:
+  language: TypeScript
+  framework: React (Vite)
+  ui_library: [Material-UI, TailwindCSS]
+  chart_library: Recharts
+  http_client: axios
+  router: react-router-dom
+  state_management: useState, useEffect (no Redux)
+  formatter: ESLint + Prettier
+
+code_style:
+  naming_convention:
+    components: PascalCase
+    variables: camelCase
+    files: kebab-case
+  comments: "Use concise JSDoc-style comments for functions and components."
+  indentation: 2 spaces
+  max_line_length: 100
+  quotes: double
+  semicolons: true
+
+folder_structure:
+  src/:
+    components/: "Reusable UI elements (Button, Header, Footer, etc.)"
+    pages/: "Full-page views (ProductListPage, ComparePage, etc.)"
+    services/: "API layer (axios clients, authentication service)"
+    assets/: "Static images and icons"
+    styles/: "Global Tailwind/MUI theme settings"
+
+api_integration:
+  base_url: https://your-lambda-endpoint.amazonaws.com/prod/api
+  auth:
+    method: JWT
+    storage: localStorage
+    header: Authorization: Bearer <token>
+
+ui_guidelines:
+  colors:
+    primary: "#2563EB"   # Tailwind blue-600
+    secondary: "#FACC15" # yellow-400
+    background: "#F9FAFB"
+  typography:
+    font_family: "Inter, sans-serif"
+    heading_weight: 600
+  layout: "Use responsive grid/flexbox; ensure mobile-friendly design."
+  components:
+    - "Use MUI for inputs, buttons, cards"
+    - "Use Tailwind for spacing, layout, and colors"
+
+git_rules:
+  branch_naming: "feature/<issue-id>-<short-description>"
+  commit_format: "<JIRA_KEY>: <brief description> (#<issue-number>)"
+  pull_request:
+    title: "Follow the same pattern as commit message"
+    reviewers: "Assign at least one team member"
+
+testing:
+  framework: "Vitest"
+  required_tests:
+    - Component render test
+    - API call mock test
+    - UI snapshot test
+
+deployment:
+  command: "npm run build"
+  output_folder: "dist/"
+  hosting: "AWS S3 + CloudFront (static hosting)"
+

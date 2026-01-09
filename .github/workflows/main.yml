@@ -1,0 +1,48 @@
+name: Jira Key Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  jira-key-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR title for Jira Key
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          if [[ ! "${{ github.event.pull_request.title }}" =~ [A-Z]+-[0-9]+ ]]; then
+            echo "❌ ERROR: PR title must include a Jira issue key (e.g. BTS-123)"
+            exit 1
+          fi
+
+      - name: Check commit messages for Jira Key
+        if: github.event_name == 'push'
+        run: |
+          echo "Checking commit messages..."
+
+          git fetch --unshallow || true
+
+          if [ -z "${{ github.event.before }}" ] || [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "⚠️ No valid 'before' SHA found, checking last commit only"
+            commits=$(git log -1 --no-merges --format=%B)
+          else
+            commits=$(git log --no-merges --format=%B ${{ github.event.before }}..${{ github.sha }})
+          fi
+
+          echo "$commits"
+
+          if ! echo "$commits" | grep -qE '[A-Z]+-[0-9]+'; then
+            echo "❌ ERROR: Commit messages must include a Jira issue key (e.g. BTS-123)"
+            exit 1
+          fi
