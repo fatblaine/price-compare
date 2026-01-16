@@ -147,6 +147,14 @@ if (enableQuartzJobs)
             .ForJob(cleanJobKey)
             .WithIdentity("CleanPriceHistoryJob-trigger")
             .WithCronSchedule("0 0 1 ? 1/3 4#1"));
+
+        // favorite price tracking
+        var favoriteTrackJobKey = new JobKey("FavoritePriceTrackingJob");
+        q.AddJob<FavoritePriceTrackingJob>(opts => opts.WithIdentity(favoriteTrackJobKey));
+        q.AddTrigger(opts => opts
+            .ForJob(favoriteTrackJobKey)
+            .WithIdentity("FavoritePriceTrackingJob-trigger")
+            .WithCronSchedule("0 0 5 ? * WED"));
     });
 
     builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
@@ -278,10 +286,15 @@ namespace PriceCompareWeb
                 var job = new WwsRefreshSpecialLambda();
                 await job.Handler();
             }
+            else if (string.Equals(target, "FAVORITE_TRACK", StringComparison.OrdinalIgnoreCase))
+            {
+                var job = new FavoritePriceTrackingLambda();
+                await job.Handler();
+            }
             else
             {
                 Console.WriteLine("No valid TARGET_JOB environment variable found.");
-                Console.WriteLine("Available: COLES_SPECIAL | WWS_SPECIAL");
+                Console.WriteLine("Available: COLES_SPECIAL | WWS_SPECIAL | FAVORITE_TRACK");
             }
         }
     }
