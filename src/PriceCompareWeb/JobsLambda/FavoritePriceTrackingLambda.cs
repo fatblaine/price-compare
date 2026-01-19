@@ -8,18 +8,20 @@ using PriceCompareCore.Config;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Services;
 using PriceCompareData.Data;
+using PriceCompareData.Entities.Jobs;
 
 namespace PriceCompareWeb.JobsLambda
 {
     public class FavoritePriceTrackingLambda
     {
         private readonly IFavoritePriceTrackingService _trackingService;
+        private readonly string _connString;
+        private readonly ILogger<FavoritePriceTrackingService> _logger;
 
         public FavoritePriceTrackingLambda()
         {
-            var conn = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
-            if (string.IsNullOrWhiteSpace(conn))
-                throw new InvalidOperationException("Missing database connection string.");
+            _connString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+                ?? throw new InvalidOperationException("Missing database connection string.");
 
             var config = new ConfigurationBuilder()
                 .AddEnvironmentVariables()
@@ -29,19 +31,58 @@ namespace PriceCompareWeb.JobsLambda
             var favoriteSettings = config.GetSection("FavoriteAlerts").Get<FavoriteAlertSettings>() ?? new FavoriteAlertSettings();
 
             var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
-                .UseNpgsql(conn)
+                .UseNpgsql(_connString)
                 .Options);
 
             var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-            var logger = loggerFactory.CreateLogger<FavoritePriceTrackingService>();
+            _logger = loggerFactory.CreateLogger<FavoritePriceTrackingService>();
 
             var emailSender = new SmtpEmailSender(Options.Create(emailOptions));
-            _trackingService = new FavoritePriceTrackingService(db, emailSender, logger, Options.Create(favoriteSettings));
+            _trackingService = new FavoritePriceTrackingService(db, emailSender, _logger, Options.Create(favoriteSettings));
         }
 
-        public Task Handler()
+        private AppDbContext CreateDb()
         {
-            return _trackingService.CheckAndNotifyAsync();
+            return new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+                .UseNpgsql(_connString)
+                .Options);
+        }
+
+        public async Task Handler()
+        {
+            var start = DateTime.UtcNow;
+            Exception? error = null;
+
+            try
+            {
+                await _trackingService.CheckAndNotifyAsync();
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+                throw;
+            }
+            finally
+            {
+                var end = DateTime.UtcNow;
+
+                var run = new JobRun
+                {
+                    JobName = "FavoritePriceTrackingJob",
+                    Source = "aws",
+                    ScheduledTime = null,
+                    StartTime = start,
+                    EndTime = end,
+                    Status = error == null ? "success" : "fail",
+                    DurationMs = (int)(end - start).TotalMilliseconds,
+                    ErrorMessage = error?.GetBaseException().Message,
+                    RequestId = Environment.GetEnvironmentVariable("AWS_REQUEST_ID"),
+                    Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+                };
+
+                using var db = CreateDb();
+                await JobRunRecorder.TryRecordAsync(db, run, _logger);
+            }
         }
     }
 }

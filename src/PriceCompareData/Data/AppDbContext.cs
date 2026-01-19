@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using PriceCompareData.Entities;
 using PriceCompareData.Entities.Compare;
 using PriceCompareData.Entities.History;
+using PriceCompareData.Entities.Jobs;
 using PriceCompareData.Entities.Receipts;
 using PriceCompareData.Entities.Users;
 
@@ -26,6 +27,8 @@ namespace PriceCompareData.Data
             public DbSet<FavoriteItem> FavoriteItems => Set<FavoriteItem>();
             public DbSet<FavoritePriceAlert> FavoritePriceAlerts => Set<FavoritePriceAlert>();
             public DbSet<User> Users { get { return Set<User>(); } }
+            public DbSet<JobDefinition> JobDefinitions => Set<JobDefinition>();
+            public DbSet<JobRun> JobRuns => Set<JobRun>();
 
 
             // Configure entity relationships and constraints
@@ -42,6 +45,40 @@ namespace PriceCompareData.Data
                   // Index on CategoryId, SizeUnit, SizeValue for category and size-based queries
                   modelBuilder.Entity<Product>()
                       .HasIndex(p => new { p.CategoryId, p.SizeUnit, p.SizeValue });
+
+                  // JobDefinition
+                  modelBuilder.Entity<JobDefinition>(entity =>
+                  {
+                        entity.ToTable("job_definitions");
+                        entity.HasKey(e => new { e.JobName, e.Source });
+                        entity.Property(e => e.JobName).HasColumnName("job_name");
+                        entity.Property(e => e.Source).HasColumnName("source");
+                        entity.Property(e => e.ScheduleExpression).HasColumnName("schedule_expression");
+                        entity.Property(e => e.Timezone).HasColumnName("timezone");
+                        entity.Property(e => e.Enabled).HasColumnName("enabled").HasDefaultValue(true);
+                        entity.Property(e => e.Description).HasColumnName("description");
+                        entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                        entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+                  });
+
+                  // JobRun
+                  modelBuilder.Entity<JobRun>(entity =>
+                  {
+                        entity.ToTable("job_runs");
+                        entity.HasKey(e => e.Id);
+                        entity.Property(e => e.Id).HasColumnName("id");
+                        entity.Property(e => e.JobName).HasColumnName("job_name");
+                        entity.Property(e => e.Source).HasColumnName("source");
+                        entity.Property(e => e.ScheduledTime).HasColumnName("scheduled_time");
+                        entity.Property(e => e.StartTime).HasColumnName("start_time");
+                        entity.Property(e => e.EndTime).HasColumnName("end_time");
+                        entity.Property(e => e.Status).HasColumnName("status");
+                        entity.Property(e => e.DurationMs).HasColumnName("duration_ms");
+                        entity.Property(e => e.ErrorMessage).HasColumnName("error_message");
+                        entity.Property(e => e.RequestId).HasColumnName("request_id");
+                        entity.Property(e => e.Environment).HasColumnName("environment");
+                        entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                  });
 
                   modelBuilder.Entity<Receipt>()
                   .HasMany(r => r.Items)
