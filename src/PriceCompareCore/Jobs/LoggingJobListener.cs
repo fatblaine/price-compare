@@ -47,7 +47,7 @@ namespace PriceCompareCore.Jobs
                                     context.NextFireTimeUtc);
             }
 
-            var start = context.FireTimeUtc?.UtcDateTime ?? DateTime.UtcNow;
+            var start = context.FireTimeUtc.UtcDateTime;
             var end = start + context.JobRunTime;
 
             var run = new JobRun
