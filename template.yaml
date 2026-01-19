@@ -21,6 +21,32 @@ Parameters:
   DbConnectionString:
     Type: String
     Description: PostgreSQL connection string for AppDbContext (Npgsql)
+  EmailHost:
+    Type: String
+  EmailPort:
+    Type: Number
+    Default: 587
+  EmailUseSsl:
+    Type: String
+    Default: "false"
+  EmailUsername:
+    Type: String
+  EmailPassword:
+    Type: String
+    NoEcho: true
+  EmailFromEmail:
+    Type: String
+  EmailFromName:
+    Type: String
+    Default: "PriceCompare"
+  FavoriteAlertsBaseUrl:
+    Type: String
+  FavoriteAlertsPath:
+    Type: String
+    Default: "/"
+  JwtSecretId:
+    Type: String
+    Description: Secrets Manager secret name or ARN for JwtSettings__Secret
 
 Resources:
   AppHttpApi:
@@ -162,6 +188,61 @@ Resources:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
           Aws__ReceiptBucket: !Ref ReceiptsBucket
+          DOTNET_SYSTEM_NET_DISABLEIPV6: "1"
+          JwtSettings__Secret: !Sub "{{resolve:secretsmanager:${JwtSecretId}:SecretString}}"
+
+  FavoritePriceTrackingJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "price-track-${Environment}"
+      Handler: PriceCompareWeb::PriceCompareWeb.LambdaEntryPoint::FunctionHandlerAsync
+      CodeUri: ./src/PriceCompareWeb/
+      PackageType: Zip
+      Environment:
+        Variables:
+          TARGET_JOB: FAVORITE_TRACK
+          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          DOTNET_SYSTEM_NET_DISABLEIPV6: "1"
+          Email__Host: !Ref EmailHost
+          Email__Port: !Ref EmailPort
+          Email__UseSsl: !Ref EmailUseSsl
+          Email__Username: !Ref EmailUsername
+          Email__Password: !Ref EmailPassword
+          Email__FromEmail: !Ref EmailFromEmail
+          Email__FromName: !Ref EmailFromName
+          FavoriteAlerts__BaseUrl: !Ref FavoriteAlertsBaseUrl
+          FavoriteAlerts__FavoritesPath: !Ref FavoriteAlertsPath
+
+  FavoritePriceTrackingScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeFavoritePriceTracking
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt FavoritePriceTrackingJob.Arn
+
+  FavoritePriceTrackingSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression: "cron(0 5 ? * WED *)"
+      ScheduleExpressionTimezone: "Australia/Sydney"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt FavoritePriceTrackingJob.Arn
+        RoleArn: !GetAtt FavoritePriceTrackingScheduleRole.Arn
 
 Outputs:
   FrontendBucketName:
