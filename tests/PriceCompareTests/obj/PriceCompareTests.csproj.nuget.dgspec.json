@@ -303,6 +303,10 @@
               "target": "Package",
               "version": "[3.7.*, )"
             },
+            "AWSSDK.Scheduler": {
+              "target": "Package",
+              "version": "[3.7.*, )"
+            },
             "Amazon.Lambda.APIGatewayEvents": {
               "target": "Package",
               "version": "[2.7.1, )"

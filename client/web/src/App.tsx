@@ -27,15 +27,20 @@ import {
 } from "./api/auth";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
+import AdminJobsPage from "./AdminJobsPage";
 
 function App() {
 	const [token, setToken] = React.useState<string | null>(null);
 	const [userEmail, setUserEmail] = React.useState<string | null>(null);
 	const [guestMode, setGuestMode] = React.useState(false);
 	const [authView, setAuthView] = React.useState<"login" | "register">("login");
-	const [mainTab, setMainTab] = React.useState<"products" | "receipts" | "favorites">("products");
+	const [mainTab, setMainTab] = React.useState<
+		"products" | "receipts" | "favorites" | "admin"
+	>("products");
 	const [restrictedDialogOpen, setRestrictedDialogOpen] = React.useState(false);
-	const [pendingProtectedTab, setPendingProtectedTab] = React.useState<"receipts" | "favorites" | null>(null);
+	const [pendingProtectedTab, setPendingProtectedTab] = React.useState<
+		"receipts" | "favorites" | "admin" | null
+	>(null);
 
 	React.useEffect(() => {
 		const stored = getStoredToken();
@@ -96,7 +101,7 @@ function App() {
 
 	const handleTabChange = (
 		_: React.SyntheticEvent,
-		val: "products" | "receipts" | "favorites",
+		val: "products" | "receipts" | "favorites" | "admin",
 	) => {
 		if (val !== "products" && !isAuthenticated) {
 			setPendingProtectedTab(val);
@@ -121,7 +126,9 @@ function App() {
 			? "My Receipts"
 			: pendingProtectedTab === "favorites"
 				? "My Favorites"
-				: "this section";
+				: pendingProtectedTab === "admin"
+					? "Admin"
+					: "this section";
 
 	const renderMainContent = () => {
 		if (!isAuthenticated) {
@@ -148,6 +155,10 @@ function App() {
 
 		if (mainTab === "favorites") {
 			return <MyFavoritesPage />;
+		}
+
+		if (mainTab === "admin") {
+			return <AdminJobsPage />;
 		}
 
 		return <ProductsPage />;
@@ -208,6 +219,7 @@ function App() {
 								<Tab label="Products" value="products" />
 								<Tab label="My Receipts" value="receipts" />
 								<Tab label="My Favorites" value="favorites" />
+								{isAuthenticated && <Tab label="Admin" value="admin" />}
 							</Tabs>
 						)}
 						{isAuthenticated && userEmail && (

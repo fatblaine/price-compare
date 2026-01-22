@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using System.Linq;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.Lambda.AspNetCoreServer.Hosting;
@@ -17,6 +18,7 @@ using PriceCompareCore.Services;
 using PriceCompareCore.Utils;
 using PriceCompareData.Data;
 using PriceCompareWeb.JobsLambda;
+using PriceCompareWeb.Services;
 using Quartz;
 using PriceCompareCore.Config;
 
@@ -50,6 +52,8 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonDynamoDB>();
 builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
+// AWS Scheduler client for reading schedules.
+builder.Services.AddAWSService<Amazon.Scheduler.IAmazonScheduler>();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -186,6 +190,9 @@ builder.Services.AddScoped<IReceiptService, ReceiptService>();
 // Favorite service
 builder.Services.AddScoped<IFavoriteService, FavoriteService>();
 
+// Admin schedule aggregation (AWS + Quartz).
+builder.Services.AddScoped<AdminScheduleService>();
+
 // Auth service
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
 if (jwtSettings == null || string.IsNullOrWhiteSpace(jwtSettings.Secret))
@@ -209,7 +216,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.Zero
         };
     });
-builder.Services.AddAuthorization();
+var adminEmails = builder.Configuration.GetSection("Admin:Emails").Get<string[]>() ?? Array.Empty<string>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireAssertion(ctx =>
+        {
+            var email = ctx.User.FindFirstValue(ClaimTypes.Email);
+            return !string.IsNullOrWhiteSpace(email) &&
+                   adminEmails.Any(a => string.Equals(a, email, StringComparison.OrdinalIgnoreCase));
+        }));
+});
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 

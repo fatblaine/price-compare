@@ -93,6 +93,12 @@ Resources:
               Action:
                 - rekognition:DetectText
               Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - scheduler:ListSchedules
+                - scheduler:GetSchedule
+              Resource: "*"
       Events:
         ReceiptsGet:
           Type: HttpApi
@@ -212,6 +218,7 @@ Resources:
           Email__FromName: !Ref EmailFromName
           FavoriteAlerts__BaseUrl: !Ref FavoriteAlertsBaseUrl
           FavoriteAlerts__FavoritesPath: !Ref FavoriteAlertsPath
+          SCHEDULE_NAME: !Ref FavoritePriceTrackingSchedule
 
   FavoritePriceTrackingScheduleRole:
     Type: AWS::IAM::Role
