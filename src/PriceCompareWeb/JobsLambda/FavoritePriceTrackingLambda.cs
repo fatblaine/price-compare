@@ -65,10 +65,18 @@ namespace PriceCompareWeb.JobsLambda
             finally
             {
                 var end = DateTime.UtcNow;
+                var scheduleName = Environment.GetEnvironmentVariable("SCHEDULE_NAME");
+                if (string.IsNullOrWhiteSpace(scheduleName))
+                {
+                    scheduleName = Environment.GetEnvironmentVariable("AWS_SCHEDULER_SCHEDULE_NAME");
+                }
+                var jobName = string.IsNullOrWhiteSpace(scheduleName)
+                    ? "FavoritePriceTrackingJob"
+                    : scheduleName;
 
                 var run = new JobRun
                 {
-                    JobName = "FavoritePriceTrackingJob",
+                    JobName = jobName,
                     Source = "aws",
                     ScheduledTime = null,
                     StartTime = start,
