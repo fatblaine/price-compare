@@ -47,6 +47,10 @@ Parameters:
   JwtSecretId:
     Type: String
     Description: Secrets Manager secret name or ARN for JwtSettings__Secret
+  AdminEmails:
+    Type: String
+    Description: Comma-separated list of admin emails
+    Default: ""
 
 Resources:
   AppHttpApi:
@@ -190,12 +194,37 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Favorites/{productId}
             Method: PUT
+        AdminSchedulesGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/admin/schedules
+            Method: GET
+        AdminHealthGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/admin/health
+            Method: GET
+        AdminRunsGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/admin/schedules/{jobName}/runs
+            Method: GET
+        AdminStatsGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/admin/schedules/{jobName}/stats
+            Method: GET
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
           Aws__ReceiptBucket: !Ref ReceiptsBucket
           DOTNET_SYSTEM_NET_DISABLEIPV6: "1"
           JwtSettings__Secret: !Sub "{{resolve:secretsmanager:${JwtSecretId}:SecretString}}"
+          AdminEmails: !Ref AdminEmails
 
   FavoritePriceTrackingJob:
     Type: AWS::Serverless::Function
