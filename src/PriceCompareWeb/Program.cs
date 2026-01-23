@@ -217,6 +217,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 var adminEmails = builder.Configuration.GetSection("Admin:Emails").Get<string[]>() ?? Array.Empty<string>();
+var adminEmailsEnv = builder.Configuration["AdminEmails"];
+if (!string.IsNullOrWhiteSpace(adminEmailsEnv))
+{
+    var envEmails = adminEmailsEnv
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    adminEmails = adminEmails.Concat(envEmails).ToArray();
+}
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy =>
