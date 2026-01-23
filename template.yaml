@@ -218,7 +218,7 @@ Resources:
           Email__FromName: !Ref EmailFromName
           FavoriteAlerts__BaseUrl: !Ref FavoriteAlertsBaseUrl
           FavoriteAlerts__FavoritesPath: !Ref FavoriteAlertsPath
-          SCHEDULE_NAME: !Ref FavoritePriceTrackingSchedule
+          SCHEDULE_NAME: !Sub "price-compare-${Environment}-favorite-price-tracking"
 
   FavoritePriceTrackingScheduleRole:
     Type: AWS::IAM::Role
@@ -243,6 +243,7 @@ Resources:
   FavoritePriceTrackingSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
+      Name: !Sub "price-compare-${Environment}-favorite-price-tracking"
       ScheduleExpression: "cron(0 5 ? * WED *)"
       ScheduleExpressionTimezone: "Australia/Sydney"
       FlexibleTimeWindow:
