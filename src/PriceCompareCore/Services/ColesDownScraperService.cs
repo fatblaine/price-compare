@@ -175,13 +175,13 @@ namespace PriceCompareCore.Services
                 .ToListAsync();
         }
 
-        public async Task CleanOldPriceHistoryAsync()
+        public async Task<int> CleanOldPriceHistoryAsync()
         {
             var now = DateTime.UtcNow;
             var threshold = new DateTime(now.Year, now.Month, 1).AddMonths(-2);
-            var oldRecords = _dbContext.PriceHistory.Where(p => p.ScrapedAt < threshold);
-            _dbContext.PriceHistory.RemoveRange(oldRecords);
-            await _dbContext.SaveChangesAsync();
+            return await _dbContext.PriceHistory
+                .Where(p => p.ScrapedAt < threshold)
+                .ExecuteDeleteAsync();
         }
 
 

@@ -109,5 +109,23 @@ namespace PriceCompareWeb.Controllers
                 return StatusCode(500, "Failed to get price history");
             }
         }
+
+        [HttpPost("priceHistory/cleanup")]
+        public async Task<IActionResult> CleanOldPriceHistory()
+        {
+            try
+            {
+                var deleted = await _scraperService.CleanOldPriceHistoryAsync();
+                return Ok(new
+                {
+                    Deleted = deleted
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to clean old price history");
+                return StatusCode(500, "Failed to clean old price history");
+            }
+        }
     }
 }
