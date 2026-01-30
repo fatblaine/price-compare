@@ -30,6 +30,7 @@ namespace PriceCompareCore.Services
         private readonly AppDbContext _dbContext;
         private readonly AsyncRetryPolicy _retryPolicy;
         private readonly IIngestionService _ingestion;
+        private readonly IScrapeExportService _export;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -48,7 +49,8 @@ namespace PriceCompareCore.Services
         public WoolworthsSpecialScraperService(
         AppDbContext db,
         ILogger<WoolworthsSpecialScraperService> logger,
-        IDistributedCache? cache = null)
+        IDistributedCache? cache = null,
+        IScrapeExportService? export = null)
         {
             _dbContext = db;
             _logger = logger;
@@ -59,18 +61,21 @@ namespace PriceCompareCore.Services
                     attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
                     (ex, ts, i, _) =>
                         _logger.LogWarning(ex, "Playwright attempt {Attempt} failed, will retry.", i + 1));
+            _export = export ?? new NoopScrapeExportService();
         }
 
         public WoolworthsSpecialScraperService(
             ILogger<WoolworthsSpecialScraperService> logger,
             IDistributedCache cache,
             AppDbContext dbContext,
-            IIngestionService ingestion)
+            IIngestionService ingestion,
+            IScrapeExportService export)
         {
             _logger = logger;
             _cache = cache;
             _dbContext = dbContext;
             _ingestion = ingestion;
+            _export = export;
 
             _retryPolicy = Policy
                 .Handle<Exception>()
@@ -92,6 +97,7 @@ namespace PriceCompareCore.Services
             }
 
             var allProducts = new List<WoolworthsSpecialProduct>();
+            var scrapedAt = DateTime.UtcNow;
 
             // 2. Get Api info by Playwright 
             await _retryPolicy.ExecuteAsync(async () =>
@@ -153,7 +159,8 @@ namespace PriceCompareCore.Services
                         IsOnSpecial = p.IsOnSpecial,
                         CupPrice = p.CupPrice,
                         CupString = p.CupString,
-                        LargeImageFile = p.LargeImageFile
+                        LargeImageFile = p.LargeImageFile,
+                        ScrapedAt = scrapedAt
                     }));
 
                     _logger.LogInformation("Scraped {Count} products from API.", data.Count);
@@ -167,7 +174,7 @@ namespace PriceCompareCore.Services
             // 3. Store price history
             foreach (var product in allProducts)
             {
-                var today = DateTime.UtcNow.Date;
+                var today = scrapedAt.Date;
                 bool exists = _dbContext.PriceHistory
                     .Any(ph => ph.Name == product.DisplayName &&
                                ph.ScrapedAt >= today &&
@@ -178,9 +185,9 @@ namespace PriceCompareCore.Services
                     var priceHistory = new PriceHistory
                     {
                         Name = product.DisplayName,
-                        ImageUrl = product.LargeImageFile,
+                        ImageUrl = product.LargeImageFile ?? string.Empty,
                         CurrentPrice = product.Price,
-                        ScrapedAt = DateTime.UtcNow,
+                        ScrapedAt = scrapedAt,
                         OfferType = OfferType.ON_SPECIAL,
                         ShopType = ShopType.WOOLWORTHS
                     };
@@ -189,6 +196,22 @@ namespace PriceCompareCore.Services
             }
             await _dbContext.SaveChangesAsync();
             await _ingestion.UpsertWwsAsync(allProducts);
+            var productRows = _ingestion.MapWoolworthsProducts(allProducts);
+            var priceHistoryRows = allProducts.Select(p => new PriceHistory
+            {
+                Name = p.DisplayName,
+                ImageUrl = p.LargeImageFile ?? string.Empty,
+                CurrentPrice = p.Price,
+                ScrapedAt = scrapedAt,
+                OfferType = OfferType.ON_SPECIAL,
+                ShopType = ShopType.WOOLWORTHS
+            }).ToList();
+            await _export.ExportAsync(
+                new ScrapeExportRequest(
+                    "woolworths_special",
+                    scrapedAt,
+                    priceHistoryRows,
+                    productRows));
 
             // 4. Cache the results
             await _cache.SetStringAsync(
@@ -235,8 +258,15 @@ namespace PriceCompareCore.Services
                 DisplayName = p.Name,
                 Price = p.Price,
                 WasPrice = p.WasPrice,
-                LargeImageFile = p.LargeImageFile
+                LargeImageFile = p.LargeImageFile,
+                ScrapedAt = DateTime.UtcNow
             }).ToList() ?? new();
+        }
+
+        private class NoopScrapeExportService : IScrapeExportService
+        {
+            public Task<ScrapeExportResult?> ExportAsync(ScrapeExportRequest request, CancellationToken ct = default)
+                => Task.FromResult<ScrapeExportResult?>(null);
         }
     }
 }

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
+using PriceCompareCore.Config;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Services;
 using PriceCompareCore.Utils;
@@ -35,18 +37,23 @@ namespace PriceCompareWeb.JobsLambda
             var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
             var scraperLogger = loggerFactory.CreateLogger<ColesDownScraperService>();
             var mapperLogger = loggerFactory.CreateLogger<CategoryMappingService>();
+            var exportLogger = loggerFactory.CreateLogger<ScrapeExportService>();
 
             // Dependency injection
             var httpClient = new HttpClient();
             var mapper = new CategoryMappingService(db, mapperLogger);
             var ingestion = new IngestionService(db, mapper);
+            var export = new ScrapeExportService(
+                Options.Create(new ScrapeExportOptions { Enabled = false }),
+                exportLogger);
 
             _scraper = new ColesDownScraperService(
                 httpClient,
                 scraperLogger,
                 cache,
                 db,
-                ingestion
+                ingestion,
+                export
             );
         }
 

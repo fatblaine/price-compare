@@ -14,11 +14,16 @@ public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly AdminScheduleService _scheduleService;
+    private readonly IScrapeImportSqlService _scrapeImportSqlService;
 
-    public AdminController(AppDbContext db, AdminScheduleService scheduleService)
+    public AdminController(
+        AppDbContext db,
+        AdminScheduleService scheduleService,
+        IScrapeImportSqlService scrapeImportSqlService)
     {
         _db = db;
         _scheduleService = scheduleService;
+        _scrapeImportSqlService = scrapeImportSqlService;
     }
 
     [HttpGet("schedules")]
@@ -66,6 +71,18 @@ public class AdminController : ControllerBase
             recentFailures);
 
         return Ok(dto);
+    }
+
+    [HttpPost("scrape-import/generate-sql")]
+    public async Task<IActionResult> GenerateScrapeSql([FromBody] ScrapeImportSqlRequest request, CancellationToken ct = default)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.ExportDir))
+        {
+            return BadRequest("ExportDir is required.");
+        }
+
+        var result = await _scrapeImportSqlService.GenerateAsync(request, ct);
+        return Ok(result);
     }
 
     [HttpGet("schedules/{jobName}/runs")]

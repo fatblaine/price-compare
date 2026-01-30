@@ -39,6 +39,15 @@ namespace PriceCompareCore.Services
             await UpsertAsync(items.Select(MapWoolworthsSpecial));
         }
 
+        public IReadOnlyList<Product> MapColesSpecialProducts(IEnumerable<ColesSpecialProduct> items)
+            => items.Select(MapColesSpecial).ToList();
+
+        public IReadOnlyList<Product> MapColesDownProducts(IEnumerable<ColesDownProduct> items)
+            => items.Select(MapColesDown).ToList();
+
+        public IReadOnlyList<Product> MapWoolworthsProducts(IEnumerable<WoolworthsSpecialProduct> items)
+            => items.Select(MapWoolworthsSpecial).ToList();
+
         // Map ColesSpecialProduct to Product
         private Product MapColesSpecial(ColesSpecialProduct p)
         {
