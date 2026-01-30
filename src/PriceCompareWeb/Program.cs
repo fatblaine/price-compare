@@ -45,6 +45,9 @@ builder.Services.Configure<AwsOptions>(
 builder.Services.Configure<RekognitionOptions>(
     builder.Configuration.GetSection("Rekognition"));
 
+builder.Services.Configure<ScrapeExportOptions>(
+    builder.Configuration.GetSection("ScrapeExport"));
+
 // Lambda Hosting
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
@@ -180,6 +183,7 @@ builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialSc
 builder.Services.AddScoped<ICategoryMappingService, CategoryMappingService>();
 
 builder.Services.AddScoped<IIngestionService, IngestionService>();
+builder.Services.AddScoped<IScrapeExportService, ScrapeExportService>();
 
 // Products service
 builder.Services.AddScoped<PriceCompareCore.Interfaces.IProductService, PriceCompareCore.Services.ProductService>();
@@ -192,6 +196,7 @@ builder.Services.AddScoped<IFavoriteService, FavoriteService>();
 
 // Admin schedule aggregation (AWS + Quartz).
 builder.Services.AddScoped<AdminScheduleService>();
+builder.Services.AddScoped<IScrapeImportSqlService, ScrapeImportSqlService>();
 
 // Auth service
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();

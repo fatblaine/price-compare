@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using PriceCompareCore.Config;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Services;
 using PriceCompareCore.Utils;
@@ -37,17 +38,22 @@ namespace PriceCompareWeb.JobsLambda
             var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
             var scraperLogger = loggerFactory.CreateLogger<WoolworthsSpecialScraperService>();
             var mapperLogger = loggerFactory.CreateLogger<CategoryMappingService>();
+            var exportLogger = loggerFactory.CreateLogger<ScrapeExportService>();
 
             // 4. Dependency injection
             var mapper = new CategoryMappingService(db, mapperLogger);
             var ingestion = new IngestionService(db, mapper);
+            var export = new ScrapeExportService(
+                Options.Create(new ScrapeExportOptions { Enabled = false }),
+                exportLogger);
 
             // 5. Initialize Scraper
             _scraperService = new WoolworthsSpecialScraperService(
                 scraperLogger,
                 cache,
                 db,
-                ingestion
+                ingestion,
+                export
                 );
         }
 

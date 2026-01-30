@@ -32,6 +32,7 @@ namespace PriceCompareCore.Services
         private readonly IDistributedCache _cache;
         private readonly AppDbContext _db;
         private readonly IIngestionService _ingestion;
+        private readonly IScrapeExportService _export;
 
         private readonly AsyncRetryPolicy _retry;
         private static readonly JsonSerializerOptions _jsonOpt = new() { PropertyNameCaseInsensitive = true };
@@ -43,12 +44,14 @@ namespace PriceCompareCore.Services
             ILogger<ColesSpecialScraperService> logger,
             IDistributedCache cache,
             AppDbContext dbContext,
-            IIngestionService ingestion)
+            IIngestionService ingestion,
+            IScrapeExportService export)
         {
             _logger = logger;
             _cache = cache;
             _db = dbContext;
             _ingestion = ingestion;
+            _export = export;
 
             // ✅ Retry 策略：失败后 1s, 2s 重试
             _retry = Policy
@@ -70,6 +73,7 @@ namespace PriceCompareCore.Services
             }
 
             var all = new List<ColesSpecialProduct>();
+            var scrapedAt = DateTime.UtcNow;
 
             // Step 2: scrape with Playwright + retry
             await _retry.ExecuteAsync(async () =>
@@ -154,7 +158,7 @@ namespace PriceCompareCore.Services
                             PricePerUnit = r.Pricing?.Comparable,
                             ImageUrl = r.ImageUris?.FirstOrDefault()?.Uri,
                             IsSponsored = false,
-                            ScrapedAt = DateTime.UtcNow
+                            ScrapedAt = scrapedAt
                         })
                         .ToList();
 
@@ -167,7 +171,7 @@ namespace PriceCompareCore.Services
             // Step 5: Write price history
             foreach (var p in all)
             {
-                var today = DateTime.UtcNow.Date;
+                var today = scrapedAt.Date;
                 bool exists = _db.PriceHistory.Any(ph =>
                     ph.Name == p.Name &&
                     ph.ShopType == ShopType.COLES &&
@@ -179,9 +183,9 @@ namespace PriceCompareCore.Services
                     _db.PriceHistory.Add(new PriceHistory
                     {
                         Name = p.Name,
-                        ImageUrl = p.ImageUrl,
+                        ImageUrl = p.ImageUrl ?? string.Empty,
                         CurrentPrice = p.CurrentPrice,
-                        ScrapedAt = DateTime.UtcNow,
+                        ScrapedAt = scrapedAt,
                         OfferType = OfferType.ON_SPECIAL,
                         ShopType = ShopType.COLES
                     });
@@ -191,6 +195,22 @@ namespace PriceCompareCore.Services
 
             // Step 6: Upsert product base table
             await _ingestion.UpsertColesSpecialAsync(all);
+            var productRows = _ingestion.MapColesSpecialProducts(all);
+            var priceHistoryRows = all.Select(p => new PriceHistory
+            {
+                Name = p.Name,
+                ImageUrl = p.ImageUrl ?? string.Empty,
+                CurrentPrice = p.CurrentPrice,
+                ScrapedAt = scrapedAt,
+                OfferType = OfferType.ON_SPECIAL,
+                ShopType = ShopType.COLES
+            }).ToList();
+            await _export.ExportAsync(
+                new ScrapeExportRequest(
+                    "coles_special",
+                    scrapedAt,
+                    priceHistoryRows,
+                    productRows));
 
             // Step 7: Cache result
             await _cache.SetStringAsync(

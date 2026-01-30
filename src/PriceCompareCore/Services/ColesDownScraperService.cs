@@ -30,17 +30,26 @@ namespace PriceCompareCore.Services
         private readonly IDistributedCache _cache;
         private const string BaseUrl = WebInfo.COLES_BASE_URL;
         private readonly IIngestionService _ingestion;
+        private readonly IScrapeExportService _export;
 
         private readonly AppDbContext _dbContext;
 
-        public ColesDownScraperService(AppDbContext db, ILogger<ColesDownScraperService> logger)
+        public ColesDownScraperService(
+            AppDbContext db,
+            ILogger<ColesDownScraperService> logger,
+            IScrapeExportService export)
         {
             _dbContext = db;
             _logger = logger;
+            _export = export;
         }
 
         public ColesDownScraperService(HttpClient httpClient,
-        ILogger<ColesDownScraperService> logger, IDistributedCache cache, AppDbContext dbContext, IIngestionService ingestion)
+        ILogger<ColesDownScraperService> logger,
+        IDistributedCache cache,
+        AppDbContext dbContext,
+        IIngestionService ingestion,
+        IScrapeExportService export)
         {
             _httpClient = httpClient;
             _httpClient.DefaultRequestHeaders
@@ -49,6 +58,7 @@ namespace PriceCompareCore.Services
             _cache = cache;
             _dbContext = dbContext;
             _ingestion = ingestion;
+            _export = export;
 
             // polly retry policy
             _retryPolicy = Policy
@@ -134,28 +144,40 @@ namespace PriceCompareCore.Services
             }
 
             // add price histories to database
+            var scrapedAt = DateTime.UtcNow;
+            var today = scrapedAt.Date;
+            var priceHistoryRows = new List<PriceHistory>(allProducts.Count);
             foreach (var product in allProducts)
             {
-                var today = DateTime.UtcNow.Date;
                 bool alreadyExists = _dbContext.PriceHistory
                 .Any(p => p.Name == product.Name && p.ScrapedAt >= today && p.ScrapedAt < today.AddDays(1));
 
+                var priceHistory = new PriceHistory
+                {
+                    Id = product.Id,
+                    Name = product.Name,
+                    ImageUrl = product.ImageUrl ?? string.Empty,
+                    CurrentPrice = product.CurrentPrice,
+                    ScrapedAt = scrapedAt,
+                    OfferType = OfferType.DOWN_DOWN,
+                    ShopType = ShopType.COLES
+                };
+                priceHistoryRows.Add(priceHistory);
+
                 if (!alreadyExists)
                 {
-                    _dbContext.PriceHistory.Add(new PriceHistory
-                    {
-                        Id = product.Id,
-                        Name = product.Name,
-                        ImageUrl = product.ImageUrl,
-                        CurrentPrice = product.CurrentPrice,
-                        ScrapedAt = DateTime.UtcNow,
-                        OfferType = OfferType.DOWN_DOWN,
-                        ShopType = ShopType.COLES
-                    });
+                    _dbContext.PriceHistory.Add(priceHistory);
                 }
             }
             await _dbContext.SaveChangesAsync();
             await _ingestion.UpsertColesDownAsync(allProducts);
+            var productRows = _ingestion.MapColesDownProducts(allProducts);
+            await _export.ExportAsync(
+                new ScrapeExportRequest(
+                    "coles_down",
+                    scrapedAt,
+                    priceHistoryRows,
+                    productRows));
 
             // filters
             if (request != null)
