@@ -288,7 +288,7 @@ namespace PriceCompareWeb.Services
             for (var i = 0; i < batch.Count; i++)
             {
                 var row = batch[i];
-                var line = $"  ({Sql.Int(row.ShopType)}, {Sql.Text(row.SourceId, false)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}, {Sql.Int(row.CategoryId)}, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)})";
+                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, false)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)})";
                 line += i == batch.Count - 1 ? string.Empty : ",";
                 await writer.WriteLineAsync(line);
             }
@@ -322,7 +322,7 @@ namespace PriceCompareWeb.Services
             for (var i = 0; i < batch.Count; i++)
             {
                 var row = batch[i];
-                var line = $"  ({Sql.Int(row.ShopType)}, {Sql.Text(row.SourceId, true)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}, {Sql.Int(row.CategoryId)}, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)})";
+                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, true)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)})";
                 line += i == batch.Count - 1 ? string.Empty : ",";
                 await writer.WriteLineAsync(line);
             }
@@ -340,7 +340,7 @@ namespace PriceCompareWeb.Services
             for (var i = 0; i < batch.Count; i++)
             {
                 var row = batch[i];
-                var line = $"  ({Sql.Int(row.ShopType)}, {Sql.Text(row.SourceId, true)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}, {Sql.Int(row.CategoryId)}, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)})";
+                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, true)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)})";
                 line += i == batch.Count - 1 ? string.Empty : ",";
                 await writer.WriteLineAsync(line);
             }
