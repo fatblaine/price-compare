@@ -161,7 +161,9 @@ if (enableQuartzJobs)
         q.AddTrigger(opts => opts
             .ForJob(favoriteTrackJobKey)
             .WithIdentity("FavoritePriceTrackingJob-trigger")
-            .WithCronSchedule("0 0 5 ? * WED"));
+        // testing
+        // .WithCronSchedule("0 */1 * ? * *"));
+        .WithCronSchedule("0 0 5 ? * WED"));
     });
 
     builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
@@ -179,6 +181,7 @@ builder.Services.AddHttpClient<IColesDownScraperService, ColesDownScraperService
 builder.Services.AddScoped<IColesSpecialScraperService, ColesSpecialScraperService>();
 
 builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialScraperService>();
+builder.Services.AddScoped<IWoolworthsLowerShelfDomScraperService, WoolworthsLowerShelfDomScraperService>();
 
 builder.Services.AddScoped<ICategoryMappingService, CategoryMappingService>();
 

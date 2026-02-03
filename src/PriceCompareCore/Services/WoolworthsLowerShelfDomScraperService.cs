@@ -1,0 +1,476 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Playwright;
+using PriceCompareCore.Interfaces;
+using PriceCompareData.Entities.Scraping;
+
+namespace PriceCompareCore.Services
+{
+    public class WoolworthsLowerShelfDomScraperService : IWoolworthsLowerShelfDomScraperService
+    {
+        private const string LowerShelfUrl = "https://www.woolworths.com.au/shop/browse/specials/lower-shelf-price";
+        private const string DefaultUa =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+        private readonly ILogger<WoolworthsLowerShelfDomScraperService> _logger;
+
+        public WoolworthsLowerShelfDomScraperService(ILogger<WoolworthsLowerShelfDomScraperService> logger)
+        {
+            _logger = logger;
+        }
+
+        public async Task<List<WoolworthsSpecialProduct>> ScrapeAsync(int limit = 20, CancellationToken ct = default)
+        {
+            var hardCap = GetDomHardCap();
+            if (limit <= 0) limit = hardCap;
+            if (limit > hardCap) limit = hardCap;
+
+            using var pw = await Playwright.CreateAsync();
+            await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+            {
+                Headless = GetHeadless(),
+                SlowMo = GetSlowMoMs(),
+                Channel = GetChromeChannel(),
+                Args = new[]
+                {
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--disable-blink-features=AutomationControlled"
+                }
+            });
+
+            await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                Locale = "en-AU",
+                UserAgent = GetUserAgent(),
+                TimezoneId = "Australia/Sydney",
+                ViewportSize = new ViewportSize { Width = 1365, Height = 768 },
+                ScreenSize = new ScreenSize { Width = 1365, Height = 768 },
+                DeviceScaleFactor = 1,
+                IsMobile = false,
+                HasTouch = false,
+                ExtraHTTPHeaders = new Dictionary<string, string>
+                {
+                    ["Accept-Language"] = "en-AU,en;q=0.9",
+                    ["DNT"] = "1"
+                }
+            });
+
+            await context.AddInitScriptAsync(GetStealthScript());
+
+            var page = await context.NewPageAsync();
+            var domItems = new List<DomProduct>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var maxPages = GetMaxPages();
+            var startPage = GetStartPage();
+
+            for (var pageNumber = startPage; pageNumber <= maxPages && domItems.Count < limit; pageNumber++)
+            {
+                var url = BuildLowerShelfUrl(pageNumber);
+                _logger.LogInformation("WWS DOM: goto lower shelf page {Page}...", pageNumber);
+                await page.GotoAsync(url, new PageGotoOptions
+                {
+                    WaitUntil = WaitUntilState.DOMContentLoaded,
+                    Timeout = 60000
+                });
+
+                await HumanDelayAsync(page, 1200, 2200);
+                if (pageNumber == startPage)
+                {
+                    await TryClickAsync(page, "button:has-text(\"Accept\")", 1500);
+                }
+                await HumanDelayAsync(page, 800, 1400);
+                await page.Mouse.MoveAsync(250, 250);
+
+                var selector = await WaitForAnySelectorAsync(
+                    page,
+                    new[]
+                    {
+                        "a[href*='/shop/productdetails/']",
+                        "[data-testid*='product-tile']",
+                        "[data-testid*='product']"
+                    },
+                    20000);
+
+                if (selector is null)
+                {
+                    _logger.LogWarning("WWS DOM: no product selector detected on page {Page}.", pageNumber);
+                    break;
+                }
+
+                var remaining = limit - domItems.Count;
+                var pageItems = await ExtractDomItemsAsync(page, remaining, ct, seen, GetMaxScrollRounds());
+                _logger.LogInformation("WWS DOM: page {Page} -> {Count} items.", pageNumber, pageItems.Count);
+
+                if (pageItems.Count == 0)
+                {
+                    break;
+                }
+
+                domItems.AddRange(pageItems);
+            }
+
+            var mapped = MapDomItems(domItems);
+            _logger.LogInformation("WWS DOM: extracted {Count} products.", mapped.Count);
+
+            return mapped;
+        }
+
+        private static List<WoolworthsSpecialProduct> MapDomItems(IReadOnlyList<DomProduct> items)
+        {
+            var result = new List<WoolworthsSpecialProduct>();
+            foreach (var item in items)
+            {
+                var name = item.Name?.Trim() ?? string.Empty;
+                if (!IsValidName(name))
+                {
+                    continue;
+                }
+
+                var price = ParseMoney(ExtractFromAria(item.Aria, "Non-member price"));
+                var was = ParseMoney(ExtractFromAria(item.Aria, "Was"));
+                if (!price.HasValue)
+                {
+                    continue;
+                }
+                var savings = (was.HasValue && price.HasValue && was.Value > price.Value)
+                    ? was.Value - price.Value
+                    : (decimal?)null;
+
+                result.Add(new WoolworthsSpecialProduct
+                {
+                    Stockcode = 0,
+                    Barcode = string.Empty,
+                    DisplayName = name,
+                    Brand = string.Empty,
+                    Price = price ?? 0m,
+                    WasPrice = was,
+                    SavingsAmount = savings,
+                    IsOnSpecial = true,
+                    CupPrice = null,
+                    CupString = null,
+                    LargeImageFile = item.Image,
+                    ScrapedAt = DateTime.UtcNow
+                });
+            }
+
+            return result;
+        }
+
+        private static decimal? ParseMoney(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            var cleaned = raw.Replace("Was", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("$", "", StringComparison.OrdinalIgnoreCase)
+                .Replace(" ", "");
+
+            return decimal.TryParse(cleaned, NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : null;
+        }
+
+        private static string? ExtractFromAria(string? aria, string key)
+        {
+            if (string.IsNullOrWhiteSpace(aria))
+            {
+                return null;
+            }
+
+            var marker = key + " ";
+            var idx = aria.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+            {
+                return null;
+            }
+
+            var start = idx + marker.Length;
+            var end = aria.IndexOf(',', start);
+            if (end < 0)
+            {
+                end = aria.Length;
+            }
+
+            var segment = aria.Substring(start, end - start).Trim();
+            return segment.StartsWith("$", StringComparison.OrdinalIgnoreCase) ? segment : "$" + segment;
+        }
+
+        private static async Task<List<DomProduct>> ExtractDomItemsAsync(
+            IPage page,
+            int limit,
+            CancellationToken ct,
+            HashSet<string> seen,
+            int maxRounds)
+        {
+            var results = new List<DomProduct>();
+
+            var locator = page.Locator("a[href*='/shop/productdetails/'][aria-label]");
+            var stableRounds = 0;
+
+            while (results.Count < limit && stableRounds < 3 && maxRounds-- > 0)
+            {
+                var before = results.Count;
+                var total = await locator.CountAsync();
+
+                for (var i = 0; i < total && results.Count < limit; i++)
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        return results;
+                    }
+
+                    var anchor = locator.Nth(i);
+                    var href = (await anchor.GetAttributeAsync("href")) ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(href))
+                    {
+                        continue;
+                    }
+
+                    var fullHref = href.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                        ? href
+                        : new Uri(new Uri(LowerShelfUrl), href).ToString();
+
+                    if (!seen.Add(fullHref))
+                    {
+                        continue;
+                    }
+
+                    var aria = (await anchor.GetAttributeAsync("aria-label")) ?? string.Empty;
+                    if (!IsProductAria(aria))
+                    {
+                        continue;
+                    }
+
+                    var name = ExtractNameFromAria(aria);
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        name = (await anchor.InnerTextAsync()).Trim();
+                    }
+
+                    string image = string.Empty;
+                    var img = anchor.Locator("img");
+                    if (await img.CountAsync() > 0)
+                    {
+                        image = (await img.First.GetAttributeAsync("src"))
+                                ?? (await img.First.GetAttributeAsync("data-src"))
+                                ?? string.Empty;
+                    }
+
+                    results.Add(new DomProduct
+                    {
+                        Name = name,
+                        Href = fullHref,
+                        Image = image,
+                        Aria = aria
+                    });
+                }
+
+                if (results.Count == before)
+                {
+                    stableRounds++;
+                }
+                else
+                {
+                    stableRounds = 0;
+                }
+
+                if (results.Count >= limit)
+                {
+                    break;
+                }
+
+                await page.EvaluateAsync("() => window.scrollBy(0, document.body.scrollHeight)");
+                await HumanDelayAsync(page, 700, 1200);
+            }
+
+            return results;
+        }
+
+        private static string GetUserAgent()
+        {
+            var ua = Environment.GetEnvironmentVariable("WWS_USER_AGENT");
+            return string.IsNullOrWhiteSpace(ua) ? DefaultUa : ua.Trim();
+        }
+
+        private static int GetSlowMoMs()
+        {
+            var raw = Environment.GetEnvironmentVariable("WWS_SLOWMO_MS");
+            return int.TryParse(raw, out var ms) && ms >= 0 ? ms : 60;
+        }
+
+        private static bool GetHeadless()
+        {
+            var headful = Environment.GetEnvironmentVariable("WWS_HEADFUL");
+            return !string.Equals(headful, "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string? GetChromeChannel()
+        {
+            var useChrome = Environment.GetEnvironmentVariable("WWS_USE_CHROME_CHANNEL");
+            return string.Equals(useChrome, "true", StringComparison.OrdinalIgnoreCase) ? "chrome" : null;
+        }
+
+        private static async Task<bool> TryClickAsync(IPage page, string selector, int timeoutMs)
+        {
+            try
+            {
+                await page.ClickAsync(selector, new PageClickOptions { Timeout = timeoutMs });
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static async Task HumanDelayAsync(IPage page, int minMs, int maxMs)
+        {
+            if (minMs < 0) minMs = 0;
+            if (maxMs < minMs) maxMs = minMs;
+            var delay = Random.Shared.Next(minMs, maxMs + 1);
+            await page.WaitForTimeoutAsync(delay);
+        }
+
+        private static async Task<string?> WaitForAnySelectorAsync(IPage page, IReadOnlyList<string> selectors, int timeoutMs)
+        {
+            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            while (DateTime.UtcNow < deadline)
+            {
+                foreach (var selector in selectors)
+                {
+                    try
+                    {
+                        var count = await page.Locator(selector).CountAsync();
+                        if (count > 0)
+                        {
+                            return selector;
+                        }
+                    }
+                    catch
+                    {
+                        // ignore and keep polling
+                    }
+                }
+
+                await page.WaitForTimeoutAsync(500);
+            }
+
+            return null;
+        }
+
+        private static string GetStealthScript()
+        {
+            return @"
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'languages', { get: () => ['en-AU', 'en'] });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+window.chrome = window.chrome || { runtime: {} };
+const originalQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (parameters) => (
+  parameters.name === 'notifications'
+    ? Promise.resolve({ state: Notification.permission })
+    : originalQuery(parameters)
+);
+";
+        }
+
+        private static int GetDomHardCap()
+        {
+            var raw = Environment.GetEnvironmentVariable("WWS_DOM_MAX_ITEMS");
+            return int.TryParse(raw, out var v) && v > 0 ? v : 1000;
+        }
+
+        private static int GetMaxScrollRounds()
+        {
+            var raw = Environment.GetEnvironmentVariable("WWS_DOM_MAX_ROUNDS");
+            return int.TryParse(raw, out var v) && v > 0 ? v : 6;
+        }
+
+        private static int GetMaxPages()
+        {
+            var raw = Environment.GetEnvironmentVariable("WWS_DOM_MAX_PAGES");
+            return int.TryParse(raw, out var v) && v > 0 ? v : 50;
+        }
+
+        private static int GetStartPage()
+        {
+            var raw = Environment.GetEnvironmentVariable("WWS_DOM_START_PAGE");
+            return int.TryParse(raw, out var v) && v > 0 ? v : 1;
+        }
+
+        private static string BuildLowerShelfUrl(int pageNumber)
+            => $"{LowerShelfUrl}?pageNumber={pageNumber}";
+
+        private sealed class DomProduct
+        {
+            public string? Name { get; set; }
+            public string? Href { get; set; }
+            public string? Image { get; set; }
+            public string? Aria { get; set; }
+        }
+
+        private static bool IsProductAria(string? aria)
+        {
+            if (string.IsNullOrWhiteSpace(aria))
+            {
+                return false;
+            }
+
+            return aria.Contains("Non-member price", StringComparison.OrdinalIgnoreCase) ||
+                   aria.Contains("Find out more about", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ExtractNameFromAria(string? aria)
+        {
+            if (string.IsNullOrWhiteSpace(aria))
+            {
+                return string.Empty;
+            }
+
+            if (aria.Contains("Find out more about", StringComparison.OrdinalIgnoreCase))
+            {
+                var start = aria.IndexOf("Find out more about", StringComparison.OrdinalIgnoreCase);
+                if (start >= 0)
+                {
+                    var tail = aria.Substring(start + "Find out more about".Length).Trim();
+                    var comma = tail.IndexOf(',', StringComparison.Ordinal);
+                    return (comma > 0 ? tail[..comma] : tail).Trim();
+                }
+            }
+
+            var firstPeriod = aria.IndexOf('.', StringComparison.Ordinal);
+            return firstPeriod > 0 ? aria[..firstPeriod].Trim() : aria.Trim();
+        }
+
+        private static bool IsValidName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            if (string.Equals(name, "out of stock", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!name.Any(char.IsLetter))
+            {
+                return false;
+            }
+
+            return name.Length >= 3;
+        }
+    }
+}
