@@ -17,16 +17,19 @@ namespace PriceCompareWeb.Controllers
         private readonly IColesSpecialScraperService _specialScraperService;
         private readonly ILogger<ScrapingController> _logger;
         private readonly IWoolworthsSpecialScraperService _wscraperService;
+        private readonly IWoolworthsLowerShelfDomScraperService _wwsLowerShelfDomService;
 
         public ScrapingController(IColesDownScraperService scraperService,
         ILogger<ScrapingController> logger,
         IColesSpecialScraperService specialScraperService,
-        IWoolworthsSpecialScraperService wscraperService)
+        IWoolworthsSpecialScraperService wscraperService,
+        IWoolworthsLowerShelfDomScraperService wwsLowerShelfDomService)
         {
             _scraperService = scraperService;
             _logger = logger;
             _specialScraperService = specialScraperService;
             _wscraperService = wscraperService;
+            _wwsLowerShelfDomService = wwsLowerShelfDomService;
         }
 
         [HttpGet("coles/down-down/all")]
@@ -92,6 +95,25 @@ namespace PriceCompareWeb.Controllers
             {
                 _logger.LogError(ex, "Failed to get Woolworths on-special products");
                 return StatusCode(500, "Failed to get Woolworths on-special products");
+            }
+        }
+
+        [HttpGet("woolworths/lower-shelf/dom")]
+        public async Task<IActionResult> GetWoolworthsLowerShelfDom([FromQuery] int limit = 20)
+        {
+            try
+            {
+                var products = await _wwsLowerShelfDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
+                return Ok(new
+                {
+                    Count = products.Count,
+                    Products = products
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Woolworths lower-shelf-price DOM products");
+                return StatusCode(500, "Failed to get Woolworths lower-shelf-price DOM products");
             }
         }
 
