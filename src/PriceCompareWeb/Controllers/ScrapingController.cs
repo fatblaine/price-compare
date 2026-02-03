@@ -99,7 +99,7 @@ namespace PriceCompareWeb.Controllers
         }
 
         [HttpGet("woolworths/lower-shelf/dom")]
-        public async Task<IActionResult> GetWoolworthsLowerShelfDom([FromQuery] int limit = 20)
+        public async Task<IActionResult> GetWoolworthsLowerShelfDom([FromQuery] int limit = 0)
         {
             try
             {

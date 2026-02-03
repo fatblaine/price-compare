@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 using PriceCompareCore.Interfaces;
+using PriceCompareData.Entities.Common;
 using PriceCompareData.Entities.Scraping;
 
 namespace PriceCompareCore.Services
@@ -19,17 +22,31 @@ namespace PriceCompareCore.Services
             "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
         private readonly ILogger<WoolworthsLowerShelfDomScraperService> _logger;
+        private readonly IDistributedCache _cache;
 
-        public WoolworthsLowerShelfDomScraperService(ILogger<WoolworthsLowerShelfDomScraperService> logger)
+        public WoolworthsLowerShelfDomScraperService(
+            ILogger<WoolworthsLowerShelfDomScraperService> logger,
+            IDistributedCache cache)
         {
             _logger = logger;
+            _cache = cache;
         }
 
-        public async Task<List<WoolworthsSpecialProduct>> ScrapeAsync(int limit = 20, CancellationToken ct = default)
+        public async Task<List<WoolworthsSpecialProduct>> ScrapeAsync(int limit = 0, CancellationToken ct = default)
         {
             var hardCap = GetDomHardCap();
             if (limit <= 0) limit = hardCap;
             if (limit > hardCap) limit = hardCap;
+
+            var cached = await _cache.GetStringAsync(CacheKey.WOOLWORTHS_LOWER_SHELF_PRODUCTS, ct);
+            if (!string.IsNullOrWhiteSpace(cached))
+            {
+                _logger.LogInformation("WWS DOM: returning cached lower-shelf products.");
+                var cachedItems = JsonSerializer.Deserialize<List<WoolworthsSpecialProduct>>(cached) ?? new();
+                return cachedItems.Take(limit).ToList();
+            }
+
+            var fetchLimit = hardCap;
 
             using var pw = await Playwright.CreateAsync();
             await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
@@ -72,7 +89,7 @@ namespace PriceCompareCore.Services
             var maxPages = GetMaxPages();
             var startPage = GetStartPage();
 
-            for (var pageNumber = startPage; pageNumber <= maxPages && domItems.Count < limit; pageNumber++)
+            for (var pageNumber = startPage; pageNumber <= maxPages && domItems.Count < fetchLimit; pageNumber++)
             {
                 var url = BuildLowerShelfUrl(pageNumber);
                 _logger.LogInformation("WWS DOM: goto lower shelf page {Page}...", pageNumber);
@@ -106,7 +123,7 @@ namespace PriceCompareCore.Services
                     break;
                 }
 
-                var remaining = limit - domItems.Count;
+                var remaining = fetchLimit - domItems.Count;
                 var pageItems = await ExtractDomItemsAsync(page, remaining, ct, seen, GetMaxScrollRounds());
                 _logger.LogInformation("WWS DOM: page {Page} -> {Count} items.", pageNumber, pageItems.Count);
 
@@ -121,7 +138,17 @@ namespace PriceCompareCore.Services
             var mapped = MapDomItems(domItems);
             _logger.LogInformation("WWS DOM: extracted {Count} products.", mapped.Count);
 
-            return mapped;
+            var serialized = JsonSerializer.Serialize(mapped);
+            await _cache.SetStringAsync(
+                CacheKey.WOOLWORTHS_LOWER_SHELF_PRODUCTS,
+                serialized,
+                new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+                },
+                ct);
+
+            return mapped.Take(limit).ToList();
         }
 
         private static List<WoolworthsSpecialProduct> MapDomItems(IReadOnlyList<DomProduct> items)

@@ -7,6 +7,6 @@ namespace PriceCompareCore.Interfaces
 {
     public interface IWoolworthsLowerShelfDomScraperService
     {
-        Task<List<WoolworthsSpecialProduct>> ScrapeAsync(int limit = 20, CancellationToken ct = default);
+        Task<List<WoolworthsSpecialProduct>> ScrapeAsync(int limit = 0, CancellationToken ct = default);
     }
 }
