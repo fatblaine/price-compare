@@ -129,7 +129,7 @@ if (enableQuartzJobs)
         q.AddTrigger(opts => opts
             .ForJob(jobKey)
             .WithIdentity("ColesRefreshJob-trigger")
-            .WithCronSchedule("0 0 2 ? * WED"));
+            .WithCronSchedule("0 30 1 ? * WED"));
 
         // scrape data - coles on special
         var jobKeySpecial = new JobKey("ColesRefreshJobSpecial");
@@ -137,15 +137,15 @@ if (enableQuartzJobs)
         q.AddTrigger(opts => opts
             .ForJob(jobKeySpecial)
             .WithIdentity("ColesRefreshJobSpecial-trigger")
-            .WithCronSchedule("0 0 3 ? * WED"));
+            .WithCronSchedule("0 0 2 ? * WED"));
 
-        // scrape data - wws
-        var jobKeyWwsSpecial = new JobKey("WwsRefreshJobSpecial");
-        q.AddJob<WwsRefreshJobSpecial>(opts => opts.WithIdentity(jobKeyWwsSpecial));
+        // scrape data - woolworths lower shelf price (DOM)
+        var jobKeyWwsLowerShelf = new JobKey("WwsLowerShelfDomJob");
+        q.AddJob<WwsLowerShelfDomJob>(opts => opts.WithIdentity(jobKeyWwsLowerShelf));
         q.AddTrigger(opts => opts
-            .ForJob(jobKeyWwsSpecial)
-            .WithIdentity("WwsRefreshJobSpecial-trigger")
-            .WithCronSchedule("0 0 4 ? * WED"));
+            .ForJob(jobKeyWwsLowerShelf)
+            .WithIdentity("WwsLowerShelfDomJob-trigger")
+            .WithCronSchedule("0 30 2 ? * WED"));
 
         // delete data
         var cleanJobKey = new JobKey("CleanPriceHistoryJob");

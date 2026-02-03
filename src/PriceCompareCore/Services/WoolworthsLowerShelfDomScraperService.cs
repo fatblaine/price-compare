@@ -9,7 +9,10 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 using PriceCompareCore.Interfaces;
+using PriceCompareData.Common;
+using PriceCompareData.Data;
 using PriceCompareData.Entities.Common;
+using PriceCompareData.Entities.History;
 using PriceCompareData.Entities.Scraping;
 
 namespace PriceCompareCore.Services
@@ -23,13 +26,22 @@ namespace PriceCompareCore.Services
 
         private readonly ILogger<WoolworthsLowerShelfDomScraperService> _logger;
         private readonly IDistributedCache _cache;
+        private readonly AppDbContext _dbContext;
+        private readonly IIngestionService _ingestion;
+        private readonly IScrapeExportService _export;
 
         public WoolworthsLowerShelfDomScraperService(
             ILogger<WoolworthsLowerShelfDomScraperService> logger,
-            IDistributedCache cache)
+            IDistributedCache cache,
+            AppDbContext dbContext,
+            IIngestionService ingestion,
+            IScrapeExportService export)
         {
             _logger = logger;
             _cache = cache;
+            _dbContext = dbContext;
+            _ingestion = ingestion;
+            _export = export;
         }
 
         public async Task<List<WoolworthsSpecialProduct>> ScrapeAsync(int limit = 0, CancellationToken ct = default)
@@ -135,7 +147,8 @@ namespace PriceCompareCore.Services
                 domItems.AddRange(pageItems);
             }
 
-            var mapped = MapDomItems(domItems);
+            var scrapedAt = DateTime.UtcNow;
+            var mapped = MapDomItems(domItems, scrapedAt);
             _logger.LogInformation("WWS DOM: extracted {Count} products.", mapped.Count);
 
             var serialized = JsonSerializer.Serialize(mapped);
@@ -148,10 +161,65 @@ namespace PriceCompareCore.Services
                 },
                 ct);
 
+            // Persist price history + products, then export CSV
+            await PersistAndExportAsync(mapped, scrapedAt, ct);
+
             return mapped.Take(limit).ToList();
         }
 
-        private static List<WoolworthsSpecialProduct> MapDomItems(IReadOnlyList<DomProduct> items)
+        private async Task PersistAndExportAsync(
+            IReadOnlyList<WoolworthsSpecialProduct> products,
+            DateTime scrapedAt,
+            CancellationToken ct)
+        {
+            if (products.Count == 0)
+            {
+                return;
+            }
+
+            var today = scrapedAt.Date;
+            var priceHistoryRows = new List<PriceHistory>(products.Count);
+
+            foreach (var product in products)
+            {
+                var exists = _dbContext.PriceHistory.Any(ph =>
+                    ph.Name == product.DisplayName &&
+                    ph.ShopType == ShopType.WOOLWORTHS &&
+                    ph.OfferType == OfferType.LOWER_SHELF &&
+                    ph.ScrapedAt >= today &&
+                    ph.ScrapedAt < today.AddDays(1));
+
+                var priceHistory = new PriceHistory
+                {
+                    Name = product.DisplayName,
+                    ImageUrl = product.LargeImageFile ?? string.Empty,
+                    CurrentPrice = product.Price,
+                    ScrapedAt = scrapedAt,
+                    OfferType = OfferType.LOWER_SHELF,
+                    ShopType = ShopType.WOOLWORTHS
+                };
+
+                priceHistoryRows.Add(priceHistory);
+
+                if (!exists)
+                {
+                    _dbContext.PriceHistory.Add(priceHistory);
+                }
+            }
+
+            await _dbContext.SaveChangesAsync(ct);
+            await _ingestion.UpsertWwsAsync(products);
+            var productRows = _ingestion.MapWoolworthsProducts(products);
+            await _export.ExportAsync(
+                new ScrapeExportRequest(
+                    "woolworths_lower_shelf",
+                    scrapedAt,
+                    priceHistoryRows,
+                    productRows),
+                ct);
+        }
+
+        private static List<WoolworthsSpecialProduct> MapDomItems(IReadOnlyList<DomProduct> items, DateTime scrapedAt)
         {
             var result = new List<WoolworthsSpecialProduct>();
             foreach (var item in items)
@@ -185,7 +253,7 @@ namespace PriceCompareCore.Services
                     CupPrice = null,
                     CupString = null,
                     LargeImageFile = item.Image,
-                    ScrapedAt = DateTime.UtcNow
+                    ScrapedAt = scrapedAt
                 });
             }
 
