@@ -95,9 +95,17 @@ namespace PriceCompareCore.Services
             var (sv, su, pk) = _mapper.ParseSpec(name);
             var catId = _mapper.MapCategoryId(name, p.Brand);
 
-            var sourceId = !string.IsNullOrWhiteSpace(p.Barcode)
-                ? p.Barcode
-                : p.Stockcode.ToString();
+            // Prefer stable upstream IDs. Lower-shelf DOM scraping may have empty barcode and stockcode=0.
+            // In that case keep SourceId null so import uses name-based branch instead of collapsing to "0".
+            string? sourceId = null;
+            if (!string.IsNullOrWhiteSpace(p.Barcode))
+            {
+                sourceId = p.Barcode.Trim();
+            }
+            else if (p.Stockcode > 0)
+            {
+                sourceId = p.Stockcode.ToString();
+            }
 
             return new Product
             {
