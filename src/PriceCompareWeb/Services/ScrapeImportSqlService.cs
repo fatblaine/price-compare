@@ -221,8 +221,9 @@ namespace PriceCompareWeb.Services
                 var parsed = ProductRow.FromCsv(row.Values, row.HeaderMap);
                 total++;
 
-                if (string.IsNullOrWhiteSpace(parsed.SourceId))
+                if (!HasUsableSourceId(parsed))
                 {
+                    parsed = parsed with { SourceId = null };
                     withoutSource.Add(parsed);
                     if (withoutSource.Count >= batchSize)
                     {
@@ -254,6 +255,17 @@ namespace PriceCompareWeb.Services
             return total;
         }
 
+        private static bool HasUsableSourceId(ProductRow row)
+        {
+            if (string.IsNullOrWhiteSpace(row.SourceId))
+            {
+                return false;
+            }
+
+            // Historical export bug could serialize missing WWS IDs as "0".
+            return !string.Equals(row.SourceId.Trim(), "0", StringComparison.Ordinal);
+        }
+
         private static async Task WritePriceHistoryBatchAsync(StreamWriter writer, IReadOnlyList<PriceHistoryRow> batch, CancellationToken ct)
         {
             await writer.WriteLineAsync("INSERT INTO pricehistory (name, currentprice, imageurl, scrapedat, offertype, shoptype)");
@@ -281,9 +293,19 @@ namespace PriceCompareWeb.Services
 
         private static async Task WriteProductBatchWithSourceAsync(StreamWriter writer, IReadOnlyList<ProductRow> batch, CancellationToken ct)
         {
-            await writer.WriteLineAsync("INSERT INTO product (shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat)");
-            await writer.WriteLineAsync("SELECT v.shoptype, v.sourceid, v.name, v.brand, v.sizevalue, v.sizeunit, v.packageqty, v.categoryid, v.imageurl, v.lastseenat");
-            await writer.WriteLineAsync("FROM (VALUES");
+            await writer.WriteLineAsync("UPDATE product p SET");
+            await writer.WriteLineAsync("  name = d.name,");
+            await writer.WriteLineAsync("  brand = COALESCE(d.brand, p.brand),");
+            await writer.WriteLineAsync("  sizevalue = COALESCE(d.sizevalue, p.sizevalue),");
+            await writer.WriteLineAsync("  sizeunit = COALESCE(d.sizeunit, p.sizeunit),");
+            await writer.WriteLineAsync("  packageqty = COALESCE(d.packageqty, p.packageqty),");
+            await writer.WriteLineAsync("  categoryid = COALESCE(d.categoryid, p.categoryid),");
+            await writer.WriteLineAsync("  imageurl = COALESCE(d.imageurl, p.imageurl),");
+            await writer.WriteLineAsync("  lastseenat = GREATEST(p.lastseenat, d.lastseenat)");
+            await writer.WriteLineAsync("FROM (");
+            await writer.WriteLineAsync("  SELECT DISTINCT ON (v.shoptype, v.sourceid)");
+            await writer.WriteLineAsync("    v.shoptype, v.sourceid, v.name, v.brand, v.sizevalue, v.sizeunit, v.packageqty, v.categoryid, v.imageurl, v.lastseenat");
+            await writer.WriteLineAsync("  FROM (VALUES");
 
             for (var i = 0; i < batch.Count; i++)
             {
@@ -293,17 +315,38 @@ namespace PriceCompareWeb.Services
                 await writer.WriteLineAsync(line);
             }
 
-            await writer.WriteLineAsync(") AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat)");
-            await writer.WriteLineAsync("WHERE v.sourceid IS NOT NULL");
-            await writer.WriteLineAsync("ON CONFLICT (shoptype, sourceid) WHERE sourceid IS NOT NULL DO UPDATE SET");
-            await writer.WriteLineAsync("  name = EXCLUDED.name,");
-            await writer.WriteLineAsync("  brand = COALESCE(EXCLUDED.brand, product.brand),");
-            await writer.WriteLineAsync("  sizevalue = COALESCE(EXCLUDED.sizevalue, product.sizevalue),");
-            await writer.WriteLineAsync("  sizeunit = COALESCE(EXCLUDED.sizeunit, product.sizeunit),");
-            await writer.WriteLineAsync("  packageqty = COALESCE(EXCLUDED.packageqty, product.packageqty),");
-            await writer.WriteLineAsync("  categoryid = COALESCE(EXCLUDED.categoryid, product.categoryid),");
-            await writer.WriteLineAsync("  imageurl = COALESCE(EXCLUDED.imageurl, product.imageurl),");
-            await writer.WriteLineAsync("  lastseenat = GREATEST(product.lastseenat, EXCLUDED.lastseenat);");
+            await writer.WriteLineAsync("  ) AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat)");
+            await writer.WriteLineAsync("  WHERE v.sourceid IS NOT NULL");
+            await writer.WriteLineAsync("  ORDER BY v.shoptype, v.sourceid, v.lastseenat DESC, v.name DESC");
+            await writer.WriteLineAsync(") AS d");
+            await writer.WriteLineAsync("WHERE p.shoptype = d.shoptype");
+            await writer.WriteLineAsync("  AND p.sourceid = d.sourceid;");
+            await writer.WriteLineAsync();
+
+            await writer.WriteLineAsync("INSERT INTO product (shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat)");
+            await writer.WriteLineAsync("SELECT d.shoptype, d.sourceid, d.name, d.brand, d.sizevalue, d.sizeunit, d.packageqty, d.categoryid, d.imageurl, d.lastseenat");
+            await writer.WriteLineAsync("FROM (");
+            await writer.WriteLineAsync("  SELECT DISTINCT ON (v.shoptype, v.sourceid)");
+            await writer.WriteLineAsync("    v.shoptype, v.sourceid, v.name, v.brand, v.sizevalue, v.sizeunit, v.packageqty, v.categoryid, v.imageurl, v.lastseenat");
+            await writer.WriteLineAsync("  FROM (VALUES");
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var row = batch[i];
+                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, false)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)})";
+                line += i == batch.Count - 1 ? string.Empty : ",";
+                await writer.WriteLineAsync(line);
+            }
+
+            await writer.WriteLineAsync("  ) AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat)");
+            await writer.WriteLineAsync("  WHERE v.sourceid IS NOT NULL");
+            await writer.WriteLineAsync("  ORDER BY v.shoptype, v.sourceid, v.lastseenat DESC, v.name DESC");
+            await writer.WriteLineAsync(") AS d");
+            await writer.WriteLineAsync("WHERE NOT EXISTS (");
+            await writer.WriteLineAsync("  SELECT 1 FROM product p");
+            await writer.WriteLineAsync("  WHERE p.shoptype = d.shoptype");
+            await writer.WriteLineAsync("    AND p.sourceid = d.sourceid");
+            await writer.WriteLineAsync(");");
             await writer.WriteLineAsync();
         }
 

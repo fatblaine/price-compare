@@ -124,5 +124,30 @@ namespace PriceCompareTests
             // Assert
             Assert.Equal("Updated WWS", updated.Name);
         }
+
+        [Fact]
+        public void MapWoolworthsProducts_WhenBarcodeAndStockcodeMissing_ShouldKeepSourceIdNull()
+        {
+            // Arrange
+            var dbContext = GetInMemoryDbContext();
+            var mapper = new CategoryMappingService(dbContext);
+            var service = new IngestionService(dbContext, mapper);
+
+            var product = new WoolworthsSpecialProduct
+            {
+                Stockcode = 0,
+                Barcode = string.Empty,
+                DisplayName = "WWS DOM Product",
+                Price = 2.99m,
+                LargeImageFile = "http://example.com/wws-dom.jpg",
+                ScrapedAt = DateTime.UtcNow
+            };
+
+            // Act
+            var mapped = service.MapWoolworthsProducts(new[] { product }).Single();
+
+            // Assert
+            Assert.Null(mapped.SourceId);
+        }
     }
 }
