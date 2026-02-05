@@ -39,6 +39,15 @@ namespace PriceCompareCore.Services
             await UpsertAsync(items.Select(MapWoolworthsSpecial));
         }
 
+        public IReadOnlyList<Product> MapColesSpecialProducts(IEnumerable<ColesSpecialProduct> items)
+            => items.Select(MapColesSpecial).ToList();
+
+        public IReadOnlyList<Product> MapColesDownProducts(IEnumerable<ColesDownProduct> items)
+            => items.Select(MapColesDown).ToList();
+
+        public IReadOnlyList<Product> MapWoolworthsProducts(IEnumerable<WoolworthsSpecialProduct> items)
+            => items.Select(MapWoolworthsSpecial).ToList();
+
         // Map ColesSpecialProduct to Product
         private Product MapColesSpecial(ColesSpecialProduct p)
         {
@@ -86,9 +95,17 @@ namespace PriceCompareCore.Services
             var (sv, su, pk) = _mapper.ParseSpec(name);
             var catId = _mapper.MapCategoryId(name, p.Brand);
 
-            var sourceId = !string.IsNullOrWhiteSpace(p.Barcode)
-                ? p.Barcode
-                : p.Stockcode.ToString();
+            // Prefer stable upstream IDs. Lower-shelf DOM scraping may have empty barcode and stockcode=0.
+            // In that case keep SourceId null so import uses name-based branch instead of collapsing to "0".
+            string? sourceId = null;
+            if (!string.IsNullOrWhiteSpace(p.Barcode))
+            {
+                sourceId = p.Barcode.Trim();
+            }
+            else if (p.Stockcode > 0)
+            {
+                sourceId = p.Stockcode.ToString();
+            }
 
             return new Product
             {

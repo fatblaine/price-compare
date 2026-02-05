@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using System.Linq;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.Lambda.AspNetCoreServer.Hosting;
@@ -17,6 +18,7 @@ using PriceCompareCore.Services;
 using PriceCompareCore.Utils;
 using PriceCompareData.Data;
 using PriceCompareWeb.JobsLambda;
+using PriceCompareWeb.Services;
 using Quartz;
 using PriceCompareCore.Config;
 
@@ -43,6 +45,9 @@ builder.Services.Configure<AwsOptions>(
 builder.Services.Configure<RekognitionOptions>(
     builder.Configuration.GetSection("Rekognition"));
 
+builder.Services.Configure<ScrapeExportOptions>(
+    builder.Configuration.GetSection("ScrapeExport"));
+
 // Lambda Hosting
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
@@ -50,6 +55,8 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonDynamoDB>();
 builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
+// AWS Scheduler client for reading schedules.
+builder.Services.AddAWSService<Amazon.Scheduler.IAmazonScheduler>();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -122,7 +129,7 @@ if (enableQuartzJobs)
         q.AddTrigger(opts => opts
             .ForJob(jobKey)
             .WithIdentity("ColesRefreshJob-trigger")
-            .WithCronSchedule("0 0 2 ? * WED"));
+            .WithCronSchedule("0 30 1 ? * WED"));
 
         // scrape data - coles on special
         var jobKeySpecial = new JobKey("ColesRefreshJobSpecial");
@@ -130,15 +137,15 @@ if (enableQuartzJobs)
         q.AddTrigger(opts => opts
             .ForJob(jobKeySpecial)
             .WithIdentity("ColesRefreshJobSpecial-trigger")
-            .WithCronSchedule("0 0 3 ? * WED"));
+            .WithCronSchedule("0 30 2 ? * WED"));
 
-        // scrape data - wws
-        var jobKeyWwsSpecial = new JobKey("WwsRefreshJobSpecial");
-        q.AddJob<WwsRefreshJobSpecial>(opts => opts.WithIdentity(jobKeyWwsSpecial));
+        // scrape data - woolworths lower shelf price (DOM)
+        var jobKeyWwsLowerShelf = new JobKey("WwsLowerShelfDomJob");
+        q.AddJob<WwsLowerShelfDomJob>(opts => opts.WithIdentity(jobKeyWwsLowerShelf));
         q.AddTrigger(opts => opts
-            .ForJob(jobKeyWwsSpecial)
-            .WithIdentity("WwsRefreshJobSpecial-trigger")
-            .WithCronSchedule("0 0 4 ? * WED"));
+            .ForJob(jobKeyWwsLowerShelf)
+            .WithIdentity("WwsLowerShelfDomJob-trigger")
+            .WithCronSchedule("0 0 2 ? * WED"));
 
         // delete data
         var cleanJobKey = new JobKey("CleanPriceHistoryJob");
@@ -147,6 +154,16 @@ if (enableQuartzJobs)
             .ForJob(cleanJobKey)
             .WithIdentity("CleanPriceHistoryJob-trigger")
             .WithCronSchedule("0 0 1 ? 1/3 4#1"));
+
+        // favorite price tracking
+        var favoriteTrackJobKey = new JobKey("FavoritePriceTrackingJob");
+        q.AddJob<FavoritePriceTrackingJob>(opts => opts.WithIdentity(favoriteTrackJobKey));
+        q.AddTrigger(opts => opts
+            .ForJob(favoriteTrackJobKey)
+            .WithIdentity("FavoritePriceTrackingJob-trigger")
+        // testing
+        // .WithCronSchedule("0 */1 * ? * *"));
+        .WithCronSchedule("0 0 5 ? * WED"));
     });
 
     builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
@@ -164,10 +181,12 @@ builder.Services.AddHttpClient<IColesDownScraperService, ColesDownScraperService
 builder.Services.AddScoped<IColesSpecialScraperService, ColesSpecialScraperService>();
 
 builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialScraperService>();
+builder.Services.AddScoped<IWoolworthsLowerShelfDomScraperService, WoolworthsLowerShelfDomScraperService>();
 
 builder.Services.AddScoped<ICategoryMappingService, CategoryMappingService>();
 
 builder.Services.AddScoped<IIngestionService, IngestionService>();
+builder.Services.AddScoped<IScrapeExportService, ScrapeExportService>();
 
 // Products service
 builder.Services.AddScoped<PriceCompareCore.Interfaces.IProductService, PriceCompareCore.Services.ProductService>();
@@ -177,6 +196,10 @@ builder.Services.AddScoped<IReceiptService, ReceiptService>();
 
 // Favorite service
 builder.Services.AddScoped<IFavoriteService, FavoriteService>();
+
+// Admin schedule aggregation (AWS + Quartz).
+builder.Services.AddScoped<AdminScheduleService>();
+builder.Services.AddScoped<IScrapeImportSqlService, ScrapeImportSqlService>();
 
 // Auth service
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
@@ -201,7 +224,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.Zero
         };
     });
-builder.Services.AddAuthorization();
+var adminEmails = builder.Configuration.GetSection("Admin:Emails").Get<string[]>() ?? Array.Empty<string>();
+var adminEmailsEnv = builder.Configuration["AdminEmails"];
+if (!string.IsNullOrWhiteSpace(adminEmailsEnv))
+{
+    var envEmails = adminEmailsEnv
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    adminEmails = adminEmails.Concat(envEmails).ToArray();
+}
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireAssertion(ctx =>
+        {
+            var email = ctx.User.FindFirstValue(ClaimTypes.Email);
+            return !string.IsNullOrWhiteSpace(email) &&
+                   adminEmails.Any(a => string.Equals(a, email, StringComparison.OrdinalIgnoreCase));
+        }));
+});
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -278,10 +318,15 @@ namespace PriceCompareWeb
                 var job = new WwsRefreshSpecialLambda();
                 await job.Handler();
             }
+            else if (string.Equals(target, "FAVORITE_TRACK", StringComparison.OrdinalIgnoreCase))
+            {
+                var job = new FavoritePriceTrackingLambda();
+                await job.Handler();
+            }
             else
             {
                 Console.WriteLine("No valid TARGET_JOB environment variable found.");
-                Console.WriteLine("Available: COLES_SPECIAL | WWS_SPECIAL");
+                Console.WriteLine("Available: COLES_SPECIAL | WWS_SPECIAL | FAVORITE_TRACK");
             }
         }
     }

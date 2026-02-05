@@ -9,5 +9,6 @@ namespace PriceCompareData.Common
     {
         public const int DOWN_DOWN = 0;
         public const int ON_SPECIAL = 1;
+        public const int LOWER_SHELF = 2;
     }
 }

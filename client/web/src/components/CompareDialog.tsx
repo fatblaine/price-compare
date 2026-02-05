@@ -135,6 +135,15 @@ export default function CompareDialog(props: CompareDialogProps) {
 
 	const [seriesLoading, setSeriesLoading] = React.useState(false);
 	const [series, setSeries] = React.useState<PairedSeriesPoint[]>([]);
+	const fallbackTargetShop = React.useMemo(() => {
+		if (!source) return undefined;
+		return source.shopType === ShopTypes.COLES
+			? ShopTypes.WOOLWORTHS
+			: source.shopType === ShopTypes.WOOLWORTHS
+				? ShopTypes.COLES
+				: undefined;
+	}, [source]);
+	const targetShopForTitle = selectedTarget?.shopType ?? fallbackTargetShop;
 
 	React.useEffect(() => {
 		let cancelled = false;
@@ -213,14 +222,22 @@ export default function CompareDialog(props: CompareDialogProps) {
 								/>
 								<PriceCard
 									title={
-										selectedTarget?.shopType === ShopTypes.COLES
+										targetShopForTitle === ShopTypes.COLES
 											? "Target · Coles"
-											: "Target · Woolworths"
+											: targetShopForTitle === ShopTypes.WOOLWORTHS
+												? "Target · Woolworths"
+												: "Target"
 									}
 									item={selectedTarget}
 									accent="#22c55e"
 								/>
 							</Stack>
+
+							{targets.length === 0 && (
+								<Typography variant="body2" color="text.secondary">
+									No matched product found in the other shop yet.
+								</Typography>
+							)}
 
 							{targets.length > 1 && (
 								<Stack
@@ -304,6 +321,10 @@ export default function CompareDialog(props: CompareDialogProps) {
 									>
 										<CircularProgress size={24} />
 									</Stack>
+								) : series.length === 0 ? (
+									<Typography variant="body2" color="text.secondary">
+										No price history yet.
+									</Typography>
 								) : (
 									<ResponsiveContainer>
 										<LineChart
@@ -324,7 +345,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 												dataKey="source"
 												name="Source"
 												stroke="#0ea5e9"
-												dot={false}
+												dot={series.length <= 1}
 												strokeWidth={2}
 											/>
 											<Line
@@ -332,7 +353,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 												dataKey="target"
 												name="Target"
 												stroke="#22c55e"
-												dot={false}
+												dot={series.length <= 1}
 												strokeWidth={2}
 											/>
 										</LineChart>

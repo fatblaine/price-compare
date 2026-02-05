@@ -36,9 +36,9 @@ function normalizeProduct(raw: any): CompareProduct {
 		"CurrentPrice",
 	);
 	const productId = read<string>(raw, "productId", "ProductId");
-	const shopType = Number(
-		read<number | string>(raw, "shopType", "ShopType"),
-	) as number;
+	const shopTypeRaw = read<number | string>(raw, "shopType", "ShopType");
+	const shopTypeNum = Number(shopTypeRaw);
+	const shopType = Number.isFinite(shopTypeNum) ? shopTypeNum : NaN;
 	const brand = read<string | null>(raw, "brand", "Brand") ?? null;
 	const sizeExisting = read<string | null>(raw, "size", "Size");
 	let size = sizeExisting ?? null;
@@ -87,7 +87,9 @@ export async function fetchCompareMatches(
 	const rawSource = read<any>(match, "source", "Source");
 	const rawTargets = read<any[]>(match, "targets", "Targets") ?? [];
 	const source = normalizeProduct(rawSource);
-	const targets = rawTargets.map(normalizeProduct);
+	const targets = rawTargets
+		.map(normalizeProduct)
+		.filter((t) => !Number.isFinite(source.shopType) || t.shopType !== source.shopType);
 	return { source, targets };
 }
 
@@ -118,13 +120,16 @@ export async function fetchMergedHistory(
 	name: string,
 	shopType: number,
 ): Promise<PriceHistoryPoint[]> {
-	const [a, b] = await Promise.allSettled([
-		fetchPriceHistory(name, shopType, 0),
-		fetchPriceHistory(name, shopType, 1),
-	]);
+	const requests = [0, 1, 2].map((offerType) =>
+		fetchPriceHistory(name, shopType, offerType),
+	);
+	const settled = await Promise.allSettled(requests);
 	const list: PriceHistoryPoint[] = [];
-	if (a.status === "fulfilled") list.push(...a.value);
-	if (b.status === "fulfilled") list.push(...b.value);
+	for (const result of settled) {
+		if (result.status === "fulfilled") {
+			list.push(...result.value);
+		}
+	}
 	// dedupe by timestamp; keep the lowest price for the same timestamp
 	const map = new Map<string, number>();
 	for (const p of list) {

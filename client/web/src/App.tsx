@@ -25,17 +25,24 @@ import {
 	getStoredToken,
 	setGuestSession,
 } from "./api/auth";
+import { fetchAdminHealth } from "./api/admin";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
+import AdminJobsPage from "./AdminJobsPage";
 
 function App() {
 	const [token, setToken] = React.useState<string | null>(null);
 	const [userEmail, setUserEmail] = React.useState<string | null>(null);
 	const [guestMode, setGuestMode] = React.useState(false);
+	const [isAdmin, setIsAdmin] = React.useState(false);
 	const [authView, setAuthView] = React.useState<"login" | "register">("login");
-	const [mainTab, setMainTab] = React.useState<"products" | "receipts" | "favorites">("products");
+	const [mainTab, setMainTab] = React.useState<
+		"products" | "receipts" | "favorites" | "admin"
+	>("products");
 	const [restrictedDialogOpen, setRestrictedDialogOpen] = React.useState(false);
-	const [pendingProtectedTab, setPendingProtectedTab] = React.useState<"receipts" | "favorites" | null>(null);
+	const [pendingProtectedTab, setPendingProtectedTab] = React.useState<
+		"receipts" | "favorites" | "admin" | null
+	>(null);
 
 	React.useEffect(() => {
 		const stored = getStoredToken();
@@ -51,6 +58,31 @@ function App() {
 		setUserEmail(null);
 		setGuestMode(getStoredGuest());
 	}, []);
+
+	React.useEffect(() => {
+		let active = true;
+		if (!token) {
+			setIsAdmin(false);
+			return;
+		}
+		(async () => {
+			try {
+				await fetchAdminHealth(1);
+				if (active) setIsAdmin(true);
+			} catch {
+				if (active) setIsAdmin(false);
+			}
+		})();
+		return () => {
+			active = false;
+		};
+	}, [token]);
+
+	React.useEffect(() => {
+		if (!isAdmin && mainTab === "admin") {
+			setMainTab("products");
+		}
+	}, [isAdmin, mainTab]);
 
 	const isAuthenticated = !!token;
 	const isGuest = guestMode && !isAuthenticated;
@@ -96,8 +128,11 @@ function App() {
 
 	const handleTabChange = (
 		_: React.SyntheticEvent,
-		val: "products" | "receipts" | "favorites",
+		val: "products" | "receipts" | "favorites" | "admin",
 	) => {
+		if (val === "admin" && !isAdmin) {
+			return;
+		}
 		if (val !== "products" && !isAuthenticated) {
 			setPendingProtectedTab(val);
 			setRestrictedDialogOpen(true);
@@ -121,7 +156,9 @@ function App() {
 			? "My Receipts"
 			: pendingProtectedTab === "favorites"
 				? "My Favorites"
-				: "this section";
+				: pendingProtectedTab === "admin"
+					? "Admin"
+					: "this section";
 
 	const renderMainContent = () => {
 		if (!isAuthenticated) {
@@ -148,6 +185,10 @@ function App() {
 
 		if (mainTab === "favorites") {
 			return <MyFavoritesPage />;
+		}
+
+		if (mainTab === "admin") {
+			return isAdmin ? <AdminJobsPage /> : <ProductsPage />;
 		}
 
 		return <ProductsPage />;
@@ -208,6 +249,9 @@ function App() {
 								<Tab label="Products" value="products" />
 								<Tab label="My Receipts" value="receipts" />
 								<Tab label="My Favorites" value="favorites" />
+								{isAuthenticated && isAdmin && (
+									<Tab label="Admin" value="admin" />
+								)}
 							</Tabs>
 						)}
 						{isAuthenticated && userEmail && (

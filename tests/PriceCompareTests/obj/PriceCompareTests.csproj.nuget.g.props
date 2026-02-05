@@ -25,9 +25,10 @@
   <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
     <Pkgxunit_analyzers Condition=" '$(Pkgxunit_analyzers)' == '' ">C:\Users\Fan\.nuget\packages\xunit.analyzers\1.18.0</Pkgxunit_analyzers>
     <PkgMicrosoft_Extensions_ApiDescription_Server Condition=" '$(PkgMicrosoft_Extensions_ApiDescription_Server)' == '' ">C:\Users\Fan\.nuget\packages\microsoft.extensions.apidescription.server\6.0.5</PkgMicrosoft_Extensions_ApiDescription_Server>
-    <PkgAWSSDK_Core Condition=" '$(PkgAWSSDK_Core)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.core\3.7.500.60</PkgAWSSDK_Core>
-    <PkgAWSSDK_S3 Condition=" '$(PkgAWSSDK_S3)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.s3\3.7.509.1</PkgAWSSDK_S3>
-    <PkgAWSSDK_Rekognition Condition=" '$(PkgAWSSDK_Rekognition)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.rekognition\3.7.502.22</PkgAWSSDK_Rekognition>
-    <PkgAWSSDK_DynamoDBv2 Condition=" '$(PkgAWSSDK_DynamoDBv2)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.dynamodbv2\3.7.509.14</PkgAWSSDK_DynamoDBv2>
+    <PkgAWSSDK_Core Condition=" '$(PkgAWSSDK_Core)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.core\3.7.500.68</PkgAWSSDK_Core>
+    <PkgAWSSDK_S3 Condition=" '$(PkgAWSSDK_S3)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.s3\3.7.509.9</PkgAWSSDK_S3>
+    <PkgAWSSDK_Rekognition Condition=" '$(PkgAWSSDK_Rekognition)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.rekognition\3.7.502.30</PkgAWSSDK_Rekognition>
+    <PkgAWSSDK_DynamoDBv2 Condition=" '$(PkgAWSSDK_DynamoDBv2)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.dynamodbv2\3.7.509.22</PkgAWSSDK_DynamoDBv2>
+    <PkgAWSSDK_Scheduler Condition=" '$(PkgAWSSDK_Scheduler)' == '' ">C:\Users\Fan\.nuget\packages\awssdk.scheduler\3.7.502.30</PkgAWSSDK_Scheduler>
   </PropertyGroup>
 </Project>

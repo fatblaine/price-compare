@@ -25,6 +25,9 @@ appsecrets.*.json
 **/Properties/launchSettings.json
 samconfig.toml
 tools/KeywordMiner/appsettings.json
+tools/KeywordMiner/*.csv
+exports/
+**/exports/
 
 # Local DB files (if you ever use LocalDB or SQL Express files)
 *.mdf

@@ -16,7 +16,7 @@ namespace PriceCompareCore.Interfaces
         // get price history in the past 7 days
         Task<List<PriceHistory>> GetPriceHistoryAsync(string name, int offerType, int shopType);
 
-        // delete data every 14 days
-        Task CleanOldPriceHistoryAsync();
+        // delete old price history records
+        Task<int> CleanOldPriceHistoryAsync();
     }
 }

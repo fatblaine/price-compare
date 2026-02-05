@@ -43,7 +43,7 @@ namespace PriceCompareCore.Services
                 if (categoryId.HasValue)
                     query = query.Where(p => p.CategoryId == categoryId.Value);
 
-                using var countCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                using var countCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 _logger.LogInformation("GetProducts count start");
                 var total = await query.CountAsync(countCts.Token);
                 _logger.LogInformation("GetProducts count done total={Total}", total);
@@ -61,7 +61,7 @@ namespace PriceCompareCore.Services
 
                 try
                 {
-                    using var itemsCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    using var itemsCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     _logger.LogInformation("GetProducts items start page={Page} pageSize={PageSize}", page, pageSize);
                     var items = await itemsQuery.ToListAsync(itemsCts.Token);
                     _logger.LogInformation("GetProducts items done items={Count}", items.Count);

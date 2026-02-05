@@ -17,16 +17,19 @@ namespace PriceCompareWeb.Controllers
         private readonly IColesSpecialScraperService _specialScraperService;
         private readonly ILogger<ScrapingController> _logger;
         private readonly IWoolworthsSpecialScraperService _wscraperService;
+        private readonly IWoolworthsLowerShelfDomScraperService _wwsLowerShelfDomService;
 
         public ScrapingController(IColesDownScraperService scraperService,
         ILogger<ScrapingController> logger,
         IColesSpecialScraperService specialScraperService,
-        IWoolworthsSpecialScraperService wscraperService)
+        IWoolworthsSpecialScraperService wscraperService,
+        IWoolworthsLowerShelfDomScraperService wwsLowerShelfDomService)
         {
             _scraperService = scraperService;
             _logger = logger;
             _specialScraperService = specialScraperService;
             _wscraperService = wscraperService;
+            _wwsLowerShelfDomService = wwsLowerShelfDomService;
         }
 
         [HttpGet("coles/down-down/all")]
@@ -95,6 +98,25 @@ namespace PriceCompareWeb.Controllers
             }
         }
 
+        [HttpGet("woolworths/lower-shelf/dom")]
+        public async Task<IActionResult> GetWoolworthsLowerShelfDom([FromQuery] int limit = 0)
+        {
+            try
+            {
+                var products = await _wwsLowerShelfDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
+                return Ok(new
+                {
+                    Count = products.Count,
+                    Products = products
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Woolworths lower-shelf-price DOM products");
+                return StatusCode(500, "Failed to get Woolworths lower-shelf-price DOM products");
+            }
+        }
+
         [HttpGet("priceHistory")]
         public async Task<IActionResult> GetPriceHistory([FromQuery] string name, [FromQuery] int offerType, [FromQuery] int shopType)
         {
@@ -107,6 +129,24 @@ namespace PriceCompareWeb.Controllers
             {
                 _logger.LogError(ex, "Failed to get price history");
                 return StatusCode(500, "Failed to get price history");
+            }
+        }
+
+        [HttpPost("priceHistory/cleanup")]
+        public async Task<IActionResult> CleanOldPriceHistory()
+        {
+            try
+            {
+                var deleted = await _scraperService.CleanOldPriceHistoryAsync();
+                return Ok(new
+                {
+                    Deleted = deleted
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to clean old price history");
+                return StatusCode(500, "Failed to clean old price history");
             }
         }
     }
