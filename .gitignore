@@ -25,6 +25,7 @@ appsecrets.*.json
 **/Properties/launchSettings.json
 samconfig.toml
 tools/KeywordMiner/appsettings.json
+tools/KeywordMiner/*.csv
 exports/
 **/exports/
 

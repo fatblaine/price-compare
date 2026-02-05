@@ -200,7 +200,7 @@ namespace PriceCompareCore.Services
         public async Task<int> CleanOldPriceHistoryAsync()
         {
             var now = DateTime.UtcNow;
-            var threshold = new DateTime(now.Year, now.Month, 1).AddMonths(-2);
+            var threshold = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-2);
             return await _dbContext.PriceHistory
                 .Where(p => p.ScrapedAt < threshold)
                 .ExecuteDeleteAsync();
