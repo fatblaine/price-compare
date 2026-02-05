@@ -118,6 +118,10 @@ namespace PriceCompareCore.Services
                 }
                 await HumanDelayAsync(page, 800, 1400);
                 await page.Mouse.MoveAsync(250, 250);
+                if (pageNumber == startPage)
+                {
+                    await TryDismissShopModalAsync(page);
+                }
 
                 var selector = await WaitForAnySelectorAsync(
                     page,
@@ -462,6 +466,46 @@ namespace PriceCompareCore.Services
             }
 
             return null;
+        }
+
+        private static async Task TryDismissShopModalAsync(IPage page)
+        {
+            var modalTitle = page.Locator("text=How would you like to shop?");
+            if (await modalTitle.CountAsync() == 0)
+            {
+                return;
+            }
+
+            // Try close button first
+            await TryClickAsync(page, "button[aria-label='Close']", 1500);
+            await TryClickAsync(page, "button:has-text('Close')", 1500);
+
+            // Try select Delivery + save
+            await TryClickAsync(page, "text=Delivery", 1500);
+            await TryClickAsync(page, "button:has-text('Save & continue')", 2000);
+
+            // Try click on backdrop/blank area
+            try
+            {
+                await page.Mouse.ClickAsync(50, 50);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            try
+            {
+                await modalTitle.First.WaitForAsync(new LocatorWaitForOptions
+                {
+                    State = WaitForSelectorState.Hidden,
+                    Timeout = 8000
+                });
+            }
+            catch
+            {
+                // ignore - modal may persist, we will still try selectors
+            }
         }
 
         private static string GetStealthScript()
