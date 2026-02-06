@@ -12,5 +12,6 @@ namespace PriceCompareData.Entities.Common
         public const string BUILD_ID = "BuildId";
         public const string WOOLWORTHS_ON_SPECIAL_PRODUCTS = "WoolworthsOnSpecialProducts";
         public const string WOOLWORTHS_LOWER_SHELF_PRODUCTS = "WoolworthsLowerShelfProducts";
+        public const string WOOLWORTHS_EVERYDAY_LOW_PRICE_PRODUCTS = "WoolworthsEverydayLowPriceProducts";
     }
 }
