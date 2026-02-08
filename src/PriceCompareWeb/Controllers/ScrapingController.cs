@@ -19,13 +19,15 @@ namespace PriceCompareWeb.Controllers
         private readonly IWoolworthsSpecialScraperService _wscraperService;
         private readonly IWoolworthsLowerShelfDomScraperService _wwsLowerShelfDomService;
         private readonly IWoolworthsEverydayLowPriceDomScraperService _wwsEverydayLowPriceDomService;
+        private readonly IWoolworthsHalfPriceDomScraperService _wwsHalfPriceDomService;
 
         public ScrapingController(IColesDownScraperService scraperService,
         ILogger<ScrapingController> logger,
         IColesSpecialScraperService specialScraperService,
         IWoolworthsSpecialScraperService wscraperService,
         IWoolworthsLowerShelfDomScraperService wwsLowerShelfDomService,
-        IWoolworthsEverydayLowPriceDomScraperService wwsEverydayLowPriceDomService)
+        IWoolworthsEverydayLowPriceDomScraperService wwsEverydayLowPriceDomService,
+        IWoolworthsHalfPriceDomScraperService wwsHalfPriceDomService)
         {
             _scraperService = scraperService;
             _logger = logger;
@@ -33,6 +35,7 @@ namespace PriceCompareWeb.Controllers
             _wscraperService = wscraperService;
             _wwsLowerShelfDomService = wwsLowerShelfDomService;
             _wwsEverydayLowPriceDomService = wwsEverydayLowPriceDomService;
+            _wwsHalfPriceDomService = wwsHalfPriceDomService;
         }
 
         [HttpGet("coles/down-down/all")]
@@ -136,6 +139,25 @@ namespace PriceCompareWeb.Controllers
             {
                 _logger.LogError(ex, "Failed to get Woolworths everyday-low-price DOM products");
                 return StatusCode(500, "Failed to get Woolworths everyday-low-price DOM products");
+            }
+        }
+
+        [HttpGet("woolworths/half-price/dom")]
+        public async Task<IActionResult> GetWoolworthsHalfPriceDom([FromQuery] int limit = 0)
+        {
+            try
+            {
+                var products = await _wwsHalfPriceDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
+                return Ok(new
+                {
+                    Count = products.Count,
+                    Products = products
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Woolworths half-price DOM products");
+                return StatusCode(500, "Failed to get Woolworths half-price DOM products");
             }
         }
 

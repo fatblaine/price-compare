@@ -13,5 +13,6 @@ namespace PriceCompareData.Entities.Common
         public const string WOOLWORTHS_ON_SPECIAL_PRODUCTS = "WoolworthsOnSpecialProducts";
         public const string WOOLWORTHS_LOWER_SHELF_PRODUCTS = "WoolworthsLowerShelfProducts";
         public const string WOOLWORTHS_EVERYDAY_LOW_PRICE_PRODUCTS = "WoolworthsEverydayLowPriceProducts";
+        public const string WOOLWORTHS_HALF_PRICE_PRODUCTS = "WoolworthsHalfPriceProducts";
     }
 }

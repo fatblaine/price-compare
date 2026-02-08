@@ -11,5 +11,6 @@ namespace PriceCompareData.Common
         public const int ON_SPECIAL = 1;
         public const int LOWER_SHELF = 2;
         public const int EVERYDAY_LOW_PRICE = 3;
+        public const int HALF_PRICE = 4;
     }
 }
