@@ -147,6 +147,22 @@ if (enableQuartzJobs)
             .WithIdentity("WwsLowerShelfDomJob-trigger")
             .WithCronSchedule("0 0 2 ? * WED"));
 
+        // scrape data - woolworths everyday low price (DOM)
+        var jobKeyWwsEverydayLow = new JobKey("WwsEverydayLowPriceDomJob");
+        q.AddJob<WwsEverydayLowPriceDomJob>(opts => opts.WithIdentity(jobKeyWwsEverydayLow));
+        q.AddTrigger(opts => opts
+            .ForJob(jobKeyWwsEverydayLow)
+            .WithIdentity("WwsEverydayLowPriceDomJob-trigger")
+            .WithCronSchedule("0 0 3 ? * WED"));
+
+        // scrape data - woolworths half price (DOM)
+        var jobKeyWwsHalfPrice = new JobKey("WwsHalfPriceDomJob");
+        q.AddJob<WwsHalfPriceDomJob>(opts => opts.WithIdentity(jobKeyWwsHalfPrice));
+        q.AddTrigger(opts => opts
+            .ForJob(jobKeyWwsHalfPrice)
+            .WithIdentity("WwsHalfPriceDomJob-trigger")
+            .WithCronSchedule("0 0 4 ? * WED"));
+
         // delete data
         var cleanJobKey = new JobKey("CleanPriceHistoryJob");
         q.AddJob<CleanPriceHistoryJob>(opts => opts.WithIdentity(cleanJobKey));
@@ -182,6 +198,8 @@ builder.Services.AddScoped<IColesSpecialScraperService, ColesSpecialScraperServi
 
 builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialScraperService>();
 builder.Services.AddScoped<IWoolworthsLowerShelfDomScraperService, WoolworthsLowerShelfDomScraperService>();
+builder.Services.AddScoped<IWoolworthsEverydayLowPriceDomScraperService, WoolworthsEverydayLowPriceDomScraperService>();
+builder.Services.AddScoped<IWoolworthsHalfPriceDomScraperService, WoolworthsHalfPriceDomScraperService>();
 
 builder.Services.AddScoped<ICategoryMappingService, CategoryMappingService>();
 
