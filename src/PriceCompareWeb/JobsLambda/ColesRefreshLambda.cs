@@ -16,7 +16,7 @@ namespace PriceCompareWeb.JobsLambda
 {
     public class ColesRefreshLambda
     {
-        private readonly IColesDownScraperService _scraper;
+        private readonly IColesDownDomScraperService _scraper;
 
         public ColesRefreshLambda()
         {
@@ -35,7 +35,7 @@ namespace PriceCompareWeb.JobsLambda
 
             // Logger factory
             var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-            var scraperLogger = loggerFactory.CreateLogger<ColesDownScraperService>();
+            var scraperLogger = loggerFactory.CreateLogger<ColesDownDomScraperService>();
             var mapperLogger = loggerFactory.CreateLogger<CategoryMappingService>();
             var exportLogger = loggerFactory.CreateLogger<ScrapeExportService>();
 
@@ -47,7 +47,7 @@ namespace PriceCompareWeb.JobsLambda
                 Options.Create(new ScrapeExportOptions { Enabled = false }),
                 exportLogger);
 
-            _scraper = new ColesDownScraperService(
+            _scraper = new ColesDownDomScraperService(
                 httpClient,
                 scraperLogger,
                 cache,
@@ -60,7 +60,7 @@ namespace PriceCompareWeb.JobsLambda
         // AWS Lambda handler
         public async Task Handler()
         {
-            await _scraper.GetAllDownDownProductsAsync(new ColesDownProductRequest());
+            await _scraper.ScrapeAsync(0, CancellationToken.None);
         }
     }
 }
