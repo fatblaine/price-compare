@@ -195,6 +195,7 @@ builder.Services.AddHttpClient<IColesDownScraperService, ColesDownScraperService
             TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
 builder.Services.AddScoped<IColesSpecialScraperService, ColesSpecialScraperService>();
+builder.Services.AddHttpClient<IColesDownDomScraperService, ColesDownDomScraperService>();
 
 builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialScraperService>();
 builder.Services.AddScoped<IWoolworthsLowerShelfDomScraperService, WoolworthsLowerShelfDomScraperService>();

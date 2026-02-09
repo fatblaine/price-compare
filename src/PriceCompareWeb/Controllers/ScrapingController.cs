@@ -15,6 +15,7 @@ namespace PriceCompareWeb.Controllers
     {
         private readonly IColesDownScraperService _scraperService;
         private readonly IColesSpecialScraperService _specialScraperService;
+        private readonly IColesDownDomScraperService _colesDownDomService;
         private readonly ILogger<ScrapingController> _logger;
         private readonly IWoolworthsSpecialScraperService _wscraperService;
         private readonly IWoolworthsLowerShelfDomScraperService _wwsLowerShelfDomService;
@@ -24,6 +25,7 @@ namespace PriceCompareWeb.Controllers
         public ScrapingController(IColesDownScraperService scraperService,
         ILogger<ScrapingController> logger,
         IColesSpecialScraperService specialScraperService,
+        IColesDownDomScraperService colesDownDomService,
         IWoolworthsSpecialScraperService wscraperService,
         IWoolworthsLowerShelfDomScraperService wwsLowerShelfDomService,
         IWoolworthsEverydayLowPriceDomScraperService wwsEverydayLowPriceDomService,
@@ -32,6 +34,7 @@ namespace PriceCompareWeb.Controllers
             _scraperService = scraperService;
             _logger = logger;
             _specialScraperService = specialScraperService;
+            _colesDownDomService = colesDownDomService;
             _wscraperService = wscraperService;
             _wwsLowerShelfDomService = wwsLowerShelfDomService;
             _wwsEverydayLowPriceDomService = wwsEverydayLowPriceDomService;
@@ -57,6 +60,25 @@ namespace PriceCompareWeb.Controllers
             {
                 _logger.LogError(ex, "Failed to get Down Down products");
                 return StatusCode(500, "Failed to get Down Down products");
+            }
+        }
+
+        [HttpGet("coles/down-down/dom")]
+        public async Task<IActionResult> GetDownDownDom([FromQuery] int limit = 0)
+        {
+            try
+            {
+                var products = await _colesDownDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
+                return Ok(new
+                {
+                    Count = products.Count,
+                    Products = products
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Coles down-down DOM products");
+                return StatusCode(500, "Failed to get Coles down-down DOM products");
             }
         }
 
