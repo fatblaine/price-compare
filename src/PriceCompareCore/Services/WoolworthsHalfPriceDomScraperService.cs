@@ -51,13 +51,13 @@ namespace PriceCompareCore.Services
             if (limit <= 0) limit = hardCap;
             if (limit > hardCap) limit = hardCap;
 
-            // var cached = await _cache.GetStringAsync(CacheKey.WOOLWORTHS_HALF_PRICE_PRODUCTS, ct);
-            // if (!string.IsNullOrWhiteSpace(cached))
-            // {
-            //     _logger.LogInformation("WWS DOM: returning cached half-price products.");
-            //     var cachedItems = JsonSerializer.Deserialize<List<WoolworthsSpecialProduct>>(cached) ?? new();
-            //     return cachedItems.Take(limit).ToList();
-            // }
+            var cached = await _cache.GetStringAsync(CacheKey.WOOLWORTHS_HALF_PRICE_PRODUCTS, ct);
+            if (!string.IsNullOrWhiteSpace(cached))
+            {
+                _logger.LogInformation("WWS DOM: returning cached half-price products.");
+                var cachedItems = JsonSerializer.Deserialize<List<WoolworthsSpecialProduct>>(cached) ?? new();
+                return cachedItems.Take(limit).ToList();
+            }
 
             var fetchLimit = hardCap;
 
