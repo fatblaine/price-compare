@@ -188,11 +188,17 @@ namespace PriceCompareCore.Services
             return allProducts;
         }
 
-        public async Task<List<PriceHistory>> GetPriceHistoryAsync(string name, int offerType, int shopType)
+        public async Task<List<PriceHistory>> GetPriceHistoryAsync(string name, int shopType, int? offerType = null)
         {
-            var since = DateTime.UtcNow.AddMonths(-1);
-            return await _dbContext.PriceHistory
-                .Where(p => p.Name == name && p.ScrapedAt >= since && p.OfferType == offerType && p.ShopType == shopType)
+            var query = _dbContext.PriceHistory
+                .Where(p => p.Name == name && p.ShopType == shopType);
+
+            if (offerType.HasValue)
+            {
+                query = query.Where(p => p.OfferType == offerType.Value);
+            }
+
+            return await query
                 .OrderBy(p => p.ScrapedAt)
                 .ToListAsync();
         }

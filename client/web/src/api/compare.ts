@@ -102,9 +102,12 @@ export interface PriceHistoryPoint {
 export async function fetchPriceHistory(
 	name: string,
 	shopType: number,
-	offerType: number,
+	offerType?: number,
 ): Promise<PriceHistoryPoint[]> {
-	const params = { name, shopType, offerType };
+	const params: any = { name, shopType };
+	if (offerType != null && Number.isFinite(offerType)) {
+		params.offerType = offerType;
+	}
 	const url = `${API_BASE}/api/Scraping/priceHistory`;
 	const res = await axios.get(url, { params });
 	const arr = Array.isArray(res.data) ? res.data : [];
@@ -120,23 +123,15 @@ export async function fetchMergedHistory(
 	name: string,
 	shopType: number,
 ): Promise<PriceHistoryPoint[]> {
-	const requests = [0, 1, 2].map((offerType) =>
-		fetchPriceHistory(name, shopType, offerType),
-	);
-	const settled = await Promise.allSettled(requests);
-	const list: PriceHistoryPoint[] = [];
-	for (const result of settled) {
-		if (result.status === "fulfilled") {
-			list.push(...result.value);
-		}
-	}
+	const list = await fetchPriceHistory(name, shopType);
 	// dedupe by timestamp; keep the lowest price for the same timestamp
 	const map = new Map<string, number>();
 	for (const p of list) {
 		const key = p.scrapedAt;
 		const existing = map.get(key);
-		if (existing == null || p.currentPrice < existing)
+		if (existing == null || p.currentPrice < existing) {
 			map.set(key, p.currentPrice);
+		}
 	}
 	return Array.from(map.entries())
 		.map(([scrapedAt, currentPrice]) => ({ scrapedAt, currentPrice }))
