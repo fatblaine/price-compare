@@ -184,11 +184,11 @@ namespace PriceCompareWeb.Controllers
         }
 
         [HttpGet("priceHistory")]
-        public async Task<IActionResult> GetPriceHistory([FromQuery] string name, [FromQuery] int offerType, [FromQuery] int shopType)
+        public async Task<IActionResult> GetPriceHistory([FromQuery] string name, [FromQuery] int shopType, [FromQuery] int? offerType = null)
         {
             try
             {
-                var history = await _scraperService.GetPriceHistoryAsync(name, offerType, shopType);
+                var history = await _scraperService.GetPriceHistoryAsync(name, shopType, offerType);
                 return Ok(history);
             }
             catch (Exception ex)
