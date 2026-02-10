@@ -9,6 +9,7 @@ export interface ProductRow {
 	shopType?: number | string | null;
 	sizeValue?: number | null;
 	sizeUnit?: string | null;
+	imageUrl?: string | null;
 	// Combined size string for display, e.g. "500 g" or "2 L"
 	size?: string | null;
 }
@@ -36,8 +37,10 @@ export async function fetchProducts(
 	const rawItems: ProductRow[] = data.products ?? data.Products ?? [];
 	// Build combined size field on the client for compatibility with different backends
 	const items: ProductRow[] = rawItems.map((it) => {
+		const imageUrl =
+			(it as any).imageUrl ?? (it as any).ImageUrl ?? it.imageUrl ?? null;
 		const sizeExisting = (it as any).size ?? (it as any).Size;
-		if (sizeExisting) return { ...it, size: sizeExisting };
+		if (sizeExisting) return { ...it, imageUrl, size: sizeExisting };
 
 		const v = it.sizeValue;
 		const u = it.sizeUnit;
@@ -50,7 +53,7 @@ export async function fetchProducts(
 		} else if (u != null) {
 			size = u;
 		}
-		return { ...it, size };
+		return { ...it, imageUrl, size };
 	});
 	const total: number = data.count ?? data.Count ?? 0;
 
