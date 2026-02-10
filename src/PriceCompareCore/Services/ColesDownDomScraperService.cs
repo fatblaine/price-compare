@@ -240,7 +240,6 @@ namespace PriceCompareCore.Services
 
                 var priceHistory = new PriceHistory
                 {
-                    Id = product.Id,
                     Name = product.Name,
                     ImageUrl = product.ImageUrl ?? string.Empty,
                     CurrentPrice = product.CurrentPrice,

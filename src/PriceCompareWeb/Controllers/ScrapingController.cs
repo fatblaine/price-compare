@@ -42,6 +42,7 @@ namespace PriceCompareWeb.Controllers
         }
 
         [HttpGet("coles/down-down/all")]
+        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> GetDownDownProducts([FromQuery] ColesDownProductRequest request, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
@@ -105,6 +106,7 @@ namespace PriceCompareWeb.Controllers
         }
 
         [HttpGet("woolworths/on-special/deprecation")]
+        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> GetWoolworthsOnSpecialProducts([FromQuery] WoolworthsSpecialProductRequest request, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
         {
             try
