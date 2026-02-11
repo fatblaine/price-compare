@@ -18,9 +18,9 @@ using PriceCompareData.Entities.History;
 
 namespace PriceCompareCore.Services
 {
-    public class ColesDownDomScraperService : IColesDownDomScraperService
+    public class ColesDeliDomScraperService : IColesDeliDomScraperService
     {
-        private const string DefaultDataUrl = WebInfo.COLES_NEXT_DATA_BASE + "/en/browse/down-down.json?slug=down-down";
+        private const string DefaultDataUrl = WebInfo.COLES_NEXT_DATA_BASE + "/en/browse/deli.json?slug=deli";
         private const string BaseUrl = "https://www.coles.com.au";
         private const string ImageBase = "https://cdn.productimages.coles.com.au/productimages";
         private const string DefaultUa =
@@ -28,7 +28,7 @@ namespace PriceCompareCore.Services
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
         private readonly HttpClient _httpClient;
-        private readonly ILogger<ColesDownDomScraperService> _logger;
+        private readonly ILogger<ColesDeliDomScraperService> _logger;
         private readonly IDistributedCache _cache;
         private readonly AppDbContext _dbContext;
         private readonly IIngestionService _ingestion;
@@ -36,9 +36,9 @@ namespace PriceCompareCore.Services
 
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-        public ColesDownDomScraperService(
+        public ColesDeliDomScraperService(
             HttpClient httpClient,
-            ILogger<ColesDownDomScraperService> logger,
+            ILogger<ColesDeliDomScraperService> logger,
             IDistributedCache cache,
             AppDbContext dbContext,
             IIngestionService ingestion,
@@ -61,10 +61,10 @@ namespace PriceCompareCore.Services
             if (limit <= 0) limit = hardCap;
             if (limit > hardCap) limit = hardCap;
 
-            // var cached = await _cache.GetStringAsync(CacheKey.COLES_DOWNDOWN_DOM_PRODUCTS, ct);
+            // var cached = await _cache.GetStringAsync(CacheKey.COLES_DELI_DOM_PRODUCTS, ct);
             // if (!string.IsNullOrWhiteSpace(cached))
             // {
-            //     _logger.LogInformation("Coles JSON: returning cached down-down products.");
+            //     _logger.LogInformation("Coles JSON: returning cached deli products.");
             //     var cachedItems = JsonSerializer.Deserialize<List<ColesDownProduct>>(cached, JsonOptions) ?? new();
             //     return cachedItems.Take(limit).ToList();
             // }
@@ -98,7 +98,7 @@ namespace PriceCompareCore.Services
             _logger.LogInformation("Coles JSON: extracted {Count} products.", all.Count);
 
             await _cache.SetStringAsync(
-                CacheKey.COLES_DOWNDOWN_DOM_PRODUCTS,
+                CacheKey.COLES_DELI_DOM_PRODUCTS,
                 JsonSerializer.Serialize(all, JsonOptions),
                 new DistributedCacheEntryOptions
                 {
@@ -138,10 +138,10 @@ namespace PriceCompareCore.Services
             HashSet<string> seenNames)
         {
             var results = new List<ColesDownProduct>();
-            ColesDownApiResponse? dto;
+            ColesDeliApiResponse? dto;
             try
             {
-                dto = JsonSerializer.Deserialize<ColesDownApiResponse>(json, JsonOptions);
+                dto = JsonSerializer.Deserialize<ColesDeliApiResponse>(json, JsonOptions);
             }
             catch
             {
@@ -234,7 +234,7 @@ namespace PriceCompareCore.Services
                 var exists = _dbContext.PriceHistory.Any(ph =>
                     ph.Name == product.Name &&
                     ph.ShopType == ShopType.COLES &&
-                    ph.OfferType == OfferType.DOWN_DOWN &&
+                    ph.OfferType == OfferType.DELI &&
                     ph.ScrapedAt >= today &&
                     ph.ScrapedAt < today.AddDays(1));
 
@@ -244,7 +244,7 @@ namespace PriceCompareCore.Services
                     ImageUrl = product.ImageUrl ?? string.Empty,
                     CurrentPrice = product.CurrentPrice,
                     ScrapedAt = scrapedAt,
-                    OfferType = OfferType.DOWN_DOWN,
+                    OfferType = OfferType.DELI,
                     ShopType = ShopType.COLES
                 };
 
@@ -261,7 +261,7 @@ namespace PriceCompareCore.Services
             var productRows = _ingestion.MapColesDownProducts(products);
             await _export.ExportAsync(
                 new ScrapeExportRequest(
-                    "coles_down_json",
+                    "coles_deli_json",
                     scrapedAt,
                     priceHistoryRows,
                     productRows),
@@ -296,7 +296,7 @@ namespace PriceCompareCore.Services
             return Regex.IsMatch(url, pattern, RegexOptions.IgnoreCase);
         }
 
-        private static string BuildDisplayName(ColesDownApiProduct item)
+        private static string BuildDisplayName(ColesDeliApiProduct item)
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(item.Brand))
@@ -321,7 +321,7 @@ namespace PriceCompareCore.Services
             return NormalizeWhitespace(name);
         }
 
-        private static string BuildProductUrl(ColesDownApiProduct item, string displayName, int id)
+        private static string BuildProductUrl(ColesDeliApiProduct item, string displayName, int id)
         {
             if (id <= 0)
             {
@@ -377,7 +377,7 @@ namespace PriceCompareCore.Services
 
         private static int GetMaxPages()
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_DOWNDOWN_MAX_PAGES");
+            var raw = Environment.GetEnvironmentVariable("COLES_DELI_MAX_PAGES");
             if (int.TryParse(raw, out var v) && v > 0)
             {
                 return v;
@@ -389,19 +389,19 @@ namespace PriceCompareCore.Services
 
         private static int GetMaxItems()
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_DOWNDOWN_MAX_ITEMS");
+            var raw = Environment.GetEnvironmentVariable("COLES_DELI_MAX_ITEMS");
             if (int.TryParse(raw, out var v) && v > 0)
             {
                 return v;
             }
 
             raw = Environment.GetEnvironmentVariable("COLES_DOM_MAX_ITEMS");
-            return int.TryParse(raw, out v) && v > 0 ? v : 1000;
+            return int.TryParse(raw, out v) && v > 0 ? v : 3000;
         }
 
         private static string GetDataUrl()
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_DOWNDOWN_DATA_URL");
+            var raw = Environment.GetEnvironmentVariable("COLES_DELI_DATA_URL");
             return string.IsNullOrWhiteSpace(raw) ? DefaultDataUrl : raw.Trim();
         }
 
@@ -411,22 +411,22 @@ namespace PriceCompareCore.Services
             return string.IsNullOrWhiteSpace(raw) ? DefaultUa : raw.Trim();
         }
 
-        private class ColesDownApiResponse
+        private class ColesDeliApiResponse
         {
-            public ColesDownPageProps? PageProps { get; set; }
+            public ColesDeliPageProps? PageProps { get; set; }
         }
 
-        private class ColesDownPageProps
+        private class ColesDeliPageProps
         {
-            public ColesDownSearchResults? SearchResults { get; set; }
+            public ColesDeliSearchResults? SearchResults { get; set; }
         }
 
-        private class ColesDownSearchResults
+        private class ColesDeliSearchResults
         {
-            public List<ColesDownApiProduct> Results { get; set; } = new();
+            public List<ColesDeliApiProduct> Results { get; set; } = new();
         }
 
-        private class ColesDownApiProduct
+        private class ColesDeliApiProduct
         {
             public string? _type { get; set; }
             public int Id { get; set; }
@@ -439,23 +439,23 @@ namespace PriceCompareCore.Services
             public string? Size { get; set; }
             public bool Availability { get; set; }
             public string? AvailabilityType { get; set; }
-            public List<ColesDownImageUri>? ImageUris { get; set; }
-            public ColesDownPricing? Pricing { get; set; }
+            public List<ColesDeliImageUri>? ImageUris { get; set; }
+            public ColesDeliPricing? Pricing { get; set; }
         }
 
-        private class ColesDownPricing
+        private class ColesDeliPricing
         {
             public decimal? Now { get; set; }
             public decimal? Was { get; set; }
             public decimal? SaveAmount { get; set; }
             public string? PriceDescription { get; set; }
-            public ColesDownUnit? Unit { get; set; }
+            public ColesDeliUnit? Unit { get; set; }
             public string? Comparable { get; set; }
             public string? PromotionType { get; set; }
             public bool? OnlineSpecial { get; set; }
         }
 
-        private class ColesDownUnit
+        private class ColesDeliUnit
         {
             public decimal? Quantity { get; set; }
             public decimal? OfMeasureQuantity { get; set; }
@@ -466,7 +466,7 @@ namespace PriceCompareCore.Services
             public bool? IsIncremental { get; set; }
         }
 
-        private class ColesDownImageUri
+        private class ColesDeliImageUri
         {
             public string? AltText { get; set; }
             public string? Type { get; set; }
