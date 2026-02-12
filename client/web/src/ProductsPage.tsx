@@ -378,6 +378,14 @@ export default function ProductsPage() {
 												{priceText}
 											</Typography>
 										</Box>
+										{row.promoText && (
+											<Typography
+												variant="caption"
+												sx={{ mt: 0.4, color: accent, fontWeight: 600 }}
+											>
+												Promo: {row.promoText}
+											</Typography>
+										)}
 										<Divider />
 										<Stack spacing={0.3}>
 											<Typography variant="body2" color="text.secondary">

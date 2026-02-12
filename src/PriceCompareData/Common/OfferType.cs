@@ -31,5 +31,6 @@ namespace PriceCompareData.Common
         public const int BIG_PACK_VALUE = 21;
         public const int BONUS_CREDIT_PRODUCTS = 22;
         public const int DELIVER_MORE_RANGE = 23;
+        public const int BUY_MORE_SAVE_MORE = 24;
     }
 }

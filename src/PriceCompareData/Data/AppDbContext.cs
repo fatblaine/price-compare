@@ -46,6 +46,11 @@ namespace PriceCompareData.Data
                   modelBuilder.Entity<Product>()
                       .HasIndex(p => new { p.CategoryId, p.SizeUnit, p.SizeValue });
 
+                  // PriceHistory
+                  modelBuilder.Entity<PriceHistory>()
+                      .Property(p => p.PromoText)
+                      .HasColumnName("promotext");
+
                   // JobDefinition
                   modelBuilder.Entity<JobDefinition>(entity =>
                   {
