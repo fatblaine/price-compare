@@ -97,7 +97,8 @@ namespace PriceCompareCore.Services
                 "imageurl",
                 "scrapedat",
                 "offertype",
-                "shoptype"
+                "shoptype",
+                "promotext"
             };
 
             await using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
@@ -114,7 +115,8 @@ namespace PriceCompareCore.Services
                     row.ImageUrl ?? string.Empty,
                     row.ScrapedAt.ToString("O", CultureInfo.InvariantCulture),
                     row.OfferType?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
-                    row.ShopType?.ToString(CultureInfo.InvariantCulture) ?? string.Empty
+                    row.ShopType?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                    row.PromoText ?? string.Empty
                 };
 
                 await CsvWriter.WriteRowAsync(writer, fields, ct);

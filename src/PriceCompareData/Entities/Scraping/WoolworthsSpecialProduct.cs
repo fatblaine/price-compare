@@ -23,6 +23,7 @@ namespace PriceCompareData.Entities.Scraping
         public string CupString { get; set; }
 
         public string LargeImageFile { get; set; }
+        public string? PromoText { get; set; }
 
         public DateTime ScrapedAt { get; set; } = DateTime.UtcNow;
     }

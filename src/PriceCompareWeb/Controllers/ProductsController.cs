@@ -63,7 +63,7 @@ namespace PriceCompareWeb.Controllers
                     .Distinct()
                     .ToList();
 
-                var priceMap = new System.Collections.Generic.Dictionary<(string Name, int ShopType), decimal?>();
+                var priceMap = new System.Collections.Generic.Dictionary<(string Name, int ShopType), (decimal? Price, string? PromoText)>();
                 if (includePrice && names.Count > 0 && shopTypes.Count > 0)
                 {
                     try
@@ -76,23 +76,25 @@ namespace PriceCompareWeb.Controllers
                                          && ph.ShopType.HasValue
                                          && shopTypes.Contains(ph.ShopType!.Value))
                             .GroupBy(ph => new { ph.Name, ph.ShopType })
-                            .Select(g => new
-                            {
-                                g.Key.Name,
-                                g.Key.ShopType,
-                                CurrentPrice = g
-                                    .OrderByDescending(x => x.ScrapedAt)
-                                    .Select(x => (decimal?)x.CurrentPrice)
-                                    .FirstOrDefault()
-                            })
+                            .Select(g => g
+                                .OrderByDescending(x => x.ScrapedAt)
+                                .Select(x => new
+                                {
+                                    x.Name,
+                                    x.ShopType,
+                                    CurrentPrice = (decimal?)x.CurrentPrice,
+                                    x.PromoText
+                                })
+                                .FirstOrDefault())
                             .ToListAsync(cts.Token);
 
                         _logger.LogInformation("PriceHistory rows={Count}", latestPrices.Count);
 
                         priceMap = latestPrices
+                            .Where(k => k != null && k.Name != null && k.ShopType.HasValue)
                             .ToDictionary(
-                                k => (Name: k.Name!, ShopType: k.ShopType!.GetValueOrDefault()),
-                                v => v.CurrentPrice
+                                k => (Name: k!.Name!, ShopType: k!.ShopType!.GetValueOrDefault()),
+                                v => (v!.CurrentPrice, v.PromoText)
                             );
                     }
                     catch (OperationCanceledException ex)
@@ -115,8 +117,12 @@ namespace PriceCompareWeb.Controllers
                     brand = p.Brand,
                     imageUrl = p.ImageUrl,
                     price = (p.Name != null && p.ShopType.HasValue
-                        && priceMap.TryGetValue((p.Name, p.ShopType.Value), out var price)
-                        ? price
+                        && priceMap.TryGetValue((p.Name, p.ShopType.Value), out var info)
+                        ? info.Price
+                        : null),
+                    promoText = (p.Name != null && p.ShopType.HasValue
+                        && priceMap.TryGetValue((p.Name, p.ShopType.Value), out var promo)
+                        ? promo.PromoText
                         : null)
                 }).ToList();
 

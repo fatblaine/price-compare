@@ -6,6 +6,7 @@ export interface ProductRow {
 	productId: string;
 	name: string;
 	price?: number;
+	promoText?: string | null;
 	shopType?: number | string | null;
 	sizeValue?: number | null;
 	sizeUnit?: string | null;
@@ -39,8 +40,10 @@ export async function fetchProducts(
 	const items: ProductRow[] = rawItems.map((it) => {
 		const imageUrl =
 			(it as any).imageUrl ?? (it as any).ImageUrl ?? it.imageUrl ?? null;
+		const promoText =
+			(it as any).promoText ?? (it as any).PromoText ?? it.promoText ?? null;
 		const sizeExisting = (it as any).size ?? (it as any).Size;
-		if (sizeExisting) return { ...it, imageUrl, size: sizeExisting };
+		if (sizeExisting) return { ...it, imageUrl, size: sizeExisting, promoText };
 
 		const v = it.sizeValue;
 		const u = it.sizeUnit;
@@ -53,7 +56,7 @@ export async function fetchProducts(
 		} else if (u != null) {
 			size = u;
 		}
-		return { ...it, imageUrl, size };
+		return { ...it, imageUrl, size, promoText };
 	});
 	const total: number = data.count ?? data.Count ?? 0;
 
