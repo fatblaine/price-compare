@@ -1,15 +1,15 @@
-using System.Threading;
 using System.Threading.Tasks;
 using PriceCompareCore.Interfaces;
 using Quartz;
+using System.Threading;
 
 namespace PriceCompareCore.Jobs
 {
-    public class ColesRefreshJob : IJob
+    public class ColesBigPackValueDomJob : IJob
     {
-        private readonly IColesDownDomScraperService _scraperService;
+        private readonly IColesBigPackValueDomScraperService _scraperService;
 
-        public ColesRefreshJob(IColesDownDomScraperService scraperService)
+        public ColesBigPackValueDomJob(IColesBigPackValueDomScraperService scraperService)
         {
             _scraperService = scraperService;
         }

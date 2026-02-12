@@ -5,11 +5,11 @@ using Quartz;
 
 namespace PriceCompareCore.Jobs
 {
-    public class ColesRefreshJob : IJob
+    public class ColesPantryDomJob : IJob
     {
-        private readonly IColesDownDomScraperService _scraperService;
+        private readonly IColesPantryDomScraperService _scraperService;
 
-        public ColesRefreshJob(IColesDownDomScraperService scraperService)
+        public ColesPantryDomJob(IColesPantryDomScraperService scraperService)
         {
             _scraperService = scraperService;
         }
