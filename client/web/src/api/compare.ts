@@ -97,6 +97,7 @@ export async function fetchCompareMatches(
 export interface PriceHistoryPoint {
 	scrapedAt: string; // ISO date time
 	currentPrice: number;
+	promoText?: string | null;
 }
 
 export async function fetchPriceHistory(
@@ -115,15 +116,30 @@ export async function fetchPriceHistory(
 		.map((it: any) => ({
 			scrapedAt: read<string>(it, "scrapedAt", "ScrapedAt")!,
 			currentPrice: Number(read<number>(it, "currentPrice", "CurrentPrice")),
+			promoText: read<string | null>(it, "promoText", "PromoText") ?? null,
 		}))
 		.filter((p) => p.scrapedAt && Number.isFinite(p.currentPrice));
+}
+
+export interface MergedHistoryResult {
+	points: PriceHistoryPoint[];
+	latestPromoText?: string | null;
+}
+
+function getLatestPromoText(list: PriceHistoryPoint[]): string | null {
+	for (let i = list.length - 1; i >= 0; i--) {
+		const candidate = list[i]?.promoText;
+		if (candidate && candidate.trim()) return candidate;
+	}
+	return null;
 }
 
 export async function fetchMergedHistory(
 	name: string,
 	shopType: number,
-): Promise<PriceHistoryPoint[]> {
+): Promise<MergedHistoryResult> {
 	const list = await fetchPriceHistory(name, shopType);
+	const latestPromoText = getLatestPromoText(list);
 	// dedupe by timestamp; keep the lowest price for the same timestamp
 	const map = new Map<string, number>();
 	for (const p of list) {
@@ -133,12 +149,13 @@ export async function fetchMergedHistory(
 			map.set(key, p.currentPrice);
 		}
 	}
-	return Array.from(map.entries())
+	const points = Array.from(map.entries())
 		.map(([scrapedAt, currentPrice]) => ({ scrapedAt, currentPrice }))
 		.sort(
 			(x, y) =>
 				new Date(x.scrapedAt).getTime() - new Date(y.scrapedAt).getTime(),
 		);
+	return { points, latestPromoText };
 }
 
 export interface PairedSeriesPoint {
@@ -147,10 +164,16 @@ export interface PairedSeriesPoint {
 	target?: number | null;
 }
 
+export interface PairedSeriesResult {
+	series: PairedSeriesPoint[];
+	sourcePromoText?: string | null;
+	targetPromoText?: string | null;
+}
+
 export async function buildPairedSeries(
 	source: { name: string; shopType: number },
 	target: { name: string; shopType: number },
-): Promise<PairedSeriesPoint[]> {
+): Promise<PairedSeriesResult> {
 	const [srcHist, tgtHist] = await Promise.all([
 		fetchMergedHistory(source.name, source.shopType),
 		fetchMergedHistory(target.name, target.shopType),
@@ -167,14 +190,19 @@ export async function buildPairedSeries(
 			byDay.set(label, slot);
 		}
 	};
-	add(srcHist, "source");
-	add(tgtHist, "target");
+	add(srcHist.points, "source");
+	add(tgtHist.points, "target");
 
-	return Array.from(byDay.entries())
+	const series = Array.from(byDay.entries())
 		.map(([date, v]) => ({
 			date,
 			source: v.source ?? null,
 			target: v.target ?? null,
 		}))
 		.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+	return {
+		series,
+		sourcePromoText: srcHist.latestPromoText ?? null,
+		targetPromoText: tgtHist.latestPromoText ?? null,
+	};
 }

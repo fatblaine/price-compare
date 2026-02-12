@@ -40,6 +40,7 @@ namespace PriceCompareWeb.Controllers
         private readonly IWoolworthsLowerShelfDomScraperService _wwsLowerShelfDomService;
         private readonly IWoolworthsEverydayLowPriceDomScraperService _wwsEverydayLowPriceDomService;
         private readonly IWoolworthsHalfPriceDomScraperService _wwsHalfPriceDomService;
+        private readonly IWoolworthsBuyMoreSaveMoreDomScraperService _wwsBuyMoreSaveMoreDomService;
 
         public ScrapingController(IColesDownScraperService scraperService,
         ILogger<ScrapingController> logger,
@@ -67,7 +68,8 @@ namespace PriceCompareWeb.Controllers
         IWoolworthsSpecialScraperService wscraperService,
         IWoolworthsLowerShelfDomScraperService wwsLowerShelfDomService,
         IWoolworthsEverydayLowPriceDomScraperService wwsEverydayLowPriceDomService,
-        IWoolworthsHalfPriceDomScraperService wwsHalfPriceDomService)
+        IWoolworthsHalfPriceDomScraperService wwsHalfPriceDomService,
+        IWoolworthsBuyMoreSaveMoreDomScraperService wwsBuyMoreSaveMoreDomScraperService)
         {
             _scraperService = scraperService;
             _logger = logger;
@@ -96,6 +98,7 @@ namespace PriceCompareWeb.Controllers
             _wwsLowerShelfDomService = wwsLowerShelfDomService;
             _wwsEverydayLowPriceDomService = wwsEverydayLowPriceDomService;
             _wwsHalfPriceDomService = wwsHalfPriceDomService;
+            _wwsBuyMoreSaveMoreDomService = wwsBuyMoreSaveMoreDomScraperService;
         }
 
         [HttpGet("coles/down-down/all")]
@@ -601,6 +604,25 @@ namespace PriceCompareWeb.Controllers
             {
                 _logger.LogError(ex, "Failed to get Woolworths half-price DOM products");
                 return StatusCode(500, "Failed to get Woolworths half-price DOM products");
+            }
+        }
+
+        [HttpGet("woolworths/buy-more-save-more/dom")]
+        public async Task<IActionResult> GetWoolworthsBuyMoreSaveMoreDom([FromQuery] int limit = 0)
+        {
+            try
+            {
+                var products = await _wwsBuyMoreSaveMoreDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
+                return Ok(new
+                {
+                    Count = products.Count,
+                    Products = products
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Woolworths buy-more-save-more DOM products");
+                return StatusCode(500, "Failed to get Woolworths buy-more-save-more DOM products");
             }
         }
 

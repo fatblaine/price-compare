@@ -268,19 +268,19 @@ namespace PriceCompareWeb.Services
 
         private static async Task WritePriceHistoryBatchAsync(StreamWriter writer, IReadOnlyList<PriceHistoryRow> batch, CancellationToken ct)
         {
-            await writer.WriteLineAsync("INSERT INTO pricehistory (name, currentprice, imageurl, scrapedat, offertype, shoptype)");
-            await writer.WriteLineAsync("SELECT v.name, v.currentprice, v.imageurl, v.scrapedat, v.offertype, v.shoptype");
+            await writer.WriteLineAsync("INSERT INTO pricehistory (name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext)");
+            await writer.WriteLineAsync("SELECT v.name, v.currentprice, v.imageurl, v.scrapedat, v.offertype, v.shoptype, v.promotext");
             await writer.WriteLineAsync("FROM (VALUES");
 
             for (var i = 0; i < batch.Count; i++)
             {
                 var row = batch[i];
-                var line = $"  ({Sql.Text(row.Name, false)}, {Sql.Decimal(row.CurrentPrice)}, {Sql.Text(row.ImageUrl, false)}, {Sql.Timestamp(row.ScrapedAt)}, {Sql.Int(row.OfferType)}, {Sql.Int(row.ShopType)})";
+                var line = $"  ({Sql.Text(row.Name, false)}, {Sql.Decimal(row.CurrentPrice)}, {Sql.Text(row.ImageUrl, false)}, {Sql.Timestamp(row.ScrapedAt)}, {Sql.Int(row.OfferType)}, {Sql.Int(row.ShopType)}, {Sql.Text(row.PromoText, true)})";
                 line += i == batch.Count - 1 ? string.Empty : ",";
                 await writer.WriteLineAsync(line);
             }
 
-            await writer.WriteLineAsync(") AS v(name, currentprice, imageurl, scrapedat, offertype, shoptype)");
+            await writer.WriteLineAsync(") AS v(name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext)");
             await writer.WriteLineAsync("WHERE NOT EXISTS (");
             await writer.WriteLineAsync("  SELECT 1 FROM pricehistory ph");
             await writer.WriteLineAsync("  WHERE ph.name = v.name");
@@ -412,17 +412,25 @@ namespace PriceCompareWeb.Services
             string ImageUrl,
             DateTime ScrapedAt,
             int? OfferType,
-            int? ShopType)
+            int? ShopType,
+            string? PromoText)
         {
             public static PriceHistoryRow FromCsv(IReadOnlyList<string> values, IReadOnlyDictionary<string, int> map)
             {
+                string? promoText = null;
+                if (map.TryGetValue("promotext", out var idx) && idx >= 0 && idx < values.Count)
+                {
+                    promoText = values[idx];
+                }
+
                 return new PriceHistoryRow(
                     Csv.Get(values, map, "name", required: true),
                     Csv.Decimal(values, map, "currentprice"),
                     Csv.Get(values, map, "imageurl", required: true),
                     Csv.Timestamp(values, map, "scrapedat"),
                     Csv.Int(values, map, "offertype"),
-                    Csv.Int(values, map, "shoptype"));
+                    Csv.Int(values, map, "shoptype"),
+                    string.IsNullOrWhiteSpace(promoText) ? null : promoText);
             }
         }
 

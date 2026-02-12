@@ -135,6 +135,10 @@ export default function CompareDialog(props: CompareDialogProps) {
 
 	const [seriesLoading, setSeriesLoading] = React.useState(false);
 	const [series, setSeries] = React.useState<PairedSeriesPoint[]>([]);
+	const [promoText, setPromoText] = React.useState<{
+		source?: string | null;
+		target?: string | null;
+	}>({});
 	const fallbackTargetShop = React.useMemo(() => {
 		if (!source) return undefined;
 		return source.shopType === ShopTypes.COLES
@@ -150,24 +154,34 @@ export default function CompareDialog(props: CompareDialogProps) {
 		async function run() {
 			if (!source) {
 				setSeries([]);
+				setPromoText({});
 				return;
 			}
 			setSeriesLoading(true);
 			try {
 				if (!selectedTarget) {
 					const hist = await fetchMergedHistory(source.name, source.shopType);
-					const onlySource = hist.map((p) => ({
+					const onlySource = hist.points.map((p) => ({
 						date: new Date(p.scrapedAt).toLocaleDateString(),
 						source: p.currentPrice,
 						target: null,
 					}));
-					if (!cancelled) setSeries(onlySource);
+					if (!cancelled) {
+						setSeries(onlySource);
+						setPromoText({ source: hist.latestPromoText ?? null, target: null });
+					}
 				} else {
 					const s = await buildPairedSeries(
 						{ name: source.name, shopType: source.shopType },
 						{ name: selectedTarget.name, shopType: selectedTarget.shopType },
 					);
-					if (!cancelled) setSeries(s);
+					if (!cancelled) {
+						setSeries(s.series);
+						setPromoText({
+							source: s.sourcePromoText ?? null,
+							target: s.targetPromoText ?? null,
+						});
+					}
 				}
 			} finally {
 				if (!cancelled) setSeriesLoading(false);
@@ -312,6 +326,20 @@ export default function CompareDialog(props: CompareDialogProps) {
 								</Typography>
 								<Chip label="AUD" size="small" />
 							</Stack>
+							{(promoText.source || promoText.target) && (
+								<Stack spacing={0.5} sx={{ mb: 1 }}>
+									{promoText.source && (
+										<Typography variant="caption" color="text.secondary">
+											Source promo: {promoText.source}
+										</Typography>
+									)}
+									{promoText.target && (
+										<Typography variant="caption" color="text.secondary">
+											Target promo: {promoText.target}
+										</Typography>
+									)}
+								</Stack>
+							)}
 							<Box sx={{ width: "100%", height: 280 }}>
 								{seriesLoading ? (
 									<Stack
