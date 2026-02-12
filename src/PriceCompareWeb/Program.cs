@@ -133,8 +133,6 @@ if (enableQuartzJobs)
             .WithCronSchedule("0 30 17 ? * MON", x => x.InTimeZone(localTz)));
 
         // scrape data - coles on special (no scheduled trigger)
-        var jobKeySpecial = new JobKey("ColesRefreshJobSpecial");
-        q.AddJob<ColesRefreshJobSpecial>(opts => opts.WithIdentity(jobKeySpecial));
 
         // scrape data - woolworths lower shelf price (DOM)
         var jobKeyWwsLowerShelf = new JobKey("WwsLowerShelfDomJob");
