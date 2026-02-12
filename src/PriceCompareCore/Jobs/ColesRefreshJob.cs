@@ -1,8 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
+using PriceCompareCore.Interfaces;
 using Quartz;
 
-namespace PriceCompareCore.Interfaces
+namespace PriceCompareCore.Jobs
 {
     public class ColesRefreshJob : IJob
     {
