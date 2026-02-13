@@ -291,6 +291,18 @@ namespace PriceCompareWeb.Services
             await writer.WriteLineAsync("  AND ph.offertype IS NOT DISTINCT FROM v.offertype");
             await writer.WriteLineAsync("  AND ph.scrapedat::date = v.scrapedat::date;");
             await writer.WriteLineAsync();
+            await writer.WriteLineAsync("WITH v(name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext) AS (");
+            await writer.WriteLineAsync("  VALUES");
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var row = batch[i];
+                var line = $"  ({Sql.Text(row.Name, false)}, {Sql.Decimal(row.CurrentPrice)}, {Sql.Text(row.ImageUrl, false)}, {Sql.Timestamp(row.ScrapedAt)}, {Sql.Int(row.OfferType)}, {Sql.Int(row.ShopType)}, {Sql.Text(row.PromoText, true)})";
+                line += i == batch.Count - 1 ? string.Empty : ",";
+                await writer.WriteLineAsync(line);
+            }
+
+            await writer.WriteLineAsync(")");
             await writer.WriteLineAsync("INSERT INTO pricehistory (name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext)");
             await writer.WriteLineAsync("SELECT v.name, v.currentprice, v.imageurl, v.scrapedat, v.offertype, v.shoptype, v.promotext");
             await writer.WriteLineAsync("FROM v");
