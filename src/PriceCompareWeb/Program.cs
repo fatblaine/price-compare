@@ -350,6 +350,7 @@ builder.Services.AddScoped<IWoolworthsLowerShelfDomScraperService, WoolworthsLow
 builder.Services.AddScoped<IWoolworthsEverydayLowPriceDomScraperService, WoolworthsEverydayLowPriceDomScraperService>();
 builder.Services.AddScoped<IWoolworthsHalfPriceDomScraperService, WoolworthsHalfPriceDomScraperService>();
 builder.Services.AddScoped<IWoolworthsBuyMoreSaveMoreDomScraperService, WoolworthsBuyMoreSaveMoreDomScraperService>();
+builder.Services.AddScoped<IWoolworthsSummerPriceDomScraperService, WoolworthsSummerPriceDomScraperService>();
 
 builder.Services.AddScoped<ICategoryMappingService, CategoryMappingService>();
 

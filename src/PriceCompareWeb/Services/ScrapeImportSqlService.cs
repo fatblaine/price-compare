@@ -268,9 +268,8 @@ namespace PriceCompareWeb.Services
 
         private static async Task WritePriceHistoryBatchAsync(StreamWriter writer, IReadOnlyList<PriceHistoryRow> batch, CancellationToken ct)
         {
-            await writer.WriteLineAsync("INSERT INTO pricehistory (name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext)");
-            await writer.WriteLineAsync("SELECT v.name, v.currentprice, v.imageurl, v.scrapedat, v.offertype, v.shoptype, v.promotext");
-            await writer.WriteLineAsync("FROM (VALUES");
+            await writer.WriteLineAsync("WITH v(name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext) AS (");
+            await writer.WriteLineAsync("  VALUES");
 
             for (var i = 0; i < batch.Count; i++)
             {
@@ -280,7 +279,33 @@ namespace PriceCompareWeb.Services
                 await writer.WriteLineAsync(line);
             }
 
-            await writer.WriteLineAsync(") AS v(name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext)");
+            await writer.WriteLineAsync(")");
+            await writer.WriteLineAsync("UPDATE pricehistory ph");
+            await writer.WriteLineAsync("SET currentprice = v.currentprice,");
+            await writer.WriteLineAsync("    imageurl = v.imageurl,");
+            await writer.WriteLineAsync("    scrapedat = v.scrapedat,");
+            await writer.WriteLineAsync("    promotext = v.promotext");
+            await writer.WriteLineAsync("FROM v");
+            await writer.WriteLineAsync("WHERE ph.name = v.name");
+            await writer.WriteLineAsync("  AND ph.shoptype IS NOT DISTINCT FROM v.shoptype");
+            await writer.WriteLineAsync("  AND ph.offertype IS NOT DISTINCT FROM v.offertype");
+            await writer.WriteLineAsync("  AND ph.scrapedat::date = v.scrapedat::date;");
+            await writer.WriteLineAsync();
+            await writer.WriteLineAsync("WITH v(name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext) AS (");
+            await writer.WriteLineAsync("  VALUES");
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var row = batch[i];
+                var line = $"  ({Sql.Text(row.Name, false)}, {Sql.Decimal(row.CurrentPrice)}, {Sql.Text(row.ImageUrl, false)}, {Sql.Timestamp(row.ScrapedAt)}, {Sql.Int(row.OfferType)}, {Sql.Int(row.ShopType)}, {Sql.Text(row.PromoText, true)})";
+                line += i == batch.Count - 1 ? string.Empty : ",";
+                await writer.WriteLineAsync(line);
+            }
+
+            await writer.WriteLineAsync(")");
+            await writer.WriteLineAsync("INSERT INTO pricehistory (name, currentprice, imageurl, scrapedat, offertype, shoptype, promotext)");
+            await writer.WriteLineAsync("SELECT v.name, v.currentprice, v.imageurl, v.scrapedat, v.offertype, v.shoptype, v.promotext");
+            await writer.WriteLineAsync("FROM v");
             await writer.WriteLineAsync("WHERE NOT EXISTS (");
             await writer.WriteLineAsync("  SELECT 1 FROM pricehistory ph");
             await writer.WriteLineAsync("  WHERE ph.name = v.name");
