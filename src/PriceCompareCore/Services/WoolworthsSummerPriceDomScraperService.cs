@@ -17,21 +17,22 @@ using PriceCompareData.Entities.Scraping;
 
 namespace PriceCompareCore.Services
 {
-    public class WoolworthsBuyMoreSaveMoreDomScraperService : IWoolworthsBuyMoreSaveMoreDomScraperService
+    public class WoolworthsSummerPriceDomScraperService : IWoolworthsSummerPriceDomScraperService
     {
-        private const string BuyMoreSaveMoreUrl = "https://www.woolworths.com.au/shop/browse/specials/buy-more-save-more";
+        private const string SummerPriceUrl = "https://www.woolworths.com.au/shop/browse/specials/summer-price";
         private const string DefaultUa =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+        private const string SummerPricePromoText = "summer price";
 
-        private readonly ILogger<WoolworthsBuyMoreSaveMoreDomScraperService> _logger;
+        private readonly ILogger<WoolworthsSummerPriceDomScraperService> _logger;
         private readonly IDistributedCache _cache;
         private readonly AppDbContext _dbContext;
         private readonly IIngestionService _ingestion;
         private readonly IScrapeExportService _export;
 
-        public WoolworthsBuyMoreSaveMoreDomScraperService(
-            ILogger<WoolworthsBuyMoreSaveMoreDomScraperService> logger,
+        public WoolworthsSummerPriceDomScraperService(
+            ILogger<WoolworthsSummerPriceDomScraperService> logger,
             IDistributedCache cache,
             AppDbContext dbContext,
             IIngestionService ingestion,
@@ -50,10 +51,10 @@ namespace PriceCompareCore.Services
             if (limit <= 0) limit = hardCap;
             if (limit > hardCap) limit = hardCap;
 
-            var cached = await _cache.GetStringAsync(CacheKey.WOOLWORTHS_BUY_MORE_SAVE_MORE_PRODUCTS, ct);
+            var cached = await _cache.GetStringAsync(CacheKey.WOOLWORTHS_SUMMER_PRICE_PRODUCTS, ct);
             if (!string.IsNullOrWhiteSpace(cached))
             {
-                _logger.LogInformation("WWS DOM: returning cached buy-more-save-more products.");
+                _logger.LogInformation("WWS DOM: returning cached summer-price products.");
                 var cachedItems = JsonSerializer.Deserialize<List<WoolworthsSpecialProduct>>(cached) ?? new();
                 return cachedItems.Take(limit).ToList();
             }
@@ -103,8 +104,8 @@ namespace PriceCompareCore.Services
 
             for (var pageNumber = startPage; pageNumber <= maxPages && domItems.Count < fetchLimit; pageNumber++)
             {
-                var url = BuildBuyMoreSaveMoreUrl(pageNumber);
-                _logger.LogInformation("WWS DOM: goto buy-more-save-more page {Page}...", pageNumber);
+                var url = BuildSummerPriceUrl(pageNumber);
+                _logger.LogInformation("WWS DOM: goto summer-price page {Page}...", pageNumber);
                 await page.GotoAsync(url, new PageGotoOptions
                 {
                     WaitUntil = WaitUntilState.DOMContentLoaded,
@@ -157,7 +158,7 @@ namespace PriceCompareCore.Services
 
             var serialized = JsonSerializer.Serialize(mapped);
             await _cache.SetStringAsync(
-                CacheKey.WOOLWORTHS_BUY_MORE_SAVE_MORE_PRODUCTS,
+                CacheKey.WOOLWORTHS_SUMMER_PRICE_PRODUCTS,
                 serialized,
                 new DistributedCacheEntryOptions
                 {
@@ -188,7 +189,7 @@ namespace PriceCompareCore.Services
                 var existing = _dbContext.PriceHistory.FirstOrDefault(ph =>
                     ph.Name == product.DisplayName &&
                     ph.ShopType == ShopType.WOOLWORTHS &&
-                    ph.OfferType == OfferType.BUY_MORE_SAVE_MORE &&
+                    ph.OfferType == OfferType.SUMMER_PRICE &&
                     ph.ScrapedAt >= today &&
                     ph.ScrapedAt < today.AddDays(1));
 
@@ -198,9 +199,9 @@ namespace PriceCompareCore.Services
                     ImageUrl = product.LargeImageFile ?? string.Empty,
                     CurrentPrice = product.Price,
                     ScrapedAt = scrapedAt,
-                    OfferType = OfferType.BUY_MORE_SAVE_MORE,
+                    OfferType = OfferType.SUMMER_PRICE,
                     ShopType = ShopType.WOOLWORTHS,
-                    PromoText = product.PromoText
+                    PromoText = SummerPricePromoText
                 };
 
                 priceHistoryRows.Add(priceHistory);
@@ -209,10 +210,9 @@ namespace PriceCompareCore.Services
                 {
                     _dbContext.PriceHistory.Add(priceHistory);
                 }
-                else if (!string.IsNullOrWhiteSpace(product.PromoText) &&
-                         string.IsNullOrWhiteSpace(existing.PromoText))
+                else if (!string.Equals(existing.PromoText, SummerPricePromoText, StringComparison.OrdinalIgnoreCase))
                 {
-                    existing.PromoText = product.PromoText;
+                    existing.PromoText = SummerPricePromoText;
                 }
             }
 
@@ -221,7 +221,7 @@ namespace PriceCompareCore.Services
             var productRows = _ingestion.MapWoolworthsProducts(products);
             await _export.ExportAsync(
                 new ScrapeExportRequest(
-                    "woolworths_buy_more_save_more",
+                    "woolworths_summer_price",
                     scrapedAt,
                     priceHistoryRows,
                     productRows),
@@ -245,7 +245,6 @@ namespace PriceCompareCore.Services
                 {
                     continue;
                 }
-
                 var savings = (was.HasValue && price.HasValue && was.Value > price.Value)
                     ? was.Value - price.Value
                     : (decimal?)null;
@@ -263,7 +262,7 @@ namespace PriceCompareCore.Services
                     CupPrice = null,
                     CupString = null,
                     LargeImageFile = item.Image,
-                    PromoText = item.PromoText,
+                    PromoText = SummerPricePromoText,
                     ScrapedAt = scrapedAt
                 });
             }
@@ -312,35 +311,6 @@ namespace PriceCompareCore.Services
             return segment.StartsWith("$", StringComparison.OrdinalIgnoreCase) ? segment : "$" + segment;
         }
 
-        private static string? ExtractPromoFromAria(string? aria)
-        {
-            if (string.IsNullOrWhiteSpace(aria))
-            {
-                return null;
-            }
-
-            var endMarker = ". Non-member price";
-            var end = aria.IndexOf(endMarker, StringComparison.OrdinalIgnoreCase);
-            if (end < 0)
-            {
-                return null;
-            }
-
-            var start = aria.IndexOf(". ", StringComparison.Ordinal);
-            if (start < 0 || start + 2 >= end)
-            {
-                return null;
-            }
-
-            var segment = aria.Substring(start + 2, end - (start + 2)).Trim();
-            if (string.IsNullOrWhiteSpace(segment))
-            {
-                return null;
-            }
-
-            return segment.Trim().Trim('.', ',', ';');
-        }
-
         private static async Task<List<DomProduct>> ExtractDomItemsAsync(
             IPage page,
             int limit,
@@ -349,7 +319,6 @@ namespace PriceCompareCore.Services
             int maxRounds)
         {
             var results = new List<DomProduct>();
-            var localIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             var locator = page.Locator("a[href*='/shop/productdetails/'][aria-label]");
             var stableRounds = 0;
@@ -375,7 +344,12 @@ namespace PriceCompareCore.Services
 
                     var fullHref = href.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                         ? href
-                        : new Uri(new Uri(BuyMoreSaveMoreUrl), href).ToString();
+                        : new Uri(new Uri(SummerPriceUrl), href).ToString();
+
+                    if (!seen.Add(fullHref))
+                    {
+                        continue;
+                    }
 
                     var aria = (await anchor.GetAttributeAsync("aria-label")) ?? string.Empty;
                     if (!IsProductAria(aria))
@@ -398,33 +372,13 @@ namespace PriceCompareCore.Services
                                 ?? string.Empty;
                     }
 
-                    var promoText = ExtractPromoFromAria(aria);
-                    if (localIndex.TryGetValue(fullHref, out var localIdx))
-                    {
-                        var existing = results[localIdx];
-                        if (!string.IsNullOrWhiteSpace(promoText) &&
-                            string.IsNullOrWhiteSpace(existing.PromoText))
-                        {
-                            existing.PromoText = promoText;
-                        }
-
-                        continue;
-                    }
-
-                    if (!seen.Add(fullHref))
-                    {
-                        continue;
-                    }
-
                     results.Add(new DomProduct
                     {
                         Name = name,
                         Href = fullHref,
                         Image = image,
-                        Aria = aria,
-                        PromoText = promoText
+                        Aria = aria
                     });
-                    localIndex[fullHref] = results.Count - 1;
                 }
 
                 if (results.Count == before)
@@ -528,15 +482,12 @@ namespace PriceCompareCore.Services
                 return;
             }
 
-            // Try close button first
             await TryClickAsync(page, "button[aria-label='Close']", 1500);
             await TryClickAsync(page, "button:has-text('Close')", 1500);
 
-            // Try select Delivery + save
             await TryClickAsync(page, "text=Delivery", 1500);
             await TryClickAsync(page, "button:has-text('Save & continue')", 2000);
 
-            // Try click on backdrop/blank area
             try
             {
                 await page.Mouse.ClickAsync(50, 50);
@@ -578,8 +529,8 @@ window.navigator.permissions.query = (parameters) => (
 
         private static int GetDomHardCap()
         {
-            var raw = Environment.GetEnvironmentVariable("WWS_BMSM_MAX_ITEMS");
-            return int.TryParse(raw, out var v) && v > 0 ? Math.Min(v, 3000) : 3000;
+            var raw = Environment.GetEnvironmentVariable("WWS_DOM_MAX_ITEMS");
+            return int.TryParse(raw, out var v) && v > 0 ? v : 1000;
         }
 
         private static int GetMaxScrollRounds()
@@ -590,8 +541,8 @@ window.navigator.permissions.query = (parameters) => (
 
         private static int GetMaxPages()
         {
-            var raw = Environment.GetEnvironmentVariable("WWS_BMSM_MAX_PAGES");
-            return int.TryParse(raw, out var v) && v > 0 ? Math.Min(v, 50) : 50;
+            var raw = Environment.GetEnvironmentVariable("WWS_DOM_MAX_PAGES");
+            return int.TryParse(raw, out var v) && v > 0 ? v : 50;
         }
 
         private static int GetStartPage()
@@ -600,8 +551,8 @@ window.navigator.permissions.query = (parameters) => (
             return int.TryParse(raw, out var v) && v > 0 ? v : 1;
         }
 
-        private static string BuildBuyMoreSaveMoreUrl(int pageNumber)
-            => $"{BuyMoreSaveMoreUrl}?pageNumber={pageNumber}";
+        private static string BuildSummerPriceUrl(int pageNumber)
+            => $"{SummerPriceUrl}?pageNumber={pageNumber}";
 
         private sealed class DomProduct
         {
@@ -609,7 +560,6 @@ window.navigator.permissions.query = (parameters) => (
             public string? Href { get; set; }
             public string? Image { get; set; }
             public string? Aria { get; set; }
-            public string? PromoText { get; set; }
         }
 
         private static bool IsProductAria(string? aria)
