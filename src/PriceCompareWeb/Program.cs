@@ -158,6 +158,22 @@ if (enableQuartzJobs)
             .WithIdentity("WwsHalfPriceDomJob-trigger")
             .WithCronSchedule("0 30 4 ? * TUE", x => x.InTimeZone(localTz)));
 
+        // scrape data - woolworths buy more save more (DOM)
+        var jobKeyWwsBuyMoreSaveMore = new JobKey("WwsBuyMoreSaveMoreDomJob");
+        q.AddJob<WwsBuyMoreSaveMoreDomJob>(opts => opts.WithIdentity(jobKeyWwsBuyMoreSaveMore));
+        q.AddTrigger(opts => opts
+            .ForJob(jobKeyWwsBuyMoreSaveMore)
+            .WithIdentity("WwsBuyMoreSaveMoreDomJob-trigger")
+            .WithCronSchedule("0 30 5 ? * TUE", x => x.InTimeZone(localTz)));
+
+        // scrape data - woolworths summer price (DOM)
+        var jobKeyWwsSummerPrice = new JobKey("WwsSummerPriceDomJob");
+        q.AddJob<WwsSummerPriceDomJob>(opts => opts.WithIdentity(jobKeyWwsSummerPrice));
+        q.AddTrigger(opts => opts
+            .ForJob(jobKeyWwsSummerPrice)
+            .WithIdentity("WwsSummerPriceDomJob-trigger")
+            .WithCronSchedule("0 0 6 ? * TUE", x => x.InTimeZone(localTz)));
+
         // weekly sequential scrape - coles DOM categories (Mon 17:30 local, every 30 mins)
         var jobKeyColesMeatSeafood = new JobKey("ColesMeatSeafoodDomJob");
         q.AddJob<ColesMeatSeafoodDomJob>(opts => opts.WithIdentity(jobKeyColesMeatSeafood));
@@ -292,13 +308,13 @@ if (enableQuartzJobs)
             .WithIdentity("ColesDeliverMoreRangeDomJob-trigger")
             .WithCronSchedule("0 0 3 ? * TUE", x => x.InTimeZone(localTz)));
 
-        // delete data (quarterly, first Tuesday 05:30)
+        // delete data (quarterly, first Tuesday 06:00)
         var cleanJobKey = new JobKey("CleanPriceHistoryJob");
         q.AddJob<CleanPriceHistoryJob>(opts => opts.WithIdentity(cleanJobKey));
         q.AddTrigger(opts => opts
             .ForJob(cleanJobKey)
             .WithIdentity("CleanPriceHistoryJob-trigger")
-            .WithCronSchedule("0 30 5 ? 1/3 TUE#1", x => x.InTimeZone(localTz)));
+            .WithCronSchedule("0 0 6 ? 1/3 TUE#1", x => x.InTimeZone(localTz)));
 
         // favorite price tracking
         var favoriteTrackJobKey = new JobKey("FavoritePriceTrackingJob");
@@ -308,7 +324,7 @@ if (enableQuartzJobs)
             .WithIdentity("FavoritePriceTrackingJob-trigger")
         // testing
         // .WithCronSchedule("0 */1 * ? * *"));
-        .WithCronSchedule("0 0 5 ? * TUE", x => x.InTimeZone(localTz)));
+        .WithCronSchedule("0 10 6 ? * TUE", x => x.InTimeZone(localTz)));
     });
 
     builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
