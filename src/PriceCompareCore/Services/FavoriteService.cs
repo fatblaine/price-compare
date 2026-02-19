@@ -13,6 +13,14 @@ namespace PriceCompareCore.Services
     public class FavoriteService : IFavoriteService
     {
         private readonly AppDbContext _db;
+        private sealed record FavoriteProductLookup(
+            int FavoriteId,
+            Guid ProductId,
+            string ProductName,
+            string? ImageUrl,
+            int? ShopType,
+            bool IsActive,
+            DateTime CreatedAt);
 
         public FavoriteService(AppDbContext db)
         {
@@ -39,20 +47,66 @@ namespace PriceCompareCore.Services
 
         public async Task<IEnumerable<FavoriteItemDto>> GetFavoritesAsync(Guid userId)
         {
-            return await (
+            var baseList = await (
                 from fav in _db.FavoriteItems
                 join prod in _db.Products on fav.ProductId equals prod.ProductId into prodJoin
                 from prod in prodJoin.DefaultIfEmpty()
                 where fav.UserId == userId
                 orderby fav.CreatedAt descending
-                select new FavoriteItemDto(
+                select new FavoriteProductLookup(
                     fav.Id,
                     fav.ProductId,
                     prod != null ? prod.Name : $"Product {fav.ProductId}",
+                    prod != null ? prod.ImageUrl : null,
+                    prod != null ? prod.ShopType : null,
                     fav.IsActive,
                     fav.CreatedAt
                 )
             ).ToListAsync();
+
+            var missing = baseList
+                .Where(x => string.IsNullOrWhiteSpace(x.ImageUrl))
+                .Where(x => !string.IsNullOrWhiteSpace(x.ProductName))
+                .ToList();
+
+            var imageByFavoriteId = new Dictionary<int, string?>();
+            if (missing.Count > 0)
+            {
+                var names = missing
+                    .Select(x => x.ProductName)
+                    .Distinct()
+                    .ToList();
+
+                var historyMatches = await _db.PriceHistory
+                    .AsNoTracking()
+                    .Where(h => h.Name != null && names.Contains(h.Name))
+                    .OrderByDescending(h => h.ScrapedAt)
+                    .ToListAsync();
+
+                foreach (var fav in missing)
+                {
+                    var match = historyMatches.FirstOrDefault(h =>
+                        string.Equals(h.Name, fav.ProductName, StringComparison.OrdinalIgnoreCase) &&
+                        (!fav.ShopType.HasValue || h.ShopType == fav.ShopType));
+                    if (match != null && !string.IsNullOrWhiteSpace(match.ImageUrl))
+                    {
+                        imageByFavoriteId[fav.FavoriteId] = match.ImageUrl;
+                    }
+                }
+            }
+
+            return baseList
+                .Select(f => new FavoriteItemDto(
+                    f.FavoriteId,
+                    f.ProductId,
+                    f.ProductName,
+                    !string.IsNullOrWhiteSpace(f.ImageUrl)
+                        ? f.ImageUrl
+                        : (imageByFavoriteId.TryGetValue(f.FavoriteId, out var img) ? img : null),
+                    f.IsActive,
+                    f.CreatedAt
+                ))
+                .ToList();
         }
 
         public async Task<bool> RemoveFavoriteAsync(Guid userId, Guid productId)

@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
 	Box,
+	Avatar,
 	Button,
 	Card,
 	CardContent,
@@ -12,6 +13,7 @@ import {
 	DialogTitle,
 	List,
 	ListItem,
+	ListItemAvatar,
 	ListItemText,
 	Stack,
 	Typography,
@@ -176,6 +178,7 @@ export default function MyFavoritesPage() {
 								return (
 									<ListItem
 										key={fav.id}
+										sx={{ gap: 1.5 }}
 										secondaryAction={
 											<Stack direction="row" spacing={1}>
 												<Button
@@ -202,6 +205,21 @@ export default function MyFavoritesPage() {
 											</Stack>
 										}
 									>
+										<ListItemAvatar sx={{ minWidth: 0 }}>
+											<Avatar
+												variant="rounded"
+												src={fav.imageUrl ?? undefined}
+												alt={fav.productName}
+												sx={{
+													width: 40,
+													height: 40,
+													fontSize: 14,
+													bgcolor: "action.hover",
+												}}
+											>
+												{fav.productName?.[0]?.toUpperCase() ?? "?"}
+											</Avatar>
+										</ListItemAvatar>
 										<ListItemText
 											primary={
 												fav.productName || `Product ${fav.productId}`

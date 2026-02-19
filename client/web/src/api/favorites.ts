@@ -6,6 +6,7 @@ export interface FavoriteItem {
 	id: number;
 	productId: string;
 	productName: string;
+	imageUrl?: string | null;
 	isActive: boolean;
 	createdAt: string;
 }

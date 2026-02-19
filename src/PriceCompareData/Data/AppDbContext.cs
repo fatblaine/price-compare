@@ -45,6 +45,10 @@ namespace PriceCompareData.Data
                   // Index on CategoryId, SizeUnit, SizeValue for category and size-based queries
                   modelBuilder.Entity<Product>()
                       .HasIndex(p => new { p.CategoryId, p.SizeUnit, p.SizeValue });
+                  modelBuilder.Entity<Product>().HasIndex(p => new { p.ShopType, p.NormalizedName });
+                  modelBuilder.Entity<Product>()
+                      .HasIndex(p => new { p.CategoryId, p.SizeStandardUnit, p.SizeStandardValue });
+
 
                   // PriceHistory
                   modelBuilder.Entity<PriceHistory>()
@@ -392,6 +396,14 @@ namespace PriceCompareData.Data
                         .HasForeignKey(e => e.CategoryId)
                         .HasConstraintName("fk_product_category")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                        entity.Property(e => e.NormalizedName).HasColumnName("normalizedname");
+                        entity.Property(e => e.NormalizedBrand).HasColumnName("normalizedbrand");
+                        entity.Property(e => e.SizeStandardValue).HasColumnName("sizestandardvalue").HasPrecision(18, 4);
+                        entity.Property(e => e.SizeStandardUnit).HasColumnName("sizestandardunit");
+                        entity.Property(e => e.SizeUnknown).HasColumnName("sizeunknown");
+                        entity.Property(e => e.BrandUnknown).HasColumnName("brandunknown");
+                        entity.Property(e => e.CategoryUnknown).HasColumnName("categoryunknown");
                   });
 
                   // PriceHistory
