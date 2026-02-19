@@ -126,6 +126,7 @@ namespace PriceCompareWeb.Controllers
                 ocrName = i.OriginalName ?? i.ProductName,
                 finalName = i.ProductName,
                 matchedProductId = i.MatchedProductId,
+                imageUrl = i.ImageUrl,
                 confidence = i.Confidence
             }).ToArray();
 

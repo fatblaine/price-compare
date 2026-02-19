@@ -8,6 +8,7 @@ namespace PriceCompareData.DTOs
         string ProductName,
         string? OriginalName,
         Guid? MatchedProductId,
+        string? ImageUrl,
         float Confidence
     );
 }

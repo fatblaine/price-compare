@@ -14,6 +14,7 @@ export interface ReceiptItem {
 	id: number;
 	receiptId: number;
 	productName: string;
+	imageUrl?: string | null;
 }
 
 export interface ReceiptDetail {
@@ -30,6 +31,7 @@ export interface ParsedReceiptItem {
 	ocrName: string;
 	finalName: string;
 	matchedProductId: string | null;
+	imageUrl?: string | null;
 	confidence: number;
 }
 

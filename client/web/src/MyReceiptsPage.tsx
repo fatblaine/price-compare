@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
 	Box,
+	Avatar,
 	Button,
 	Card,
 	CardActionArea,
@@ -10,6 +11,7 @@ import {
 	Divider,
 	List,
 	ListItem,
+	ListItemAvatar,
 	ListItemText,
 	Dialog,
 	DialogTitle,
@@ -626,7 +628,26 @@ export default function MyReceiptsPage() {
 								) : (
 									<List dense sx={{ maxHeight: 260, overflowY: "auto" }}>
 										{detail.items.map((it) => (
-											<ListItem key={it.id} disableGutters>
+											<ListItem
+												key={it.id}
+												disableGutters
+												sx={{ gap: 1.5 }}
+											>
+												<ListItemAvatar sx={{ minWidth: 0 }}>
+													<Avatar
+														variant="rounded"
+														src={it.imageUrl ?? undefined}
+														alt={it.productName}
+														sx={{
+															width: 40,
+															height: 40,
+															fontSize: 14,
+															bgcolor: "action.hover",
+														}}
+													>
+														{it.productName?.[0]?.toUpperCase() ?? "?"}
+													</Avatar>
+												</ListItemAvatar>
 												<ListItemText primary={it.productName} />
 											</ListItem>
 										))}

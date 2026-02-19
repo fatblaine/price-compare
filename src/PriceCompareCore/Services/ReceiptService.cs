@@ -14,6 +14,11 @@ namespace PriceCompareCore.Services
     public class ReceiptService : IReceiptService
     {
         private readonly AppDbContext _db;
+        private sealed record ProductImageLookup(
+            Guid ProductId,
+            string? ImageUrl,
+            string? Name,
+            int? ShopType);
         public ReceiptService(AppDbContext db)
         {
             _db = db;
@@ -43,6 +48,51 @@ namespace PriceCompareCore.Services
             {
                 return null;
             }
+            var matchedProductIds = receipt.Items
+                .Where(i => i.MatchedProductId.HasValue)
+                .Select(i => i.MatchedProductId!.Value)
+                .Distinct()
+                .ToList();
+            var products = matchedProductIds.Count == 0
+                ? new List<ProductImageLookup>()
+                : await _db.Products
+                    .AsNoTracking()
+                    .Where(p => matchedProductIds.Contains(p.ProductId))
+                    .Select(p => new ProductImageLookup(
+                        p.ProductId,
+                        p.ImageUrl,
+                        p.Name,
+                        p.ShopType))
+                    .ToListAsync();
+            var imageByProductId = products
+                .Where(p => !string.IsNullOrWhiteSpace(p.ImageUrl))
+                .ToDictionary(p => p.ProductId, p => p.ImageUrl);
+            var missingImageProducts = products
+                .Where(p => string.IsNullOrWhiteSpace(p.ImageUrl) && !string.IsNullOrWhiteSpace(p.Name))
+                .ToList();
+            if (missingImageProducts.Count > 0)
+            {
+                var missingNames = missingImageProducts
+                    .Select(p => p.Name!)
+                    .Distinct()
+                    .ToList();
+                var historyMatches = await _db.PriceHistory
+                    .AsNoTracking()
+                    .Where(h => h.Name != null && missingNames.Contains(h.Name))
+                    .OrderByDescending(h => h.ScrapedAt)
+                    .ToListAsync();
+
+                foreach (var product in missingImageProducts)
+                {
+                    var match = historyMatches.FirstOrDefault(h =>
+                        string.Equals(h.Name, product.Name, StringComparison.OrdinalIgnoreCase) &&
+                        (!product.ShopType.HasValue || h.ShopType == product.ShopType));
+                    if (match != null && !string.IsNullOrWhiteSpace(match.ImageUrl))
+                    {
+                        imageByProductId[product.ProductId] = match.ImageUrl;
+                    }
+                }
+            }
             return new ReceiptDetailDto(
                 receipt.Id,
                 receipt.StoreName,
@@ -55,6 +105,10 @@ namespace PriceCompareCore.Services
                     i.ProductName,
                     i.OriginalName,
                     i.MatchedProductId,
+                    i.MatchedProductId.HasValue &&
+                    imageByProductId.TryGetValue(i.MatchedProductId.Value, out var imageUrl)
+                        ? imageUrl
+                        : null,
                     i.Confidence
                 )).ToList()
             );
