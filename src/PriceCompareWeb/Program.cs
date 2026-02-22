@@ -48,6 +48,14 @@ builder.Services.Configure<RekognitionOptions>(
 builder.Services.Configure<ScrapeExportOptions>(
     builder.Configuration.GetSection("ScrapeExport"));
 
+// Match job services
+builder.Services.AddScoped<IMatchJobService, MatchJobService>();
+builder.Services.AddScoped<IProductMatchingService, ProductMatchingService>();
+
+// Vector services (disabled by default)
+builder.Services.AddSingleton<IEmbeddingService, NullEmbeddingService>();
+builder.Services.AddScoped<IVectorSearchService, NullVectorSearchService>();
+
 // Lambda Hosting
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 

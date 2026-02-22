@@ -19,5 +19,14 @@ namespace PriceCompareData.Entities.Compare
         public int? CategoryId { get; set; }
         public string? ImageUrl { get; set; }
         public DateTime LastSeenAt { get; set; }
+
+        public string? NormalizedName { get; set; }
+        public string? NormalizedBrand { get; set; }
+        public decimal? SizeStandardValue { get; set; }
+        public string? SizeStandardUnit { get; set; }
+        public bool SizeUnknown { get; set; }
+        public bool BrandUnknown { get; set; }
+        public bool CategoryUnknown { get; set; }
+
     }
 }

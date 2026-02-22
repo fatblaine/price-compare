@@ -29,6 +29,9 @@ namespace PriceCompareData.Data
             public DbSet<User> Users { get { return Set<User>(); } }
             public DbSet<JobDefinition> JobDefinitions => Set<JobDefinition>();
             public DbSet<JobRun> JobRuns => Set<JobRun>();
+            public DbSet<ProductMatch> ProductMatches => Set<ProductMatch>();
+            public DbSet<MatchJob> MatchJobs => Set<MatchJob>();
+
 
 
             // Configure entity relationships and constraints
@@ -45,6 +48,64 @@ namespace PriceCompareData.Data
                   // Index on CategoryId, SizeUnit, SizeValue for category and size-based queries
                   modelBuilder.Entity<Product>()
                       .HasIndex(p => new { p.CategoryId, p.SizeUnit, p.SizeValue });
+                  modelBuilder.Entity<Product>().HasIndex(p => new { p.ShopType, p.NormalizedName });
+                  modelBuilder.Entity<Product>()
+                      .HasIndex(p => new { p.CategoryId, p.SizeStandardUnit, p.SizeStandardValue });
+
+                  // ProductMatch
+                  modelBuilder.Entity<ProductMatch>(entity =>
+                  {
+                        entity.ToTable("productmatch");
+                        entity.HasKey(e => e.Id);
+
+                        entity.Property(e => e.Id).HasColumnName("id");
+                        entity.Property(e => e.SourceProductId).HasColumnName("sourceproductid");
+                        entity.Property(e => e.TargetProductId).HasColumnName("targetproductid");
+
+                        entity.Property(e => e.SourceShopType).HasColumnName("sourceshoptype");
+                        entity.Property(e => e.TargetShopType).HasColumnName("targetshoptype");
+
+                        entity.Property(e => e.Score).HasColumnName("score");
+                        entity.Property(e => e.Method).HasColumnName("method");
+                        entity.Property(e => e.MatchType).HasColumnName("matchtype");
+
+                        entity.Property(e => e.IsConfirmed).HasColumnName("isconfirmed");
+                        entity.Property(e => e.EvidenceJson)
+                              .HasColumnName("evidencejson")
+                              .HasColumnType("jsonb");
+
+                        entity.Property(e => e.CreatedAt).HasColumnName("createdat");
+                        entity.Property(e => e.UpdatedAt).HasColumnName("updatedat");
+                  });
+
+                  // MatchJob
+                  modelBuilder.Entity<MatchJob>(entity =>
+                  {
+                        entity.ToTable("matchjob");
+                        entity.HasKey(e => e.Id);
+
+                        entity.Property(e => e.Id).HasColumnName("id");
+                        entity.Property(e => e.SourceShop).HasColumnName("sourceshop");
+                        entity.Property(e => e.TargetShop).HasColumnName("targetshop");
+                        entity.Property(e => e.Status).HasColumnName("status");
+                        entity.Property(e => e.Mode).HasColumnName("mode");
+                        entity.Property(e => e.Since).HasColumnName("since");
+
+                        entity.Property(e => e.Total).HasColumnName("total");
+                        entity.Property(e => e.Processed).HasColumnName("processed");
+                        entity.Property(e => e.Matched).HasColumnName("matched");
+                        entity.Property(e => e.Comparable).HasColumnName("comparable");
+                        entity.Property(e => e.Failed).HasColumnName("failed");
+
+                        entity.Property(e => e.UseLlm).HasColumnName("usellm");
+                        entity.Property(e => e.LimitNum).HasColumnName("limitnum");
+                        entity.Property(e => e.TopN).HasColumnName("topn");
+
+                        entity.Property(e => e.ErrorMessage).HasColumnName("errormessage");
+                        entity.Property(e => e.CreatedAt).HasColumnName("createdat");
+                        entity.Property(e => e.UpdatedAt).HasColumnName("updatedat");
+                  });
+
 
                   // PriceHistory
                   modelBuilder.Entity<PriceHistory>()
@@ -392,6 +453,14 @@ namespace PriceCompareData.Data
                         .HasForeignKey(e => e.CategoryId)
                         .HasConstraintName("fk_product_category")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                        entity.Property(e => e.NormalizedName).HasColumnName("normalizedname");
+                        entity.Property(e => e.NormalizedBrand).HasColumnName("normalizedbrand");
+                        entity.Property(e => e.SizeStandardValue).HasColumnName("sizestandardvalue").HasPrecision(18, 4);
+                        entity.Property(e => e.SizeStandardUnit).HasColumnName("sizestandardunit");
+                        entity.Property(e => e.SizeUnknown).HasColumnName("sizeunknown");
+                        entity.Property(e => e.BrandUnknown).HasColumnName("brandunknown");
+                        entity.Property(e => e.CategoryUnknown).HasColumnName("categoryunknown");
                   });
 
                   // PriceHistory
