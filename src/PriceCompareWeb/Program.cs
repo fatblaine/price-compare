@@ -48,13 +48,23 @@ builder.Services.Configure<RekognitionOptions>(
 builder.Services.Configure<ScrapeExportOptions>(
     builder.Configuration.GetSection("ScrapeExport"));
 
+builder.Services.Configure<OpenRouterOptions>(
+    builder.Configuration.GetSection("OpenRouter"));
+
 // Match job services
 builder.Services.AddScoped<IMatchJobService, MatchJobService>();
 builder.Services.AddScoped<IProductMatchingService, ProductMatchingService>();
 
-// Vector services (disabled by default)
-builder.Services.AddSingleton<IEmbeddingService, NullEmbeddingService>();
-builder.Services.AddScoped<IVectorSearchService, NullVectorSearchService>();
+// OpenRouter services
+builder.Services.AddHttpClient("OpenRouter", client =>
+{
+    client.BaseAddress = new Uri("https://openrouter.ai/api/v1/");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+builder.Services.AddSingleton<IEmbeddingService, OpenRouterEmbeddingService>();
+builder.Services.AddScoped<IVectorSearchService, OpenRouterVectorSearchService>();
+builder.Services.AddScoped<IMatchVerificationService, OpenRouterMatchVerificationService>();
 
 // Lambda Hosting
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
