@@ -13,6 +13,9 @@ import {
 	MenuItem,
 	Select,
 	Stack,
+	Tab,
+	Tabs,
+	TextField,
 	Typography,
 } from "@mui/material";
 import {
@@ -35,10 +38,14 @@ import {
 	fetchAdminRuns,
 	fetchAdminSchedules,
 	fetchAdminStats,
+	fetchMatchJobStatus,
+	runMatchJob,
 	type AdminHealth,
 	type JobRun,
 	type JobRunStats,
 	type JobSchedule,
+	type MatchJobStatus,
+	type MatchRunRequest,
 } from "./api/admin";
 
 type TrendPoint = {
@@ -47,6 +54,11 @@ type TrendPoint = {
 	failed: number;
 	failureRate: number;
 };
+
+const SHOP_OPTIONS = [
+	{ label: "Coles", value: 0 },
+	{ label: "Woolworths", value: 1 },
+];
 
 const scheduleKey = (schedule: JobSchedule) =>
 	`${schedule.source}:${schedule.jobName}`;
@@ -140,6 +152,9 @@ const statusChip = (status?: string | null) => {
 	return <Chip label={status} size="small" variant="outlined" />;
 };
 
+const shopLabel = (value: number) =>
+	SHOP_OPTIONS.find((option) => option.value === value)?.label ?? String(value);
+
 export default function AdminJobsPage() {
 	const [schedules, setSchedules] = React.useState<JobSchedule[]>([]);
 	const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
@@ -153,6 +168,24 @@ export default function AdminJobsPage() {
 	const [loadingStats, setLoadingStats] = React.useState(false);
 	const [loadingHealth, setLoadingHealth] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
+	const [preMatchRequest, setPreMatchRequest] =
+		React.useState<MatchRunRequest>({
+			sourceShop: 0,
+			targetShop: 1,
+			mode: "incremental",
+			limit: 1000,
+			topN: 20,
+			useLlm: false,
+			force: false,
+		});
+	const [preMatchJobId, setPreMatchJobId] = React.useState<string | null>(null);
+	const [preMatchStatus, setPreMatchStatus] =
+		React.useState<MatchJobStatus | null>(null);
+	const [preMatchLoading, setPreMatchLoading] = React.useState(false);
+	const [preMatchError, setPreMatchError] = React.useState<string | null>(null);
+	const [adminTab, setAdminTab] = React.useState<"schedules" | "prematch">(
+		"schedules",
+	);
 
 	const selectedSchedule = React.useMemo(
 		() => schedules.find((s) => scheduleKey(s) === selectedKey) ?? null,
@@ -326,6 +359,40 @@ export default function AdminJobsPage() {
 		[runs, rangeHours, trendBucket],
 	);
 
+	const runPreMatch = React.useCallback(async () => {
+		setPreMatchError(null);
+		if (preMatchRequest.sourceShop === preMatchRequest.targetShop) {
+			setPreMatchError("Source shop and target shop must be different.");
+			return;
+		}
+		setPreMatchLoading(true);
+		try {
+			const payload: MatchRunRequest = {
+				...preMatchRequest,
+				limit:
+					preMatchRequest.limit != null
+						? Math.max(0, Number(preMatchRequest.limit))
+						: undefined,
+				topN:
+					preMatchRequest.topN != null
+						? Math.max(1, Number(preMatchRequest.topN))
+						: undefined,
+			};
+			const result = await runMatchJob(payload);
+			setPreMatchJobId(result.jobId);
+			const status = await fetchMatchJobStatus(result.jobId);
+			setPreMatchStatus(status);
+		} catch (e) {
+			if (axios.isAxiosError(e) && e.response?.status === 403) {
+				setPreMatchError("Not authorized to run pre-match.");
+			} else {
+				setPreMatchError("Failed to start pre-match job.");
+			}
+		} finally {
+			setPreMatchLoading(false);
+		}
+	}, [preMatchRequest]);
+
 	return (
 		<Box>
 			<Stack spacing={3}>
@@ -338,14 +405,28 @@ export default function AdminJobsPage() {
 					<Typography variant="h4" fontWeight={800}>
 						Admin Monitoring
 					</Typography>
-					<Button variant="contained" onClick={loadSchedules}>
-						Refresh schedules
-					</Button>
+					{adminTab === "schedules" && (
+						<Button variant="contained" onClick={loadSchedules}>
+							Refresh schedules
+						</Button>
+					)}
 				</Stack>
 
 				{error && <Alert severity="error">{error}</Alert>}
 
-				<Card variant="outlined">
+				<Tabs
+					value={adminTab}
+					onChange={(_, value) => setAdminTab(value)}
+					textColor="primary"
+					indicatorColor="primary"
+				>
+					<Tab value="schedules" label="Schedules" />
+					<Tab value="prematch" label="Pre-match" />
+				</Tabs>
+
+				{adminTab === "schedules" && (
+					<>
+						<Card variant="outlined">
 					<CardContent>
 						<Stack
 							direction={{ xs: "column", md: "row" }}
@@ -444,9 +525,221 @@ export default function AdminJobsPage() {
 							</Box>
 						) : null}
 					</CardContent>
-				</Card>
+						</Card>
+					</>
+				)}
 
-				<Card variant="outlined">
+				{adminTab === "prematch" && (
+					<Card variant="outlined">
+					<CardContent>
+						<Stack
+							direction={{ xs: "column", md: "row" }}
+							spacing={2}
+							alignItems={{ xs: "flex-start", md: "center" }}
+							justifyContent="space-between"
+						>
+							<Typography variant="h6" fontWeight={700}>
+								Batch pre-match
+							</Typography>
+							<Stack direction="row" spacing={1}>
+								<Button
+									variant="contained"
+									onClick={runPreMatch}
+									disabled={preMatchLoading}
+								>
+									{preMatchLoading ? "Starting..." : "Run pre-match"}
+								</Button>
+							</Stack>
+						</Stack>
+
+						<Divider sx={{ my: 2 }} />
+
+						<Box sx={{ overflowX: "auto", pt: 1.5, pb: 0.5 }}>
+							<Stack
+								direction="row"
+								spacing={2}
+								alignItems="center"
+								flexWrap="nowrap"
+								sx={{ minWidth: "max-content" }}
+							>
+							<FormControl size="small" sx={{ minWidth: 160 }}>
+								<InputLabel id="pre-match-source-label">Source shop</InputLabel>
+								<Select
+									labelId="pre-match-source-label"
+									label="Source shop"
+									value={preMatchRequest.sourceShop}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											sourceShop: Number(e.target.value),
+										}))
+									}
+								>
+									{SHOP_OPTIONS.map((option) => (
+										<MenuItem key={option.value} value={option.value}>
+											{option.label}
+										</MenuItem>
+									))}
+								</Select>
+							</FormControl>
+							<FormControl size="small" sx={{ minWidth: 160 }}>
+								<InputLabel id="pre-match-target-label">Target shop</InputLabel>
+								<Select
+									labelId="pre-match-target-label"
+									label="Target shop"
+									value={preMatchRequest.targetShop}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											targetShop: Number(e.target.value),
+										}))
+									}
+								>
+									{SHOP_OPTIONS.map((option) => (
+										<MenuItem key={option.value} value={option.value}>
+											{option.label}
+										</MenuItem>
+									))}
+								</Select>
+							</FormControl>
+							<FormControl size="small" sx={{ minWidth: 160 }}>
+								<InputLabel id="pre-match-mode-label">Mode</InputLabel>
+								<Select
+									labelId="pre-match-mode-label"
+									label="Mode"
+									value={preMatchRequest.mode ?? "incremental"}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											mode: String(e.target.value),
+										}))
+									}
+								>
+									<MenuItem value="incremental">Incremental</MenuItem>
+									<MenuItem value="full">Full</MenuItem>
+								</Select>
+							</FormControl>
+							<TextField
+								label="Limit"
+								size="small"
+								type="number"
+								value={preMatchRequest.limit ?? 0}
+								onChange={(e) =>
+									setPreMatchRequest((prev) => ({
+										...prev,
+										limit: Number(e.target.value),
+									}))
+								}
+								inputProps={{ min: 0 }}
+								sx={{ width: 120 }}
+							/>
+							<TextField
+								label="Top N"
+								size="small"
+								type="number"
+								value={preMatchRequest.topN ?? 20}
+								onChange={(e) =>
+									setPreMatchRequest((prev) => ({
+										...prev,
+										topN: Number(e.target.value),
+									}))
+								}
+								inputProps={{ min: 1, max: 50 }}
+								sx={{ width: 100 }}
+							/>
+							<FormControl size="small" sx={{ minWidth: 140 }}>
+								<InputLabel id="pre-match-llm-label">Use LLM</InputLabel>
+								<Select
+									labelId="pre-match-llm-label"
+									label="Use LLM"
+									value={preMatchRequest.useLlm ? "yes" : "no"}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											useLlm: e.target.value === "yes",
+										}))
+									}
+								>
+									<MenuItem value="no">No</MenuItem>
+									<MenuItem value="yes">Yes</MenuItem>
+								</Select>
+							</FormControl>
+							<FormControl size="small" sx={{ minWidth: 160 }}>
+								<InputLabel id="pre-match-force-label">
+									Force re-match
+								</InputLabel>
+								<Select
+									labelId="pre-match-force-label"
+									label="Force re-match"
+									value={preMatchRequest.force ? "yes" : "no"}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											force: e.target.value === "yes",
+										}))
+									}
+								>
+									<MenuItem value="no">No</MenuItem>
+									<MenuItem value="yes">Yes</MenuItem>
+								</Select>
+							</FormControl>
+							</Stack>
+						</Box>
+
+						{preMatchError && (
+							<Alert severity="error" sx={{ mt: 2 }}>
+								{preMatchError}
+							</Alert>
+						)}
+
+						{preMatchJobId && (
+							<Box sx={{ mt: 2 }}>
+								<Typography variant="subtitle2" color="text.secondary">
+									Job ID
+								</Typography>
+								<Typography variant="body2">{preMatchJobId}</Typography>
+							</Box>
+						)}
+
+						{preMatchStatus && (
+							<Box sx={{ mt: 2 }}>
+								<Typography variant="subtitle2" color="text.secondary">
+									Status
+								</Typography>
+								<Stack spacing={0.5}>
+									<Typography variant="body2">
+										State: {preMatchStatus.status}
+									</Typography>
+									<Typography variant="body2">
+										{shopLabel(preMatchStatus.sourceShop)} →{" "}
+										{shopLabel(preMatchStatus.targetShop)}
+									</Typography>
+									<Typography variant="body2">
+										Progress: {preMatchStatus.processed}/{preMatchStatus.total}
+									</Typography>
+									<Typography variant="body2">
+										Matched: {preMatchStatus.matched}, Comparable:{" "}
+										{preMatchStatus.comparable}, Failed:{" "}
+										{preMatchStatus.failed}
+									</Typography>
+									<Typography variant="body2">
+										Updated: {formatDateTime(preMatchStatus.updatedAt)}
+									</Typography>
+									{preMatchStatus.errorMessage ? (
+										<Typography variant="body2" color="error">
+											Error: {preMatchStatus.errorMessage}
+										</Typography>
+									) : null}
+								</Stack>
+							</Box>
+						)}
+					</CardContent>
+					</Card>
+				)}
+
+				{adminTab === "schedules" && (
+					<>
+						<Card variant="outlined">
 					<CardContent>
 						<Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
 							Schedules
@@ -470,9 +763,9 @@ export default function AdminJobsPage() {
 							}}
 						/>
 					</CardContent>
-				</Card>
+						</Card>
 
-				<Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+						<Stack direction={{ xs: "column", md: "row" }} spacing={2}>
 					<Card variant="outlined" sx={{ flex: 1 }}>
 						<CardContent>
 							<Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
@@ -561,9 +854,9 @@ export default function AdminJobsPage() {
 							</ResponsiveContainer>
 						</CardContent>
 					</Card>
-				</Stack>
+						</Stack>
 
-				<Card variant="outlined">
+						<Card variant="outlined">
 					<CardContent>
 						<Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
 							Recent runs
@@ -626,7 +919,9 @@ export default function AdminJobsPage() {
 							</Box>
 						)}
 					</CardContent>
-				</Card>
+						</Card>
+					</>
+				)}
 			</Stack>
 		</Box>
 	);
