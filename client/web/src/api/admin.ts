@@ -92,3 +92,50 @@ export async function fetchAdminHealth(rangeHours = 24): Promise<AdminHealth> {
 	});
 	return res.data;
 }
+
+export type MatchRunRequest = {
+	sourceShop: number;
+	targetShop: number;
+	mode?: string;
+	since?: string | null;
+	limit?: number;
+	topN?: number;
+	useLlm?: boolean;
+	force?: boolean;
+};
+
+export type MatchJobStatus = {
+	id: string;
+	sourceShop: number;
+	targetShop: number;
+	status: string;
+	mode: string;
+	since?: string | null;
+	total: number;
+	processed: number;
+	matched: number;
+	comparable: number;
+	failed: number;
+	useLlm: boolean;
+	limitNum: number;
+	topN: number;
+	errorMessage?: string | null;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export async function runMatchJob(
+	payload: MatchRunRequest,
+): Promise<{ jobId: string }> {
+	const res = await axios.post(`${API_BASE}/api/Match/run`, payload);
+	return res.data;
+}
+
+export async function fetchMatchJobStatus(
+	jobId: string,
+): Promise<MatchJobStatus> {
+	const res = await axios.get(
+		`${API_BASE}/api/Match/status/${encodeURIComponent(jobId)}`,
+	);
+	return res.data;
+}

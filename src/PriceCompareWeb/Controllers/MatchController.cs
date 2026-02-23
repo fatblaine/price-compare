@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.DTOs;
@@ -8,6 +9,7 @@ namespace PriceCompareWeb.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Policy = "AdminOnly")]
     public class MatchController : ControllerBase
     {
         private readonly IMatchJobService _matchJobService;
@@ -33,11 +35,6 @@ namespace PriceCompareWeb.Controllers
 
             var jobId = await _matchJobService.StartAsync(request);
             return Ok(new { jobId });
-        }
-
-        private IActionResult BadRequest(string v)
-        {
-            throw new NotImplementedException();
         }
 
         [HttpGet("status/{jobId}")]
