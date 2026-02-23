@@ -73,6 +73,7 @@ namespace PriceCompareCore.Services
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var matcher = scope.ServiceProvider.GetRequiredService<IProductMatchingService>();
+            var llm = scope.ServiceProvider.GetRequiredService<IMatchVerificationService>();
 
             var job = await db.MatchJobs.FirstOrDefaultAsync(j => j.Id == jobId);
             if (job == null)
@@ -155,11 +156,34 @@ namespace PriceCompareCore.Services
                             var candidates = await matcher.MatchCandidatesAsync(source.ProductId, request.TopN);
                             if (candidates.Count > 0)
                             {
+                                var best = candidates.OrderByDescending(c => c.Score).First();
+
+                                if (request.UseLlm && best.Score >= 0.50m && best.Score < SameProductScore)
+                                {
+                                    var decision = await llm.VerifyAsync(
+                                        source,
+                                        candidates.Select(c => c.Target).ToList());
+
+                                    if (decision == "same_product" || decision == "comparable")
+                                    {
+                                        // Promote score so LLM-approved matches rank higher when reading cached results.
+                                        best.Score = decision == "same_product" ? 0.95m : 0.70m;
+                                        best.MatchType = decision;
+                                    }
+                                    else
+                                    {
+                                        // LLM rejected the match; skip writing.
+                                        job.Processed++;
+                                        processed++;
+                                        continue;
+                                    }
+                                }
+
                                 // Write topN candidates into productmatch.
                                 ApplyCandidates(db, source, candidates);
 
                                 // Update job counters.
-                                var hasSame = candidates.Any(c => c.Score >= SameProductScore);
+                                var hasSame = candidates.Any(c => c.MatchType == "same_product" || c.Score >= SameProductScore);
                                 var hasComparable = candidates.Any(c => c.MatchType == "comparable");
 
                                 if (hasSame) job.Matched++;
