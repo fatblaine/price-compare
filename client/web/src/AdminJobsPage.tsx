@@ -33,6 +33,7 @@ import {
 	YAxis,
 } from "recharts";
 import axios from "axios";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
 	fetchAdminHealth,
 	fetchAdminRuns,
@@ -183,9 +184,17 @@ export default function AdminJobsPage() {
 		React.useState<MatchJobStatus | null>(null);
 	const [preMatchLoading, setPreMatchLoading] = React.useState(false);
 	const [preMatchError, setPreMatchError] = React.useState<string | null>(null);
-	const [adminTab, setAdminTab] = React.useState<"schedules" | "prematch">(
-		"schedules",
-	);
+	const location = useLocation();
+	const navigate = useNavigate();
+	const adminTab = location.pathname.includes("/prematch")
+		? "prematch"
+		: "schedules";
+
+	React.useEffect(() => {
+		if (location.pathname === "/admin" || location.pathname === "/admin/") {
+			navigate("/admin/schedules", { replace: true });
+		}
+	}, [location.pathname, navigate]);
 
 	const selectedSchedule = React.useMemo(
 		() => schedules.find((s) => scheduleKey(s) === selectedKey) ?? null,
@@ -416,7 +425,11 @@ export default function AdminJobsPage() {
 
 				<Tabs
 					value={adminTab}
-					onChange={(_, value) => setAdminTab(value)}
+					onChange={(_, value) => {
+						const next =
+							value === "prematch" ? "/admin/prematch" : "/admin/schedules";
+						navigate(next);
+					}}
 					textColor="primary"
 					indicatorColor="primary"
 				>

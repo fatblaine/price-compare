@@ -14,6 +14,7 @@ import {
 	Typography,
 } from "@mui/material";
 import React from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import ProductsPage from "./ProductsPage";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
@@ -36,13 +37,12 @@ function App() {
 	const [guestMode, setGuestMode] = React.useState(false);
 	const [isAdmin, setIsAdmin] = React.useState(false);
 	const [authView, setAuthView] = React.useState<"login" | "register">("login");
-	const [mainTab, setMainTab] = React.useState<
-		"products" | "receipts" | "favorites" | "admin"
-	>("products");
 	const [restrictedDialogOpen, setRestrictedDialogOpen] = React.useState(false);
 	const [pendingProtectedTab, setPendingProtectedTab] = React.useState<
 		"receipts" | "favorites" | "admin" | null
 	>(null);
+	const location = useLocation();
+	const navigate = useNavigate();
 
 	React.useEffect(() => {
 		const stored = getStoredToken();
@@ -78,15 +78,23 @@ function App() {
 		};
 	}, [token]);
 
-	React.useEffect(() => {
-		if (!isAdmin && mainTab === "admin") {
-			setMainTab("products");
-		}
-	}, [isAdmin, mainTab]);
-
 	const isAuthenticated = !!token;
 	const isGuest = guestMode && !isAuthenticated;
 	const showTabs = isAuthenticated || isGuest;
+	const mainTab = React.useMemo(() => {
+		const path = location.pathname.toLowerCase();
+		if (path.startsWith("/admin")) return "admin";
+		if (path.startsWith("/receipts")) return "receipts";
+		if (path.startsWith("/favorites")) return "favorites";
+		return "products";
+	}, [location.pathname]);
+	const adminDefaultPath = "/admin/schedules";
+	const adminPath = location.pathname.startsWith("/admin/")
+		? location.pathname
+		: adminDefaultPath;
+	const tabToPath = (
+		tab: "products" | "receipts" | "favorites" | "admin",
+	) => (tab === "admin" ? adminDefaultPath : `/${tab}`);
 
 	const handleLoggedIn = () => {
 		const stored = getStoredToken();
@@ -96,7 +104,8 @@ function App() {
 		setGuestMode(false);
 		clearGuestSession();
 		setAuthView("login");
-		setMainTab(pendingProtectedTab ?? "products");
+		const targetTab = pendingProtectedTab ?? "products";
+		navigate(tabToPath(targetTab), { replace: true });
 		setPendingProtectedTab(null);
 	};
 
@@ -106,7 +115,7 @@ function App() {
 		setToken(null);
 		setUserEmail(null);
 		setGuestMode(false);
-		setMainTab("products");
+		navigate("/products", { replace: true });
 	};
 
 	const handleGuestLogin = () => {
@@ -116,7 +125,7 @@ function App() {
 		setUserEmail(null);
 		setGuestMode(true);
 		setAuthView("login");
-		setMainTab("products");
+		navigate("/products", { replace: true });
 		setPendingProtectedTab(null);
 	};
 
@@ -138,7 +147,8 @@ function App() {
 			setRestrictedDialogOpen(true);
 			return;
 		}
-		setMainTab(val);
+		const targetPath = val === "admin" ? adminPath : `/${val}`;
+		navigate(targetPath);
 	};
 
 	const handleCloseRestrictedDialog = () => {
@@ -161,10 +171,7 @@ function App() {
 					: "this section";
 
 	const renderMainContent = () => {
-		if (!isAuthenticated) {
-			if (isGuest) {
-				return <ProductsPage />;
-			}
+		if (!isAuthenticated && !isGuest) {
 			return authView === "login" ? (
 				<LoginPage
 					onLoggedIn={handleLoggedIn}
@@ -179,19 +186,35 @@ function App() {
 			);
 		}
 
-		if (mainTab === "receipts") {
-			return <MyReceiptsPage />;
-		}
-
-		if (mainTab === "favorites") {
-			return <MyFavoritesPage />;
-		}
-
-		if (mainTab === "admin") {
-			return isAdmin ? <AdminJobsPage /> : <ProductsPage />;
-		}
-
-		return <ProductsPage />;
+		return (
+			<Routes>
+				<Route path="/" element={<Navigate to="/products" replace />} />
+				<Route path="/products" element={<ProductsPage />} />
+				<Route
+					path="/receipts"
+					element={
+						isAuthenticated ? <MyReceiptsPage /> : <Navigate to="/products" replace />
+					}
+				/>
+				<Route
+					path="/favorites"
+					element={
+						isAuthenticated ? <MyFavoritesPage /> : <Navigate to="/products" replace />
+					}
+				/>
+				<Route
+					path="/admin/*"
+					element={
+						isAuthenticated && isAdmin ? (
+							<AdminJobsPage />
+						) : (
+							<Navigate to="/products" replace />
+						)
+					}
+				/>
+				<Route path="*" element={<Navigate to="/products" replace />} />
+			</Routes>
+		);
 	};
 
 	return (
