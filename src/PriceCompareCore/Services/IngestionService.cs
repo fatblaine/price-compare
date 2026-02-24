@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using PriceCompareCore.Interfaces;
@@ -54,7 +55,7 @@ namespace PriceCompareCore.Services
             var name = p.Name ?? string.Empty;
             var (sv, su, pk) = _mapper.ParseSpec(name);
             var catId = _mapper.MapCategoryId(name);
-            return new Product
+            var product = new Product
             {
                 ShopType = ShopType.COLES,
                 SourceId = p.Id > 0 ? p.Id.ToString() : null,
@@ -67,6 +68,8 @@ namespace PriceCompareCore.Services
                 ImageUrl = p.ImageUrl,
                 LastSeenAt = DateTime.UtcNow
             };
+            ApplyStandardFields(product);
+            return product;
         }
 
         private Product MapColesDown(ColesDownProduct p)
@@ -74,7 +77,7 @@ namespace PriceCompareCore.Services
             var name = p.Name ?? string.Empty;
             var (sv, su, pk) = _mapper.ParseSpec(name);
             var catId = _mapper.MapCategoryId(name);
-            return new Product
+            var product = new Product
             {
                 ShopType = ShopType.COLES,
                 SourceId = p.Id > 0 ? p.Id.ToString() : null,
@@ -87,6 +90,8 @@ namespace PriceCompareCore.Services
                 ImageUrl = p.ImageUrl,
                 LastSeenAt = DateTime.UtcNow
             };
+            ApplyStandardFields(product);
+            return product;
         }
 
         private Product MapWoolworthsSpecial(WoolworthsSpecialProduct p)
@@ -107,7 +112,7 @@ namespace PriceCompareCore.Services
                 sourceId = p.Stockcode.ToString();
             }
 
-            return new Product
+            var product = new Product
             {
                 ShopType = ShopType.WOOLWORTHS,
                 SourceId = sourceId,
@@ -120,6 +125,8 @@ namespace PriceCompareCore.Services
                 ImageUrl = p.LargeImageFile,
                 LastSeenAt = DateTime.UtcNow
             };
+            ApplyStandardFields(product);
+            return product;
         }
 
         // Upsert products into database
@@ -127,6 +134,8 @@ namespace PriceCompareCore.Services
         {
             foreach (var c in candidates)
             {
+                ApplyStandardFields(c);
+
                 Product? existing = null;
 
                 // try to find existing by (ShopType + SourceId)
@@ -156,11 +165,84 @@ namespace PriceCompareCore.Services
                     existing.PackageQty = c.PackageQty ?? existing.PackageQty;
                     existing.CategoryId = c.CategoryId ?? existing.CategoryId;
                     existing.ImageUrl = c.ImageUrl ?? existing.ImageUrl;
+                    ApplyStandardFields(existing);
                     existing.LastSeenAt = DateTime.UtcNow;
                 }
             }
 
             await _dbContext.SaveChangesAsync();
+        }
+
+        private static void ApplyStandardFields(Product product)
+        {
+            product.NormalizedName = NormalizeText(product.Name);
+            product.NormalizedBrand = NormalizeText(product.Brand);
+
+            var (stdValue, stdUnit, sizeUnknown) = StandardizeSize(product.SizeValue, product.SizeUnit);
+            product.SizeStandardValue = stdValue;
+            product.SizeStandardUnit = stdUnit;
+            product.SizeUnknown = sizeUnknown;
+
+            product.BrandUnknown = string.IsNullOrWhiteSpace(product.NormalizedBrand);
+            product.CategoryUnknown = !product.CategoryId.HasValue || product.CategoryId.Value <= 0;
+        }
+
+        private static string? NormalizeText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var sb = new StringBuilder(value.Length);
+            var lastWasSpace = false;
+            foreach (var ch in value)
+            {
+                if (char.IsLetterOrDigit(ch))
+                {
+                    sb.Append(char.ToLowerInvariant(ch));
+                    lastWasSpace = false;
+                }
+                else if (!lastWasSpace)
+                {
+                    sb.Append(' ');
+                    lastWasSpace = true;
+                }
+            }
+
+            var normalized = sb.ToString().Trim();
+            return normalized.Length == 0 ? null : normalized;
+        }
+
+        private static (decimal? value, string? unit, bool unknown) StandardizeSize(decimal? sizeValue, string? sizeUnit)
+        {
+            if (!sizeValue.HasValue || sizeValue.Value <= 0m || string.IsNullOrWhiteSpace(sizeUnit))
+            {
+                return (null, null, true);
+            }
+
+            var unit = sizeUnit.Trim().ToLowerInvariant();
+            switch (unit)
+            {
+                case "g":
+                    return (sizeValue.Value, "g", false);
+                case "kg":
+                    return (sizeValue.Value * 1000m, "g", false);
+                case "mg":
+                    return (sizeValue.Value / 1000m, "g", false);
+                case "ml":
+                    return (sizeValue.Value, "ml", false);
+                case "l":
+                case "lt":
+                case "ltr":
+                case "liter":
+                case "litre":
+                case "liters":
+                case "litres":
+                    return (sizeValue.Value * 1000m, "ml", false);
+                default:
+                    return (null, null, true);
+            }
         }
     }
 }
