@@ -26,6 +26,7 @@ import { SHOP_OPTIONS, shopTypeName } from "./constants/shopTypes";
 import { fetchProducts, type ProductRow } from "./api/products";
 import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
+import type { CompareProduct } from "./api/compare";
 import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
 import { getStoredToken } from "./api/auth";
 
@@ -136,6 +137,12 @@ export default function ProductsPage() {
 	const [compareSourceShop, setCompareSourceShop] = useState<
 		number | undefined
 	>(undefined);
+	const [compareSourceProductId, setCompareSourceProductId] = useState<
+		string | undefined
+	>(undefined);
+	const [compareSourceProduct, setCompareSourceProduct] = useState<
+		CompareProduct | undefined
+	>(undefined);
 
 	const debouncedName = useDebounce(search, 350);
 
@@ -143,16 +150,39 @@ export default function ProductsPage() {
 		productId: string,
 		name?: string,
 		shopTypeValue?: number | string | null,
+		row?: ProductRow,
 	) => {
 		if (!name) {
 			alert("No product name available for comparison.");
 			return;
 		}
 		setCompareKeyword(name);
+		setCompareSourceProductId(productId);
 		const source = Number(shopTypeValue ?? NaN);
 		setCompareSourceShop(
 			Number.isFinite(source) ? (source as number) : undefined,
 		);
+		if (row) {
+			const shopTypeNum = Number(row.shopType ?? NaN);
+			const sizeValue = row.sizeValue ?? null;
+			const price = row.price ?? null;
+			setCompareSourceProduct({
+				productId: row.productId,
+				name: row.name,
+				shopType: Number.isFinite(shopTypeNum) ? shopTypeNum : NaN,
+				brand: undefined,
+				sizeValue,
+				sizeUnit: row.sizeUnit ?? null,
+				size: row.size ?? null,
+				price,
+				pricePerUnit:
+					price != null && sizeValue != null && sizeValue > 0
+						? price / sizeValue
+						: null,
+			});
+		} else {
+			setCompareSourceProduct(undefined);
+		}
 		setCompareOpen(true);
 	};
 
@@ -500,6 +530,7 @@ export default function ProductsPage() {
 														row.productId,
 														row.name,
 														row.shopType,
+														row,
 													)
 												}
 											>
@@ -591,6 +622,8 @@ export default function ProductsPage() {
 				open={compareOpen}
 				keyword={compareKeyword}
 				sourceShop={compareSourceShop}
+				sourceProductId={compareSourceProductId}
+				sourceProduct={compareSourceProduct}
 				onClose={() => setCompareOpen(false)}
 			/>
 		</Box>

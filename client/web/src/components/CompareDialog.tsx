@@ -24,6 +24,7 @@ import { useMediaQuery, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import {
 	fetchCompareMatches,
+	fetchCompareMatchesByProduct,
 	buildPairedSeries,
 	fetchMergedHistory,
 	type CompareMatches,
@@ -46,10 +47,17 @@ export interface CompareDialogProps {
 	open: boolean;
 	keyword: string;
 	sourceShop?: number;
+	sourceProductId?: string;
+	sourceProduct?: CompareProduct;
 	onClose: () => void;
 }
 
-function useCompare(keyword: string, sourceShop?: number) {
+function useCompare(
+	keyword: string,
+	sourceShop?: number,
+	sourceProductId?: string,
+	sourceProduct?: CompareProduct,
+) {
 	const [loading, setLoading] = React.useState(false);
 	const [data, setData] = React.useState<CompareMatches | null>(null);
 	const [error, setError] = React.useState<string | null>(null);
@@ -57,6 +65,28 @@ function useCompare(keyword: string, sourceShop?: number) {
 	React.useEffect(() => {
 		let cancelled = false;
 		async function run() {
+			if (sourceProductId) {
+				if (!sourceProduct) return;
+				setLoading(true);
+				setError(null);
+				try {
+					const targets = await fetchCompareMatchesByProduct(sourceProductId);
+					const filteredTargets = targets.filter(
+						(t) =>
+							!Number.isFinite(sourceProduct.shopType) ||
+							t.shopType !== sourceProduct.shopType,
+					);
+					if (!cancelled) {
+						setData({ source: sourceProduct, targets: filteredTargets });
+					}
+				} catch (e: any) {
+					if (!cancelled) setError(e?.message ?? "Failed to load comparison");
+				} finally {
+					if (!cancelled) setLoading(false);
+				}
+				return;
+			}
+
 			if (!keyword || !Number.isFinite(sourceShop)) return;
 			setLoading(true);
 			setError(null);
@@ -73,7 +103,7 @@ function useCompare(keyword: string, sourceShop?: number) {
 		return () => {
 			cancelled = true;
 		};
-	}, [keyword, sourceShop]);
+	}, [keyword, sourceShop, sourceProductId, sourceProduct]);
 
 	return { loading, data, error };
 }
@@ -119,10 +149,16 @@ function PriceCard({
 }
 
 export default function CompareDialog(props: CompareDialogProps) {
-	const { open, keyword, sourceShop, onClose } = props;
+	const { open, keyword, sourceShop, sourceProductId, sourceProduct, onClose } =
+		props;
 	const theme = useTheme();
 	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
-	const { loading, data, error } = useCompare(keyword, sourceShop);
+	const { loading, data, error } = useCompare(
+		keyword,
+		sourceShop,
+		sourceProductId,
+		sourceProduct,
+	);
 
 	const source = data?.source;
 	const targets = data?.targets ?? [];
@@ -201,7 +237,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 	return (
 		<Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isXs}>
 			<DialogTitle sx={{ pr: 6 }}>
-				Compare: {keyword}
+				Compare: {source?.name ?? keyword}
 				<IconButton
 					aria-label="close"
 					onClick={onClose}

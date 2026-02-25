@@ -13,5 +13,7 @@ namespace PriceCompareData.DTOs
         public decimal Score { get; set; }
         public string Method { get; set; } = string.Empty;
         public string? MatchType { get; set; }
+        public decimal? LatestPrice { get; set; }
+        public decimal? PricePerUnit { get; set; }
     }
 }
