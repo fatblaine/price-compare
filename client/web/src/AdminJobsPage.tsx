@@ -11,6 +11,7 @@ import {
 	FormControl,
 	InputLabel,
 	MenuItem,
+	OutlinedInput,
 	Select,
 	Stack,
 	Tab,
@@ -183,6 +184,8 @@ export default function AdminJobsPage() {
 	const [preMatchStatus, setPreMatchStatus] =
 		React.useState<MatchJobStatus | null>(null);
 	const [preMatchLoading, setPreMatchLoading] = React.useState(false);
+	const [preMatchStatusLoading, setPreMatchStatusLoading] =
+		React.useState(false);
 	const [preMatchError, setPreMatchError] = React.useState<string | null>(null);
 	const location = useLocation();
 	const navigate = useNavigate();
@@ -370,7 +373,9 @@ export default function AdminJobsPage() {
 
 	const runPreMatch = React.useCallback(async () => {
 		setPreMatchError(null);
-		if (preMatchRequest.sourceShop === preMatchRequest.targetShop) {
+		const resumeJobId = preMatchRequest.resumeJobId?.trim();
+		const isResume = Boolean(resumeJobId);
+		if (!isResume && preMatchRequest.sourceShop === preMatchRequest.targetShop) {
 			setPreMatchError("Source shop and target shop must be different.");
 			return;
 		}
@@ -378,6 +383,7 @@ export default function AdminJobsPage() {
 		try {
 			const payload: MatchRunRequest = {
 				...preMatchRequest,
+				resumeJobId: resumeJobId || undefined,
 				limit:
 					preMatchRequest.limit != null
 						? Math.max(0, Number(preMatchRequest.limit))
@@ -401,6 +407,30 @@ export default function AdminJobsPage() {
 			setPreMatchLoading(false);
 		}
 	}, [preMatchRequest]);
+
+	const loadPreMatchStatus = React.useCallback(async () => {
+		setPreMatchError(null);
+		const jobId =
+			preMatchRequest.resumeJobId?.trim() || preMatchJobId || "";
+		if (!jobId) {
+			setPreMatchError("Provide a Job ID to load status.");
+			return;
+		}
+		setPreMatchStatusLoading(true);
+		try {
+			const status = await fetchMatchJobStatus(jobId);
+			setPreMatchStatus(status);
+			setPreMatchJobId(status.id);
+		} catch (e) {
+			if (axios.isAxiosError(e) && e.response?.status === 403) {
+				setPreMatchError("Not authorized to view pre-match status.");
+			} else {
+				setPreMatchError("Failed to load pre-match status.");
+			}
+		} finally {
+			setPreMatchStatusLoading(false);
+		}
+	}, [preMatchRequest.resumeJobId, preMatchJobId]);
 
 	return (
 		<Box>
@@ -562,6 +592,13 @@ export default function AdminJobsPage() {
 								>
 									{preMatchLoading ? "Starting..." : "Run pre-match"}
 								</Button>
+								<Button
+									variant="outlined"
+									onClick={loadPreMatchStatus}
+									disabled={preMatchStatusLoading}
+								>
+									{preMatchStatusLoading ? "Loading..." : "Refresh status"}
+								</Button>
 							</Stack>
 						</Stack>
 
@@ -631,6 +668,23 @@ export default function AdminJobsPage() {
 									<MenuItem value="incremental">Incremental</MenuItem>
 									<MenuItem value="full">Full</MenuItem>
 								</Select>
+							</FormControl>
+							<FormControl size="small" sx={{ minWidth: 220 }}>
+								<InputLabel id="pre-match-resume-label" shrink>
+									Resume Job ID
+								</InputLabel>
+								<OutlinedInput
+									label="Resume Job ID"
+									placeholder="Optional"
+									value={preMatchRequest.resumeJobId ?? ""}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											resumeJobId: e.target.value,
+										}))
+									}
+									notched
+								/>
 							</FormControl>
 							<TextField
 								label="Limit"
@@ -726,6 +780,13 @@ export default function AdminJobsPage() {
 									<Typography variant="body2">
 										{shopLabel(preMatchStatus.sourceShop)} →{" "}
 										{shopLabel(preMatchStatus.targetShop)}
+									</Typography>
+									<Typography variant="body2">
+										Mode: {preMatchStatus.mode}, Top N: {preMatchStatus.topN},
+										{" "}Limit: {preMatchStatus.limitNum}
+									</Typography>
+									<Typography variant="body2">
+										Use LLM: {preMatchStatus.useLlm ? "Yes" : "No"}
 									</Typography>
 									<Typography variant="body2">
 										Progress: {preMatchStatus.processed}/{preMatchStatus.total}

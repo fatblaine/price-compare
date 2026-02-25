@@ -94,6 +94,7 @@ export async function fetchAdminHealth(rangeHours = 24): Promise<AdminHealth> {
 }
 
 export type MatchRunRequest = {
+	resumeJobId?: string;
 	sourceShop: number;
 	targetShop: number;
 	mode?: string;
