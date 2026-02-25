@@ -28,28 +28,56 @@ namespace PriceCompareCore.Services
 
         public async Task<Guid> StartAsync(MatchRunRequest request)
         {
-            var jobId = Guid.NewGuid();
+            var jobId = request.ResumeJobId ?? Guid.NewGuid();
 
             using (var scope = _scopeFactory.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-                var job = new MatchJob
-                {
-                    Id = jobId,
-                    SourceShop = request.SourceShop,
-                    TargetShop = request.TargetShop,
-                    Status = "queued",
-                    Mode = string.IsNullOrWhiteSpace(request.Mode) ? "incremental" : request.Mode,
-                    Since = request.Since,
-                    UseLlm = request.UseLlm,
-                    LimitNum = request.Limit,
-                    TopN = request.TopN,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
+                MatchJob? job = null;
 
-                db.MatchJobs.Add(job);
+                if (request.ResumeJobId.HasValue)
+                {
+                    job = await db.MatchJobs.FirstOrDefaultAsync(j => j.Id == request.ResumeJobId.Value);
+                    if (job == null)
+                    {
+                        throw new InvalidOperationException($"Resume job not found: {request.ResumeJobId}");
+                    }
+
+                    if (request.SourceShop != job.SourceShop || request.TargetShop != job.TargetShop)
+                    {
+                        throw new InvalidOperationException("Resume job source/target does not match.");
+                    }
+
+                    job.Status = "queued";
+                    request.Mode = job.Mode;
+                    request.Since = job.Since;
+                    request.UseLlm = job.UseLlm;
+                    request.Limit = job.LimitNum;
+                    request.TopN = job.TopN;
+                    job.ErrorMessage = null;
+                    job.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    job = new MatchJob
+                    {
+                        Id = jobId,
+                        SourceShop = request.SourceShop,
+                        TargetShop = request.TargetShop,
+                        Status = "queued",
+                        Mode = string.IsNullOrWhiteSpace(request.Mode) ? "incremental" : request.Mode,
+                        Since = request.Since,
+                        UseLlm = request.UseLlm,
+                        LimitNum = request.Limit,
+                        TopN = request.TopN,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    db.MatchJobs.Add(job);
+                }
+
                 await db.SaveChangesAsync();
             }
 
@@ -118,11 +146,29 @@ namespace PriceCompareCore.Services
                 await db.SaveChangesAsync();
 
                 IQueryable<Product> query = baseQuery
-                    .OrderByDescending(p => p.LastSeenAt);
+                    .OrderByDescending(p => p.LastSeenAt)
+                    .ThenByDescending(p => p.ProductId);
 
-                if (request.Limit > 0)
+                var remainingLimit = request.Limit;
+                if (request.ResumeJobId.HasValue && job.Processed > 0)
                 {
-                    query = query.Take(request.Limit);
+                    query = query.Skip(job.Processed);
+                    if (remainingLimit > 0)
+                    {
+                        remainingLimit = Math.Max(remainingLimit - job.Processed, 0);
+                    }
+                }
+
+                if (remainingLimit > 0)
+                {
+                    query = query.Take(remainingLimit);
+                }
+                else if (request.Limit > 0)
+                {
+                    job.Status = "completed";
+                    job.UpdatedAt = DateTime.UtcNow;
+                    await db.SaveChangesAsync();
+                    return;
                 }
 
                 // Process in pages to avoid loading too many rows at once.

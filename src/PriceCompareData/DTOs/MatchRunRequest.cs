@@ -7,6 +7,7 @@ namespace PriceCompareData.DTOs
 {
     public class MatchRunRequest
     {
+        public Guid? ResumeJobId { get; set; }
         public int SourceShop { get; set; }
         public int TargetShop { get; set; }
         public string Mode { get; set; } = "incremental";
