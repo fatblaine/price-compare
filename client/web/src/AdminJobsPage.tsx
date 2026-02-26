@@ -44,7 +44,9 @@ import {
 	fetchAdminStats,
 	fetchMatchJobs,
 	fetchMatchJobStatus,
+	fetchProductMatchReview,
 	runMatchJob,
+	updateProductMatch,
 	type AdminHealth,
 	type JobRun,
 	type JobRunStats,
@@ -52,6 +54,7 @@ import {
 	type MatchJobListItem,
 	type MatchJobStatus,
 	type MatchRunRequest,
+	type ProductMatchReviewItem,
 } from "./api/admin";
 
 type TrendPoint = {
@@ -204,6 +207,18 @@ export default function AdminJobsPage() {
 		page: 0,
 		pageSize: 20,
 	});
+	const [reviewItems, setReviewItems] = React.useState<ProductMatchReviewItem[]>([]);
+	const [reviewTotal, setReviewTotal] = React.useState(0);
+	const [reviewLoading, setReviewLoading] = React.useState(false);
+	const [reviewError, setReviewError] = React.useState<string | null>(null);
+	const [reviewPagination, setReviewPagination] = React.useState({
+		page: 0,
+		pageSize: 20,
+	});
+	const [reviewEdits, setReviewEdits] = React.useState<
+		Record<string, { matchType: "same_product" | "comparable"; score: string }>
+	>({});
+	const [reviewSavingIds, setReviewSavingIds] = React.useState<string[]>([]);
 	const location = useLocation();
 	const navigate = useNavigate();
 	const adminTab = location.pathname.includes("/prematch")
@@ -227,6 +242,41 @@ export default function AdminJobsPage() {
 		}),
 		[selectedKey],
 	);
+
+	const reviewScoreMin = 0.5;
+	const reviewScoreMax = 0.9;
+
+	const getReviewEdit = (row: ProductMatchReviewItem) => {
+		return (
+			reviewEdits[row.matchId] ?? {
+				matchType:
+					row.matchType === "same_product" ? "same_product" : "comparable",
+				score: row.score.toFixed(4),
+			}
+		);
+	};
+
+	const setReviewEdit = (
+		row: ProductMatchReviewItem,
+		patch: Partial<{ matchType: "same_product" | "comparable"; score: string }>,
+	) => {
+		setReviewEdits((prev) => {
+			const existing =
+				prev[row.matchId] ??
+				({
+					matchType:
+						row.matchType === "same_product" ? "same_product" : "comparable",
+					score: row.score.toFixed(4),
+				} as const);
+			return {
+				...prev,
+				[row.matchId]: {
+					...existing,
+					...patch,
+				},
+			};
+		});
+	};
 
 	const scheduleColumns: GridColDef<JobSchedule>[] = [
 		{ field: "jobName", headerName: "Job", flex: 1, minWidth: 220 },
@@ -383,6 +433,186 @@ export default function AdminJobsPage() {
 		},
 	];
 
+	const reviewColumns: GridColDef<ProductMatchReviewItem>[] = [
+		{
+			field: "sourceName",
+			headerName: "Source",
+			minWidth: 220,
+			flex: 1,
+			renderCell: (params) => (
+				<Stack direction="row" spacing={1.2} alignItems="center">
+					<Box
+						component="img"
+						src={params.row.sourceImageUrl || ""}
+						alt={params.row.sourceName}
+						sx={{
+							width: 48,
+							height: 48,
+							borderRadius: 1,
+							objectFit: "contain",
+							bgcolor: "#f5f5f7",
+						}}
+						onError={(e) => {
+							(e.currentTarget as HTMLImageElement).style.display = "none";
+						}}
+					/>
+					<Box>
+						<Typography variant="body2" fontWeight={600} noWrap>
+							{params.row.sourceName}
+						</Typography>
+						<Typography variant="caption" color="text.secondary">
+							{params.row.sourceShopName}
+						</Typography>
+					</Box>
+				</Stack>
+			),
+		},
+		{
+			field: "targetName",
+			headerName: "Target",
+			minWidth: 220,
+			flex: 1,
+			renderCell: (params) => (
+				<Stack direction="row" spacing={1.2} alignItems="center">
+					<Box
+						component="img"
+						src={params.row.targetImageUrl || ""}
+						alt={params.row.targetName}
+						sx={{
+							width: 48,
+							height: 48,
+							borderRadius: 1,
+							objectFit: "contain",
+							bgcolor: "#f5f5f7",
+						}}
+						onError={(e) => {
+							(e.currentTarget as HTMLImageElement).style.display = "none";
+						}}
+					/>
+					<Box>
+						<Typography variant="body2" fontWeight={600} noWrap>
+							{params.row.targetName}
+						</Typography>
+						<Typography variant="caption" color="text.secondary">
+							{params.row.targetShopName}
+						</Typography>
+					</Box>
+				</Stack>
+			),
+		},
+		{
+			field: "score",
+			headerName: "Score",
+			width: 110,
+			valueFormatter: (value) =>
+				Number.isFinite(Number(value))
+					? Number(value).toFixed(4)
+					: "-",
+		},
+		{
+			field: "matchType",
+			headerName: "Match type",
+			width: 140,
+			valueFormatter: (value) => (value ? String(value) : "-"),
+		},
+		{
+			field: "updatedAt",
+			headerName: "Updated",
+			width: 180,
+			valueFormatter: (value) => formatDateTime(value as string | null),
+		},
+		{
+			field: "actions",
+			headerName: "Update",
+			minWidth: 320,
+			flex: 1,
+			sortable: false,
+			filterable: false,
+			renderCell: (params) => {
+				const row = params.row;
+				const edit = getReviewEdit(row);
+				const isSaving = reviewSavingIds.includes(row.matchId);
+				const isSame = edit.matchType === "same_product";
+				return (
+					<Stack direction="row" spacing={1} alignItems="center">
+						<FormControl size="small" sx={{ minWidth: 140 }}>
+							<InputLabel id={`match-type-${row.matchId}`} shrink>
+								Match type
+							</InputLabel>
+							<Select
+								labelId={`match-type-${row.matchId}`}
+								label="Match type"
+								value={edit.matchType}
+								onChange={(e) =>
+									setReviewEdit(row, {
+										matchType: e.target.value as "same_product" | "comparable",
+									})
+								}
+								input={<OutlinedInput label="Match type" notched />}
+							>
+								<MenuItem value="same_product">same_product</MenuItem>
+								<MenuItem value="comparable">comparable</MenuItem>
+							</Select>
+						</FormControl>
+						<TextField
+							label="Score"
+							size="small"
+							type="number"
+							value={edit.score}
+							disabled={isSame}
+							onChange={(e) => setReviewEdit(row, { score: e.target.value })}
+							inputProps={{ min: 0.5, max: 0.9999, step: 0.0001 }}
+							sx={{ width: 120 }}
+						/>
+						<Button
+							variant="contained"
+							size="small"
+							disabled={isSaving}
+							onClick={() => {
+								const nextType = edit.matchType;
+								const nextScore = Number(edit.score);
+								if (nextType === "comparable") {
+									if (!Number.isFinite(nextScore)) {
+										setReviewError("Score must be a number.");
+										return;
+									}
+									if (nextScore < 0.5 || nextScore > 0.9999) {
+										setReviewError("Score must be between 0.5000 and 0.9999.");
+										return;
+									}
+								}
+								setReviewSavingIds((prev) =>
+									prev.includes(row.matchId) ? prev : [...prev, row.matchId],
+								);
+								setReviewError(null);
+								void updateProductMatch({
+									matchId: row.matchId,
+									matchType: nextType,
+									score: nextType === "comparable" ? nextScore : undefined,
+								})
+									.then(() => loadReviewMatches())
+									.catch((e) => {
+										if (axios.isAxiosError(e) && e.response?.status === 403) {
+											setReviewError("Not authorized to update match.");
+										} else {
+											setReviewError("Failed to update match.");
+										}
+									})
+									.finally(() => {
+										setReviewSavingIds((prev) =>
+											prev.filter((id) => id !== row.matchId),
+										);
+									});
+							}}
+						>
+							Save
+						</Button>
+					</Stack>
+				);
+			},
+		},
+	];
+
 	const loadSchedules = React.useCallback(async () => {
 		setLoadingSchedules(true);
 		setError(null);
@@ -536,6 +766,34 @@ export default function AdminJobsPage() {
 		if (adminTab !== "prematch") return;
 		void loadMatchJobs();
 	}, [adminTab, loadMatchJobs]);
+
+	const loadReviewMatches = React.useCallback(async () => {
+		setReviewError(null);
+		setReviewLoading(true);
+		try {
+			const result = await fetchProductMatchReview({
+				minScore: reviewScoreMin,
+				maxScore: reviewScoreMax,
+				page: reviewPagination.page + 1,
+				pageSize: reviewPagination.pageSize,
+			});
+			setReviewItems(result.items);
+			setReviewTotal(result.total);
+		} catch (e) {
+			if (axios.isAxiosError(e) && e.response?.status === 403) {
+				setReviewError("Not authorized to view match review.");
+			} else {
+				setReviewError("Failed to load match review.");
+			}
+		} finally {
+			setReviewLoading(false);
+		}
+	}, [reviewPagination.page, reviewPagination.pageSize, reviewScoreMin, reviewScoreMax]);
+
+	React.useEffect(() => {
+		if (adminTab !== "prematch") return;
+		void loadReviewMatches();
+	}, [adminTab, loadReviewMatches]);
 
 	return (
 		<Box>
@@ -1110,6 +1368,66 @@ export default function AdminJobsPage() {
 									}}
 									pageSizeOptions={[10, 20, 50]}
 									disableRowSelectionOnClick
+								/>
+							</Box>
+						</CardContent>
+						</Card>
+
+						<Card variant="outlined">
+						<CardContent>
+							<Stack
+								direction={{ xs: "column", md: "row" }}
+								spacing={2}
+								alignItems={{ xs: "flex-start", md: "center" }}
+								justifyContent="space-between"
+							>
+								<Box>
+									<Typography variant="h6" fontWeight={700}>
+										Match review
+									</Typography>
+									<Typography variant="body2" color="text.secondary">
+										Score range: {reviewScoreMin.toFixed(2)}–{reviewScoreMax.toFixed(2)}
+									</Typography>
+								</Box>
+							</Stack>
+
+							<Divider sx={{ my: 2 }} />
+
+							{reviewError && (
+								<Alert severity="error" sx={{ mt: 2 }}>
+									{reviewError}
+								</Alert>
+							)}
+
+							<Box sx={{ mt: 2 }}>
+								<DataGrid
+									rows={reviewItems}
+									columns={reviewColumns}
+									getRowId={(row) => row.matchId}
+									autoHeight
+									rowHeight={92}
+									loading={reviewLoading}
+									rowCount={reviewTotal}
+									paginationMode="server"
+									paginationModel={reviewPagination}
+									onPaginationModelChange={(model) => {
+										setReviewPagination(model);
+									}}
+									pageSizeOptions={[10, 20, 50]}
+									disableRowSelectionOnClick
+									sx={{
+										"& .MuiDataGrid-columnHeaders": {
+											minHeight: 56,
+											maxHeight: 56,
+										},
+										"& .MuiDataGrid-cell": {
+											py: 1.5,
+											alignItems: "center",
+										},
+										"& .MuiDataGrid-row": {
+											maxHeight: "none",
+										},
+									}}
 								/>
 							</Box>
 						</CardContent>
