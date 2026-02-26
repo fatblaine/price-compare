@@ -210,12 +210,15 @@ namespace PriceCompareCore.Services
                                         source,
                                         candidates.Select(c => c.Target).ToList());
 
-                                    if (decision == "same_product" || decision == "comparable")
-                                    {
-                                        // Promote score so LLM-approved matches rank higher when reading cached results.
-                                        best.Score = decision == "same_product" ? 0.95m : 0.70m;
-                                        best.MatchType = decision;
-                                    }
+									if (decision == "same_product" || decision == "comparable")
+									{
+										// Promote score only for same_product to avoid lowering comparable matches.
+										if (decision == "same_product")
+										{
+											best.Score = 0.95m;
+										}
+										best.MatchType = decision;
+									}
                                     else
                                     {
                                         // LLM rejected the match; skip writing.
@@ -322,5 +325,135 @@ namespace PriceCompareCore.Services
                 }
             }
         }
+
+        public async Task<MatchJobListResponse> SearchAsync(MatchJobQueryRequest request)
+        {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            // Normalize pagination
+            var page = request.Page < 1 ? 1 : request.Page;
+            var pageSize = request.PageSize < 1 ? 1 : request.PageSize;
+            pageSize = Math.Min(pageSize, 200);
+
+            // Normalize sorting inputs.
+            var sortBy = (request.SortBy ?? "updatedAt").Trim().ToLowerInvariant();
+            var sortDir = (request.SortDir ?? "desc").Trim().ToLowerInvariant();
+
+            if (sortBy != "updatedat" && sortBy != "createdat")
+            {
+                throw new ArgumentException("sortBy must be 'updatedAt' or 'createdAt'.");
+            }
+
+            if (sortDir != "asc" && sortDir != "desc")
+            {
+                throw new ArgumentException("sortDir must be 'asc' or 'desc'.");
+            }
+
+            var statusList = ParseStatusList(request.Status);
+
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            IQueryable<MatchJob> query = db.MatchJobs.AsNoTracking();
+
+            if (statusList.Count > 0)
+            {
+                query = query.Where(j => statusList.Contains(j.Status));
+            }
+
+            var updatedFrom = NormalizeToUtc(request.UpdatedFrom);
+            var updatedTo = NormalizeToUtc(request.UpdatedTo);
+
+            if (request.UpdatedFrom.HasValue)
+            {
+                query = query.Where(j => j.UpdatedAt >= updatedFrom.Value);
+            }
+
+            if (request.UpdatedTo.HasValue)
+            {
+                query = query.Where(j => j.UpdatedAt <= updatedTo.Value);
+            }
+
+            var total = await query.CountAsync();
+
+            // sorting
+            if (sortBy == "createdat")
+            {
+                query = sortDir == "asc"
+                    ? query.OrderBy(j => j.CreatedAt)
+                    : query.OrderByDescending(j => j.CreatedAt);
+            }
+            else
+            {
+                query = sortDir == "asc"
+                    ? query.OrderBy(j => j.UpdatedAt)
+                    : query.OrderByDescending(j => j.UpdatedAt);
+            }
+
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(j => new MatchJobListItem
+                {
+                    Id = j.Id,
+                    SourceShop = j.SourceShop,
+                    TargetShop = j.TargetShop,
+                    Status = j.Status,
+                    Mode = j.Mode,
+                    Since = j.Since,
+                    Total = j.Total,
+                    Processed = j.Processed,
+                    Matched = j.Matched,
+                    Comparable = j.Comparable,
+                    Failed = j.Failed,
+                    UseLlm = j.UseLlm,
+                    LimitNum = j.LimitNum,
+                    TopN = j.TopN,
+                    ErrorMessage = j.ErrorMessage,
+                    CreatedAt = j.CreatedAt,
+                    UpdatedAt = j.UpdatedAt
+                })
+                .ToListAsync();
+
+            return new MatchJobListResponse
+            {
+                Items = items,
+                Total = total,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
+        private static List<string> ParseStatusList(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return new List<string>();
+            }
+
+            // Normalize to lower-case and remove empty entries.
+            return raw.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim().ToLowerInvariant())
+                .Where(s => s.Length > 0)
+                .Distinct()
+                .ToList();
+        }
+
+        // Normalize DateTime for PostgreSQL (timestamptz requires UTC).
+        private static DateTime? NormalizeToUtc(DateTime? value)
+        {
+            if (!value.HasValue) return null;
+
+            var dt = value.Value;
+            if (dt.Kind == DateTimeKind.Utc) return dt;
+            if (dt.Kind == DateTimeKind.Local) return dt.ToUniversalTime();
+
+            // Treat Unspecified as local time, then convert to UTC.
+            return DateTime.SpecifyKind(dt, DateTimeKind.Local).ToUniversalTime();
+        }
+
     }
 }

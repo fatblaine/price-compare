@@ -167,6 +167,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Match/status/{jobId}
             Method: GET
+        MatchJobsGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Match/jobs
+            Method: GET
         CompareCachedGet:
           Type: HttpApi
           Properties:

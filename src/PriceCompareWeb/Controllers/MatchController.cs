@@ -53,5 +53,24 @@ namespace PriceCompareWeb.Controllers
 
             return Ok(job);
         }
+
+        [HttpGet("jobs")]
+        public async Task<IActionResult> Jobs([FromQuery] MatchJobQueryRequest request)
+        {
+            if (request == null)
+            {
+                return BadRequest("Request is required.");
+            }
+
+            try
+            {
+                var result = await _matchJobService.SearchAsync(request);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 }
