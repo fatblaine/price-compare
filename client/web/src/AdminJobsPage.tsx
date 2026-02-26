@@ -5,11 +5,13 @@ import {
 	Button,
 	Card,
 	CardContent,
+	Checkbox,
 	Chip,
 	CircularProgress,
 	Divider,
 	FormControl,
 	InputLabel,
+	ListItemText,
 	MenuItem,
 	OutlinedInput,
 	Select,
@@ -40,12 +42,14 @@ import {
 	fetchAdminRuns,
 	fetchAdminSchedules,
 	fetchAdminStats,
+	fetchMatchJobs,
 	fetchMatchJobStatus,
 	runMatchJob,
 	type AdminHealth,
 	type JobRun,
 	type JobRunStats,
 	type JobSchedule,
+	type MatchJobListItem,
 	type MatchJobStatus,
 	type MatchRunRequest,
 } from "./api/admin";
@@ -184,9 +188,22 @@ export default function AdminJobsPage() {
 	const [preMatchStatus, setPreMatchStatus] =
 		React.useState<MatchJobStatus | null>(null);
 	const [preMatchLoading, setPreMatchLoading] = React.useState(false);
-	const [preMatchStatusLoading, setPreMatchStatusLoading] =
-		React.useState(false);
 	const [preMatchError, setPreMatchError] = React.useState<string | null>(null);
+	const [matchJobs, setMatchJobs] = React.useState<MatchJobListItem[]>([]);
+	const [matchJobsTotal, setMatchJobsTotal] = React.useState(0);
+	const [matchJobsLoading, setMatchJobsLoading] = React.useState(false);
+	const [matchJobsError, setMatchJobsError] = React.useState<string | null>(null);
+	const [matchJobsFilters, setMatchJobsFilters] = React.useState({
+		statuses: [] as string[],
+		updatedFrom: "",
+		updatedTo: "",
+		sortBy: "updatedAt" as "updatedAt" | "createdAt",
+		sortDir: "desc" as "asc" | "desc",
+	});
+	const [matchJobsPagination, setMatchJobsPagination] = React.useState({
+		page: 0,
+		pageSize: 20,
+	});
 	const location = useLocation();
 	const navigate = useNavigate();
 	const adminTab = location.pathname.includes("/prematch")
@@ -285,6 +302,85 @@ export default function AdminJobsPage() {
 		},
 		{ field: "environment", headerName: "Env", width: 110 },
 		{ field: "requestId", headerName: "Request ID", width: 220 },
+	];
+
+	const matchJobColumns: GridColDef<MatchJobListItem>[] = [
+		{ field: "id", headerName: "ID", width: 240 },
+		{
+			field: "status",
+			headerName: "Status",
+			width: 120,
+			renderCell: (params) => statusChip(params.value as string | null),
+		},
+		{
+			field: "sourceShop",
+			headerName: "Source",
+			width: 100,
+			valueFormatter: (value) => shopLabel(Number(value)),
+		},
+		{
+			field: "targetShop",
+			headerName: "Target",
+			width: 100,
+			valueFormatter: (value) => shopLabel(Number(value)),
+		},
+		{ field: "mode", headerName: "Mode", width: 130 },
+		{
+			field: "useLlm",
+			headerName: "Use LLM",
+			width: 110,
+			renderCell: (params) => (
+				<Chip
+					label={params.value ? "Yes" : "No"}
+					size="small"
+					variant="outlined"
+				/>
+			),
+		},
+		{ field: "total", headerName: "Total", width: 90 },
+		{ field: "processed", headerName: "Processed", width: 110 },
+		{ field: "matched", headerName: "Matched", width: 100 },
+		{ field: "comparable", headerName: "Comparable", width: 120 },
+		{ field: "failed", headerName: "Failed", width: 90 },
+		{ field: "limitNum", headerName: "Limit", width: 90 },
+		{ field: "topN", headerName: "Top N", width: 80 },
+		{
+			field: "since",
+			headerName: "Since",
+			width: 180,
+			valueFormatter: (value) => formatDateTime(value as string | null),
+		},
+		{
+			field: "createdAt",
+			headerName: "Created",
+			width: 180,
+			valueFormatter: (value) => formatDateTime(value as string | null),
+		},
+		{
+			field: "updatedAt",
+			headerName: "Updated",
+			width: 180,
+			valueFormatter: (value) => formatDateTime(value as string | null),
+		},
+		{
+			field: "errorMessage",
+			headerName: "Error",
+			flex: 1,
+			minWidth: 220,
+			renderCell: (params) => (
+				<Box
+					title={params.value ? String(params.value) : ""}
+					sx={{
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+						whiteSpace: "nowrap",
+						width: "100%",
+					}}
+				>
+					{params.value ? String(params.value) : "-"}
+				</Box>
+			),
+		},
 	];
 
 	const loadSchedules = React.useCallback(async () => {
@@ -408,29 +504,38 @@ export default function AdminJobsPage() {
 		}
 	}, [preMatchRequest]);
 
-	const loadPreMatchStatus = React.useCallback(async () => {
-		setPreMatchError(null);
-		const jobId =
-			preMatchRequest.resumeJobId?.trim() || preMatchJobId || "";
-		if (!jobId) {
-			setPreMatchError("Provide a Job ID to load status.");
-			return;
-		}
-		setPreMatchStatusLoading(true);
+	const loadMatchJobs = React.useCallback(async () => {
+		setMatchJobsError(null);
+		setMatchJobsLoading(true);
 		try {
-			const status = await fetchMatchJobStatus(jobId);
-			setPreMatchStatus(status);
-			setPreMatchJobId(status.id);
+			const result = await fetchMatchJobs({
+				status: matchJobsFilters.statuses.length
+					? matchJobsFilters.statuses.join(",")
+					: undefined,
+				updatedFrom: matchJobsFilters.updatedFrom || undefined,
+				updatedTo: matchJobsFilters.updatedTo || undefined,
+				page: matchJobsPagination.page + 1,
+				pageSize: matchJobsPagination.pageSize,
+				sortBy: matchJobsFilters.sortBy,
+				sortDir: matchJobsFilters.sortDir,
+			});
+			setMatchJobs(result.items);
+			setMatchJobsTotal(result.total);
 		} catch (e) {
 			if (axios.isAxiosError(e) && e.response?.status === 403) {
-				setPreMatchError("Not authorized to view pre-match status.");
+				setMatchJobsError("Not authorized to view match jobs.");
 			} else {
-				setPreMatchError("Failed to load pre-match status.");
+				setMatchJobsError("Failed to load match jobs.");
 			}
 		} finally {
-			setPreMatchStatusLoading(false);
+			setMatchJobsLoading(false);
 		}
-	}, [preMatchRequest.resumeJobId, preMatchJobId]);
+	}, [matchJobsPagination.page, matchJobsPagination.pageSize, matchJobsFilters]);
+
+	React.useEffect(() => {
+		if (adminTab !== "prematch") return;
+		void loadMatchJobs();
+	}, [adminTab, loadMatchJobs]);
 
 	return (
 		<Box>
@@ -573,242 +678,443 @@ export default function AdminJobsPage() {
 				)}
 
 				{adminTab === "prematch" && (
-					<Card variant="outlined">
-					<CardContent>
-						<Stack
-							direction={{ xs: "column", md: "row" }}
-							spacing={2}
-							alignItems={{ xs: "flex-start", md: "center" }}
-							justifyContent="space-between"
-						>
-							<Typography variant="h6" fontWeight={700}>
-								Batch pre-match
-							</Typography>
-							<Stack direction="row" spacing={1}>
-								<Button
-									variant="contained"
-									onClick={runPreMatch}
-									disabled={preMatchLoading}
-								>
-									{preMatchLoading ? "Starting..." : "Run pre-match"}
-								</Button>
-								<Button
-									variant="outlined"
-									onClick={loadPreMatchStatus}
-									disabled={preMatchStatusLoading}
-								>
-									{preMatchStatusLoading ? "Loading..." : "Refresh status"}
-								</Button>
-							</Stack>
-						</Stack>
-
-						<Divider sx={{ my: 2 }} />
-
-						<Box sx={{ overflowX: "auto", pt: 1.5, pb: 0.5 }}>
+					<Stack spacing={2}>
+						<Card variant="outlined">
+						<CardContent>
 							<Stack
-								direction="row"
+								direction={{ xs: "column", md: "row" }}
 								spacing={2}
-								alignItems="center"
-								flexWrap="nowrap"
-								sx={{ minWidth: "max-content" }}
+								alignItems={{ xs: "flex-start", md: "center" }}
+								justifyContent="space-between"
 							>
-							<FormControl size="small" sx={{ minWidth: 160 }}>
-								<InputLabel id="pre-match-source-label">Source shop</InputLabel>
-								<Select
-									labelId="pre-match-source-label"
-									label="Source shop"
-									value={preMatchRequest.sourceShop}
-									onChange={(e) =>
-										setPreMatchRequest((prev) => ({
-											...prev,
-											sourceShop: Number(e.target.value),
-										}))
-									}
-								>
-									{SHOP_OPTIONS.map((option) => (
-										<MenuItem key={option.value} value={option.value}>
-											{option.label}
-										</MenuItem>
-									))}
-								</Select>
-							</FormControl>
-							<FormControl size="small" sx={{ minWidth: 160 }}>
-								<InputLabel id="pre-match-target-label">Target shop</InputLabel>
-								<Select
-									labelId="pre-match-target-label"
-									label="Target shop"
-									value={preMatchRequest.targetShop}
-									onChange={(e) =>
-										setPreMatchRequest((prev) => ({
-											...prev,
-											targetShop: Number(e.target.value),
-										}))
-									}
-								>
-									{SHOP_OPTIONS.map((option) => (
-										<MenuItem key={option.value} value={option.value}>
-											{option.label}
-										</MenuItem>
-									))}
-								</Select>
-							</FormControl>
-							<FormControl size="small" sx={{ minWidth: 160 }}>
-								<InputLabel id="pre-match-mode-label">Mode</InputLabel>
-								<Select
-									labelId="pre-match-mode-label"
-									label="Mode"
-									value={preMatchRequest.mode ?? "incremental"}
-									onChange={(e) =>
-										setPreMatchRequest((prev) => ({
-											...prev,
-											mode: String(e.target.value),
-										}))
-									}
-								>
-									<MenuItem value="incremental">Incremental</MenuItem>
-									<MenuItem value="full">Full</MenuItem>
-								</Select>
-							</FormControl>
-							<FormControl size="small" sx={{ minWidth: 220 }}>
-								<InputLabel id="pre-match-resume-label" shrink>
-									Resume Job ID
-								</InputLabel>
-								<OutlinedInput
-									label="Resume Job ID"
-									placeholder="Optional"
-									value={preMatchRequest.resumeJobId ?? ""}
-									onChange={(e) =>
-										setPreMatchRequest((prev) => ({
-											...prev,
-											resumeJobId: e.target.value,
-										}))
-									}
-									notched
-								/>
-							</FormControl>
-							<TextField
-								label="Limit"
-								size="small"
-								type="number"
-								value={preMatchRequest.limit ?? 0}
-								onChange={(e) =>
-									setPreMatchRequest((prev) => ({
-										...prev,
-										limit: Number(e.target.value),
-									}))
-								}
-								inputProps={{ min: 0 }}
-								sx={{ width: 120 }}
-							/>
-							<TextField
-								label="Top N"
-								size="small"
-								type="number"
-								value={preMatchRequest.topN ?? 20}
-								onChange={(e) =>
-									setPreMatchRequest((prev) => ({
-										...prev,
-										topN: Number(e.target.value),
-									}))
-								}
-								inputProps={{ min: 1, max: 50 }}
-								sx={{ width: 100 }}
-							/>
-							<FormControl size="small" sx={{ minWidth: 140 }}>
-								<InputLabel id="pre-match-llm-label">Use LLM</InputLabel>
-								<Select
-									labelId="pre-match-llm-label"
-									label="Use LLM"
-									value={preMatchRequest.useLlm ? "yes" : "no"}
-									onChange={(e) =>
-										setPreMatchRequest((prev) => ({
-											...prev,
-											useLlm: e.target.value === "yes",
-										}))
-									}
-								>
-									<MenuItem value="no">No</MenuItem>
-									<MenuItem value="yes">Yes</MenuItem>
-								</Select>
-							</FormControl>
-							<FormControl size="small" sx={{ minWidth: 160 }}>
-								<InputLabel id="pre-match-force-label">
-									Force re-match
-								</InputLabel>
-								<Select
-									labelId="pre-match-force-label"
-									label="Force re-match"
-									value={preMatchRequest.force ? "yes" : "no"}
-									onChange={(e) =>
-										setPreMatchRequest((prev) => ({
-											...prev,
-											force: e.target.value === "yes",
-										}))
-									}
-								>
-									<MenuItem value="no">No</MenuItem>
-									<MenuItem value="yes">Yes</MenuItem>
-								</Select>
-							</FormControl>
+								<Typography variant="h6" fontWeight={700}>
+									Batch pre-match
+								</Typography>
+								<Stack direction="row" spacing={1}>
+									<Button
+										variant="contained"
+										onClick={runPreMatch}
+										disabled={preMatchLoading}
+									>
+										{preMatchLoading ? "Starting..." : "Run pre-match"}
+									</Button>
+								</Stack>
 							</Stack>
-						</Box>
 
-						{preMatchError && (
-							<Alert severity="error" sx={{ mt: 2 }}>
-								{preMatchError}
-							</Alert>
-						)}
+							<Divider sx={{ my: 2 }} />
 
-						{preMatchJobId && (
-							<Box sx={{ mt: 2 }}>
-								<Typography variant="subtitle2" color="text.secondary">
-									Job ID
-								</Typography>
-								<Typography variant="body2">{preMatchJobId}</Typography>
-							</Box>
-						)}
-
-						{preMatchStatus && (
-							<Box sx={{ mt: 2 }}>
-								<Typography variant="subtitle2" color="text.secondary">
-									Status
-								</Typography>
-								<Stack spacing={0.5}>
-									<Typography variant="body2">
-										State: {preMatchStatus.status}
-									</Typography>
-									<Typography variant="body2">
-										{shopLabel(preMatchStatus.sourceShop)} →{" "}
-										{shopLabel(preMatchStatus.targetShop)}
-									</Typography>
-									<Typography variant="body2">
-										Mode: {preMatchStatus.mode}, Top N: {preMatchStatus.topN},
-										{" "}Limit: {preMatchStatus.limitNum}
-									</Typography>
-									<Typography variant="body2">
-										Use LLM: {preMatchStatus.useLlm ? "Yes" : "No"}
-									</Typography>
-									<Typography variant="body2">
-										Progress: {preMatchStatus.processed}/{preMatchStatus.total}
-									</Typography>
-									<Typography variant="body2">
-										Matched: {preMatchStatus.matched}, Comparable:{" "}
-										{preMatchStatus.comparable}, Failed:{" "}
-										{preMatchStatus.failed}
-									</Typography>
-									<Typography variant="body2">
-										Updated: {formatDateTime(preMatchStatus.updatedAt)}
-									</Typography>
-									{preMatchStatus.errorMessage ? (
-										<Typography variant="body2" color="error">
-											Error: {preMatchStatus.errorMessage}
-										</Typography>
-									) : null}
+							<Box sx={{ overflowX: "auto", pt: 1.5, pb: 0.5 }}>
+								<Stack
+									direction="row"
+									spacing={2}
+									alignItems="center"
+									flexWrap="nowrap"
+									sx={{ minWidth: "max-content" }}
+								>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="pre-match-source-label">Source shop</InputLabel>
+									<Select
+										labelId="pre-match-source-label"
+										label="Source shop"
+										value={preMatchRequest.sourceShop}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												sourceShop: Number(e.target.value),
+											}))
+										}
+									>
+										{SHOP_OPTIONS.map((option) => (
+											<MenuItem key={option.value} value={option.value}>
+												{option.label}
+											</MenuItem>
+										))}
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="pre-match-target-label">Target shop</InputLabel>
+									<Select
+										labelId="pre-match-target-label"
+										label="Target shop"
+										value={preMatchRequest.targetShop}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												targetShop: Number(e.target.value),
+											}))
+										}
+									>
+										{SHOP_OPTIONS.map((option) => (
+											<MenuItem key={option.value} value={option.value}>
+												{option.label}
+											</MenuItem>
+										))}
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="pre-match-mode-label">Mode</InputLabel>
+									<Select
+										labelId="pre-match-mode-label"
+										label="Mode"
+										value={preMatchRequest.mode ?? "incremental"}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												mode: String(e.target.value),
+											}))
+										}
+									>
+										<MenuItem value="incremental">Incremental</MenuItem>
+										<MenuItem value="full">Full</MenuItem>
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 220 }}>
+									<InputLabel id="pre-match-resume-label" shrink>
+										Resume Job ID
+									</InputLabel>
+									<OutlinedInput
+										label="Resume Job ID"
+										placeholder="Optional"
+										value={preMatchRequest.resumeJobId ?? ""}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												resumeJobId: e.target.value,
+											}))
+										}
+										notched
+									/>
+								</FormControl>
+								<TextField
+									label="Limit"
+									size="small"
+									type="number"
+									value={preMatchRequest.limit ?? 0}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											limit: Number(e.target.value),
+										}))
+									}
+									inputProps={{ min: 0 }}
+									sx={{ width: 120 }}
+								/>
+								<TextField
+									label="Top N"
+									size="small"
+									type="number"
+									value={preMatchRequest.topN ?? 20}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											topN: Number(e.target.value),
+										}))
+									}
+									inputProps={{ min: 1, max: 50 }}
+									sx={{ width: 100 }}
+								/>
+								<FormControl size="small" sx={{ minWidth: 140 }}>
+									<InputLabel id="pre-match-llm-label">Use LLM</InputLabel>
+									<Select
+										labelId="pre-match-llm-label"
+										label="Use LLM"
+										value={preMatchRequest.useLlm ? "yes" : "no"}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												useLlm: e.target.value === "yes",
+											}))
+										}
+									>
+										<MenuItem value="no">No</MenuItem>
+										<MenuItem value="yes">Yes</MenuItem>
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="pre-match-force-label">
+										Force re-match
+									</InputLabel>
+									<Select
+										labelId="pre-match-force-label"
+										label="Force re-match"
+										value={preMatchRequest.force ? "yes" : "no"}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												force: e.target.value === "yes",
+											}))
+										}
+									>
+										<MenuItem value="no">No</MenuItem>
+										<MenuItem value="yes">Yes</MenuItem>
+									</Select>
+								</FormControl>
 								</Stack>
 							</Box>
-						)}
-					</CardContent>
-					</Card>
+
+							{preMatchError && (
+								<Alert severity="error" sx={{ mt: 2 }}>
+									{preMatchError}
+								</Alert>
+							)}
+
+							{preMatchJobId && (
+								<Box sx={{ mt: 2 }}>
+									<Typography variant="subtitle2" color="text.secondary">
+										Job ID
+									</Typography>
+									<Typography variant="body2">{preMatchJobId}</Typography>
+								</Box>
+							)}
+
+							{preMatchStatus && (
+								<Box sx={{ mt: 2 }}>
+									<Typography variant="subtitle2" color="text.secondary">
+										Status
+									</Typography>
+									<Stack spacing={0.5}>
+										<Typography variant="body2">
+											State: {preMatchStatus.status}
+										</Typography>
+										<Typography variant="body2">
+											{shopLabel(preMatchStatus.sourceShop)} →{" "}
+											{shopLabel(preMatchStatus.targetShop)}
+										</Typography>
+										<Typography variant="body2">
+											Mode: {preMatchStatus.mode}, Top N: {preMatchStatus.topN},
+											{" "}Limit: {preMatchStatus.limitNum}
+										</Typography>
+										<Typography variant="body2">
+											Use LLM: {preMatchStatus.useLlm ? "Yes" : "No"}
+										</Typography>
+										<Typography variant="body2">
+											Progress: {preMatchStatus.processed}/{preMatchStatus.total}
+										</Typography>
+										<Typography variant="body2">
+											Matched: {preMatchStatus.matched}, Comparable:{" "}
+											{preMatchStatus.comparable}, Failed:{" "}
+											{preMatchStatus.failed}
+										</Typography>
+										<Typography variant="body2">
+											Updated: {formatDateTime(preMatchStatus.updatedAt)}
+										</Typography>
+										{preMatchStatus.errorMessage ? (
+											<Typography variant="body2" color="error">
+												Error: {preMatchStatus.errorMessage}
+											</Typography>
+										) : null}
+									</Stack>
+								</Box>
+							)}
+						</CardContent>
+						</Card>
+
+						<Card variant="outlined">
+						<CardContent>
+							<Stack
+								direction={{ xs: "column", md: "row" }}
+								spacing={2}
+								alignItems={{ xs: "flex-start", md: "center" }}
+								justifyContent="space-between"
+							>
+								<Typography variant="h6" fontWeight={700}>
+									Match jobs
+								</Typography>
+							</Stack>
+
+							<Divider sx={{ my: 2 }} />
+
+							<Stack
+								direction={{ xs: "column", md: "row" }}
+								spacing={2}
+								alignItems={{ xs: "stretch", md: "center" }}
+								flexWrap="wrap"
+							>
+								<FormControl size="small" sx={{ minWidth: 220 }}>
+									<InputLabel id="match-jobs-status-label" shrink>
+										Status
+									</InputLabel>
+									<Select
+										labelId="match-jobs-status-label"
+										label="Status"
+										multiple
+										displayEmpty
+										value={matchJobsFilters.statuses}
+										onChange={(e) => {
+											const value = e.target.value;
+											setMatchJobsPagination((prev) => ({
+												...prev,
+												page: 0,
+											}));
+											setMatchJobsFilters((prev) => ({
+												...prev,
+												statuses:
+													typeof value === "string" ? value.split(",") : value,
+											}));
+										}}
+										input={<OutlinedInput label="Status" notched />}
+										renderValue={(selected) => {
+											const list = selected as string[];
+											if (list.length === 0) {
+												return (
+													<Typography color="text.disabled">
+														Optional
+													</Typography>
+												);
+											}
+											return list.join(", ");
+										}}
+									>
+										{["queued", "running", "completed", "failed"].map((status) => (
+											<MenuItem key={status} value={status}>
+												<Checkbox
+													checked={matchJobsFilters.statuses.includes(status)}
+												/>
+												<ListItemText primary={status} />
+											</MenuItem>
+										))}
+									</Select>
+								</FormControl>
+								<TextField
+									label="Updated from"
+									size="small"
+									type="datetime-local"
+									InputLabelProps={{ shrink: true }}
+									value={matchJobsFilters.updatedFrom}
+									onChange={(e) =>
+										{
+											setMatchJobsPagination((prev) => ({
+												...prev,
+												page: 0,
+											}));
+											setMatchJobsFilters((prev) => ({
+												...prev,
+												updatedFrom: e.target.value,
+											}));
+										}
+									}
+									sx={{
+										minWidth: 220,
+										"& input": {
+											color: matchJobsFilters.updatedFrom
+												? "text.primary"
+												: "text.disabled",
+										},
+										"& input::-webkit-datetime-edit": {
+											color: matchJobsFilters.updatedFrom
+												? "inherit"
+												: "text.disabled",
+										},
+									}}
+								/>
+								<TextField
+									label="Updated to"
+									size="small"
+									type="datetime-local"
+									InputLabelProps={{ shrink: true }}
+									value={matchJobsFilters.updatedTo}
+									onChange={(e) =>
+										{
+											setMatchJobsPagination((prev) => ({
+												...prev,
+												page: 0,
+											}));
+											setMatchJobsFilters((prev) => ({
+												...prev,
+												updatedTo: e.target.value,
+											}));
+										}
+									}
+									sx={{
+										minWidth: 220,
+										"& input": {
+											color: matchJobsFilters.updatedTo
+												? "text.primary"
+												: "text.disabled",
+										},
+										"& input::-webkit-datetime-edit": {
+											color: matchJobsFilters.updatedTo
+												? "inherit"
+												: "text.disabled",
+										},
+									}}
+								/>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="match-jobs-sortby-label">Sort by</InputLabel>
+									<Select
+										labelId="match-jobs-sortby-label"
+										label="Sort by"
+										value={matchJobsFilters.sortBy}
+										onChange={(e) =>
+											{
+												setMatchJobsPagination((prev) => ({
+													...prev,
+													page: 0,
+												}));
+												setMatchJobsFilters((prev) => ({
+													...prev,
+													sortBy: e.target.value as "updatedAt" | "createdAt",
+												}));
+											}
+										}
+									>
+										<MenuItem value="updatedAt">Updated</MenuItem>
+										<MenuItem value="createdAt">Created</MenuItem>
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 140 }}>
+									<InputLabel id="match-jobs-sortdir-label">
+										Direction
+									</InputLabel>
+									<Select
+										labelId="match-jobs-sortdir-label"
+										label="Direction"
+										value={matchJobsFilters.sortDir}
+										onChange={(e) =>
+											{
+												setMatchJobsPagination((prev) => ({
+													...prev,
+													page: 0,
+												}));
+												setMatchJobsFilters((prev) => ({
+													...prev,
+													sortDir: e.target.value as "asc" | "desc",
+												}));
+											}
+										}
+									>
+										<MenuItem value="desc">Desc</MenuItem>
+										<MenuItem value="asc">Asc</MenuItem>
+									</Select>
+								</FormControl>
+							</Stack>
+
+							{matchJobsError && (
+								<Alert severity="error" sx={{ mt: 2 }}>
+									{matchJobsError}
+								</Alert>
+							)}
+
+							<Box sx={{ mt: 2 }}>
+								<DataGrid
+									rows={matchJobs}
+									columns={matchJobColumns}
+									getRowId={(row) => row.id}
+									autoHeight
+									loading={matchJobsLoading}
+									rowCount={matchJobsTotal}
+									paginationMode="server"
+									paginationModel={matchJobsPagination}
+									onPaginationModelChange={(model) => {
+										setMatchJobsPagination(model);
+									}}
+									pageSizeOptions={[10, 20, 50]}
+									disableRowSelectionOnClick
+								/>
+							</Box>
+						</CardContent>
+						</Card>
+					</Stack>
 				)}
 
 				{adminTab === "schedules" && (

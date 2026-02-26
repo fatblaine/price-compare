@@ -125,6 +125,43 @@ export type MatchJobStatus = {
 	updatedAt: string;
 };
 
+export type MatchJobListItem = {
+	id: string;
+	sourceShop: number;
+	targetShop: number;
+	status: string;
+	mode: string;
+	since?: string | null;
+	total: number;
+	processed: number;
+	matched: number;
+	comparable: number;
+	failed: number;
+	useLlm: boolean;
+	limitNum: number;
+	topN: number;
+	errorMessage?: string | null;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type MatchJobListResponse = {
+	items: MatchJobListItem[];
+	total: number;
+	page: number;
+	pageSize: number;
+};
+
+export type MatchJobQuery = {
+	status?: string;
+	updatedFrom?: string;
+	updatedTo?: string;
+	page?: number;
+	pageSize?: number;
+	sortBy?: "updatedAt" | "createdAt";
+	sortDir?: "asc" | "desc";
+};
+
 export async function runMatchJob(
 	payload: MatchRunRequest,
 ): Promise<{ jobId: string }> {
@@ -138,5 +175,12 @@ export async function fetchMatchJobStatus(
 	const res = await axios.get(
 		`${API_BASE}/api/Match/status/${encodeURIComponent(jobId)}`,
 	);
+	return res.data;
+}
+
+export async function fetchMatchJobs(
+	params: MatchJobQuery,
+): Promise<MatchJobListResponse> {
+	const res = await axios.get(`${API_BASE}/api/Match/jobs`, { params });
 	return res.data;
 }
