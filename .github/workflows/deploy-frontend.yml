@@ -1,11 +1,6 @@
 name: Deploy Frontend (S3)
 
 on:
-    push:
-        branches: [main]
-        paths:
-            - "client/web/**"
-            - ".github/workflows/deploy-frontend.yml"
     workflow_dispatch:
 
 jobs:
