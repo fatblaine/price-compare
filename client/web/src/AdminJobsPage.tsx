@@ -5,14 +5,20 @@ import {
 	Button,
 	Card,
 	CardContent,
+	Checkbox,
 	Chip,
 	CircularProgress,
 	Divider,
 	FormControl,
 	InputLabel,
+	ListItemText,
 	MenuItem,
+	OutlinedInput,
 	Select,
 	Stack,
+	Tab,
+	Tabs,
+	TextField,
 	Typography,
 } from "@mui/material";
 import {
@@ -30,15 +36,25 @@ import {
 	YAxis,
 } from "recharts";
 import axios from "axios";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
 	fetchAdminHealth,
 	fetchAdminRuns,
 	fetchAdminSchedules,
 	fetchAdminStats,
+	fetchMatchJobs,
+	fetchMatchJobStatus,
+	fetchProductMatchReview,
+	runMatchJob,
+	updateProductMatch,
 	type AdminHealth,
 	type JobRun,
 	type JobRunStats,
 	type JobSchedule,
+	type MatchJobListItem,
+	type MatchJobStatus,
+	type MatchRunRequest,
+	type ProductMatchReviewItem,
 } from "./api/admin";
 
 type TrendPoint = {
@@ -47,6 +63,11 @@ type TrendPoint = {
 	failed: number;
 	failureRate: number;
 };
+
+const SHOP_OPTIONS = [
+	{ label: "Coles", value: 0 },
+	{ label: "Woolworths", value: 1 },
+];
 
 const scheduleKey = (schedule: JobSchedule) =>
 	`${schedule.source}:${schedule.jobName}`;
@@ -140,6 +161,9 @@ const statusChip = (status?: string | null) => {
 	return <Chip label={status} size="small" variant="outlined" />;
 };
 
+const shopLabel = (value: number) =>
+	SHOP_OPTIONS.find((option) => option.value === value)?.label ?? String(value);
+
 export default function AdminJobsPage() {
 	const [schedules, setSchedules] = React.useState<JobSchedule[]>([]);
 	const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
@@ -153,6 +177,59 @@ export default function AdminJobsPage() {
 	const [loadingStats, setLoadingStats] = React.useState(false);
 	const [loadingHealth, setLoadingHealth] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
+	const [preMatchRequest, setPreMatchRequest] =
+		React.useState<MatchRunRequest>({
+			sourceShop: 0,
+			targetShop: 1,
+			mode: "incremental",
+			limit: 1000,
+			topN: 20,
+			useLlm: false,
+			force: false,
+		});
+	const [preMatchJobId, setPreMatchJobId] = React.useState<string | null>(null);
+	const [preMatchStatus, setPreMatchStatus] =
+		React.useState<MatchJobStatus | null>(null);
+	const [preMatchLoading, setPreMatchLoading] = React.useState(false);
+	const [preMatchError, setPreMatchError] = React.useState<string | null>(null);
+	const [matchJobs, setMatchJobs] = React.useState<MatchJobListItem[]>([]);
+	const [matchJobsTotal, setMatchJobsTotal] = React.useState(0);
+	const [matchJobsLoading, setMatchJobsLoading] = React.useState(false);
+	const [matchJobsError, setMatchJobsError] = React.useState<string | null>(null);
+	const [matchJobsFilters, setMatchJobsFilters] = React.useState({
+		statuses: [] as string[],
+		updatedFrom: "",
+		updatedTo: "",
+		sortBy: "updatedAt" as "updatedAt" | "createdAt",
+		sortDir: "desc" as "asc" | "desc",
+	});
+	const [matchJobsPagination, setMatchJobsPagination] = React.useState({
+		page: 0,
+		pageSize: 20,
+	});
+	const [reviewItems, setReviewItems] = React.useState<ProductMatchReviewItem[]>([]);
+	const [reviewTotal, setReviewTotal] = React.useState(0);
+	const [reviewLoading, setReviewLoading] = React.useState(false);
+	const [reviewError, setReviewError] = React.useState<string | null>(null);
+	const [reviewPagination, setReviewPagination] = React.useState({
+		page: 0,
+		pageSize: 20,
+	});
+	const [reviewEdits, setReviewEdits] = React.useState<
+		Record<string, { matchType: "same_product" | "comparable"; score: string }>
+	>({});
+	const [reviewSavingIds, setReviewSavingIds] = React.useState<string[]>([]);
+	const location = useLocation();
+	const navigate = useNavigate();
+	const adminTab = location.pathname.includes("/prematch")
+		? "prematch"
+		: "schedules";
+
+	React.useEffect(() => {
+		if (location.pathname === "/admin" || location.pathname === "/admin/") {
+			navigate("/admin/schedules", { replace: true });
+		}
+	}, [location.pathname, navigate]);
 
 	const selectedSchedule = React.useMemo(
 		() => schedules.find((s) => scheduleKey(s) === selectedKey) ?? null,
@@ -165,6 +242,41 @@ export default function AdminJobsPage() {
 		}),
 		[selectedKey],
 	);
+
+	const reviewScoreMin = 0.5;
+	const reviewScoreMax = 0.9;
+
+	const getReviewEdit = (row: ProductMatchReviewItem) => {
+		return (
+			reviewEdits[row.matchId] ?? {
+				matchType:
+					row.matchType === "same_product" ? "same_product" : "comparable",
+				score: row.score.toFixed(4),
+			}
+		);
+	};
+
+	const setReviewEdit = (
+		row: ProductMatchReviewItem,
+		patch: Partial<{ matchType: "same_product" | "comparable"; score: string }>,
+	) => {
+		setReviewEdits((prev) => {
+			const existing =
+				prev[row.matchId] ??
+				({
+					matchType:
+						row.matchType === "same_product" ? "same_product" : "comparable",
+					score: row.score.toFixed(4),
+				} as const);
+			return {
+				...prev,
+				[row.matchId]: {
+					...existing,
+					...patch,
+				},
+			};
+		});
+	};
 
 	const scheduleColumns: GridColDef<JobSchedule>[] = [
 		{ field: "jobName", headerName: "Job", flex: 1, minWidth: 220 },
@@ -240,6 +352,265 @@ export default function AdminJobsPage() {
 		},
 		{ field: "environment", headerName: "Env", width: 110 },
 		{ field: "requestId", headerName: "Request ID", width: 220 },
+	];
+
+	const matchJobColumns: GridColDef<MatchJobListItem>[] = [
+		{ field: "id", headerName: "ID", width: 240 },
+		{
+			field: "status",
+			headerName: "Status",
+			width: 120,
+			renderCell: (params) => statusChip(params.value as string | null),
+		},
+		{
+			field: "sourceShop",
+			headerName: "Source",
+			width: 100,
+			valueFormatter: (value) => shopLabel(Number(value)),
+		},
+		{
+			field: "targetShop",
+			headerName: "Target",
+			width: 100,
+			valueFormatter: (value) => shopLabel(Number(value)),
+		},
+		{ field: "mode", headerName: "Mode", width: 130 },
+		{
+			field: "useLlm",
+			headerName: "Use LLM",
+			width: 110,
+			renderCell: (params) => (
+				<Chip
+					label={params.value ? "Yes" : "No"}
+					size="small"
+					variant="outlined"
+				/>
+			),
+		},
+		{ field: "total", headerName: "Total", width: 90 },
+		{ field: "processed", headerName: "Processed", width: 110 },
+		{ field: "matched", headerName: "Matched", width: 100 },
+		{ field: "comparable", headerName: "Comparable", width: 120 },
+		{ field: "failed", headerName: "Failed", width: 90 },
+		{ field: "limitNum", headerName: "Limit", width: 90 },
+		{ field: "topN", headerName: "Top N", width: 80 },
+		{
+			field: "since",
+			headerName: "Since",
+			width: 180,
+			valueFormatter: (value) => formatDateTime(value as string | null),
+		},
+		{
+			field: "createdAt",
+			headerName: "Created",
+			width: 180,
+			valueFormatter: (value) => formatDateTime(value as string | null),
+		},
+		{
+			field: "updatedAt",
+			headerName: "Updated",
+			width: 180,
+			valueFormatter: (value) => formatDateTime(value as string | null),
+		},
+		{
+			field: "errorMessage",
+			headerName: "Error",
+			flex: 1,
+			minWidth: 220,
+			renderCell: (params) => (
+				<Box
+					title={params.value ? String(params.value) : ""}
+					sx={{
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+						whiteSpace: "nowrap",
+						width: "100%",
+					}}
+				>
+					{params.value ? String(params.value) : "-"}
+				</Box>
+			),
+		},
+	];
+
+	const reviewColumns: GridColDef<ProductMatchReviewItem>[] = [
+		{
+			field: "sourceName",
+			headerName: "Source",
+			minWidth: 220,
+			flex: 1,
+			renderCell: (params) => (
+				<Stack direction="row" spacing={1.2} alignItems="center">
+					<Box
+						component="img"
+						src={params.row.sourceImageUrl || ""}
+						alt={params.row.sourceName}
+						sx={{
+							width: 48,
+							height: 48,
+							borderRadius: 1,
+							objectFit: "contain",
+							bgcolor: "#f5f5f7",
+						}}
+						onError={(e) => {
+							(e.currentTarget as HTMLImageElement).style.display = "none";
+						}}
+					/>
+					<Box>
+						<Typography variant="body2" fontWeight={600} noWrap>
+							{params.row.sourceName}
+						</Typography>
+						<Typography variant="caption" color="text.secondary">
+							{params.row.sourceShopName}
+						</Typography>
+					</Box>
+				</Stack>
+			),
+		},
+		{
+			field: "targetName",
+			headerName: "Target",
+			minWidth: 220,
+			flex: 1,
+			renderCell: (params) => (
+				<Stack direction="row" spacing={1.2} alignItems="center">
+					<Box
+						component="img"
+						src={params.row.targetImageUrl || ""}
+						alt={params.row.targetName}
+						sx={{
+							width: 48,
+							height: 48,
+							borderRadius: 1,
+							objectFit: "contain",
+							bgcolor: "#f5f5f7",
+						}}
+						onError={(e) => {
+							(e.currentTarget as HTMLImageElement).style.display = "none";
+						}}
+					/>
+					<Box>
+						<Typography variant="body2" fontWeight={600} noWrap>
+							{params.row.targetName}
+						</Typography>
+						<Typography variant="caption" color="text.secondary">
+							{params.row.targetShopName}
+						</Typography>
+					</Box>
+				</Stack>
+			),
+		},
+		{
+			field: "score",
+			headerName: "Score",
+			width: 110,
+			valueFormatter: (value) =>
+				Number.isFinite(Number(value))
+					? Number(value).toFixed(4)
+					: "-",
+		},
+		{
+			field: "matchType",
+			headerName: "Match type",
+			width: 140,
+			valueFormatter: (value) => (value ? String(value) : "-"),
+		},
+		{
+			field: "updatedAt",
+			headerName: "Updated",
+			width: 180,
+			valueFormatter: (value) => formatDateTime(value as string | null),
+		},
+		{
+			field: "actions",
+			headerName: "Update",
+			minWidth: 320,
+			flex: 1,
+			sortable: false,
+			filterable: false,
+			renderCell: (params) => {
+				const row = params.row;
+				const edit = getReviewEdit(row);
+				const isSaving = reviewSavingIds.includes(row.matchId);
+				const isSame = edit.matchType === "same_product";
+				return (
+					<Stack direction="row" spacing={1} alignItems="center">
+						<FormControl size="small" sx={{ minWidth: 140 }}>
+							<InputLabel id={`match-type-${row.matchId}`} shrink>
+								Match type
+							</InputLabel>
+							<Select
+								labelId={`match-type-${row.matchId}`}
+								label="Match type"
+								value={edit.matchType}
+								onChange={(e) =>
+									setReviewEdit(row, {
+										matchType: e.target.value as "same_product" | "comparable",
+									})
+								}
+								input={<OutlinedInput label="Match type" notched />}
+							>
+								<MenuItem value="same_product">same_product</MenuItem>
+								<MenuItem value="comparable">comparable</MenuItem>
+							</Select>
+						</FormControl>
+						<TextField
+							label="Score"
+							size="small"
+							type="number"
+							value={edit.score}
+							disabled={isSame}
+							onChange={(e) => setReviewEdit(row, { score: e.target.value })}
+							inputProps={{ min: 0.5, max: 0.9999, step: 0.0001 }}
+							sx={{ width: 120 }}
+						/>
+						<Button
+							variant="contained"
+							size="small"
+							disabled={isSaving}
+							onClick={() => {
+								const nextType = edit.matchType;
+								const nextScore = Number(edit.score);
+								if (nextType === "comparable") {
+									if (!Number.isFinite(nextScore)) {
+										setReviewError("Score must be a number.");
+										return;
+									}
+									if (nextScore < 0.5 || nextScore > 0.9999) {
+										setReviewError("Score must be between 0.5000 and 0.9999.");
+										return;
+									}
+								}
+								setReviewSavingIds((prev) =>
+									prev.includes(row.matchId) ? prev : [...prev, row.matchId],
+								);
+								setReviewError(null);
+								void updateProductMatch({
+									matchId: row.matchId,
+									matchType: nextType,
+									score: nextType === "comparable" ? nextScore : undefined,
+								})
+									.then(() => loadReviewMatches())
+									.catch((e) => {
+										if (axios.isAxiosError(e) && e.response?.status === 403) {
+											setReviewError("Not authorized to update match.");
+										} else {
+											setReviewError("Failed to update match.");
+										}
+									})
+									.finally(() => {
+										setReviewSavingIds((prev) =>
+											prev.filter((id) => id !== row.matchId),
+										);
+									});
+							}}
+						>
+							Save
+						</Button>
+					</Stack>
+				);
+			},
+		},
 	];
 
 	const loadSchedules = React.useCallback(async () => {
@@ -326,6 +697,104 @@ export default function AdminJobsPage() {
 		[runs, rangeHours, trendBucket],
 	);
 
+	const runPreMatch = React.useCallback(async () => {
+		setPreMatchError(null);
+		const resumeJobId = preMatchRequest.resumeJobId?.trim();
+		const isResume = Boolean(resumeJobId);
+		if (!isResume && preMatchRequest.sourceShop === preMatchRequest.targetShop) {
+			setPreMatchError("Source shop and target shop must be different.");
+			return;
+		}
+		setPreMatchLoading(true);
+		try {
+			const payload: MatchRunRequest = {
+				...preMatchRequest,
+				resumeJobId: resumeJobId || undefined,
+				limit:
+					preMatchRequest.limit != null
+						? Math.max(0, Number(preMatchRequest.limit))
+						: undefined,
+				topN:
+					preMatchRequest.topN != null
+						? Math.max(1, Number(preMatchRequest.topN))
+						: undefined,
+			};
+			const result = await runMatchJob(payload);
+			setPreMatchJobId(result.jobId);
+			const status = await fetchMatchJobStatus(result.jobId);
+			setPreMatchStatus(status);
+		} catch (e) {
+			if (axios.isAxiosError(e) && e.response?.status === 403) {
+				setPreMatchError("Not authorized to run pre-match.");
+			} else {
+				setPreMatchError("Failed to start pre-match job.");
+			}
+		} finally {
+			setPreMatchLoading(false);
+		}
+	}, [preMatchRequest]);
+
+	const loadMatchJobs = React.useCallback(async () => {
+		setMatchJobsError(null);
+		setMatchJobsLoading(true);
+		try {
+			const result = await fetchMatchJobs({
+				status: matchJobsFilters.statuses.length
+					? matchJobsFilters.statuses.join(",")
+					: undefined,
+				updatedFrom: matchJobsFilters.updatedFrom || undefined,
+				updatedTo: matchJobsFilters.updatedTo || undefined,
+				page: matchJobsPagination.page + 1,
+				pageSize: matchJobsPagination.pageSize,
+				sortBy: matchJobsFilters.sortBy,
+				sortDir: matchJobsFilters.sortDir,
+			});
+			setMatchJobs(result.items);
+			setMatchJobsTotal(result.total);
+		} catch (e) {
+			if (axios.isAxiosError(e) && e.response?.status === 403) {
+				setMatchJobsError("Not authorized to view match jobs.");
+			} else {
+				setMatchJobsError("Failed to load match jobs.");
+			}
+		} finally {
+			setMatchJobsLoading(false);
+		}
+	}, [matchJobsPagination.page, matchJobsPagination.pageSize, matchJobsFilters]);
+
+	React.useEffect(() => {
+		if (adminTab !== "prematch") return;
+		void loadMatchJobs();
+	}, [adminTab, loadMatchJobs]);
+
+	const loadReviewMatches = React.useCallback(async () => {
+		setReviewError(null);
+		setReviewLoading(true);
+		try {
+			const result = await fetchProductMatchReview({
+				minScore: reviewScoreMin,
+				maxScore: reviewScoreMax,
+				page: reviewPagination.page + 1,
+				pageSize: reviewPagination.pageSize,
+			});
+			setReviewItems(result.items);
+			setReviewTotal(result.total);
+		} catch (e) {
+			if (axios.isAxiosError(e) && e.response?.status === 403) {
+				setReviewError("Not authorized to view match review.");
+			} else {
+				setReviewError("Failed to load match review.");
+			}
+		} finally {
+			setReviewLoading(false);
+		}
+	}, [reviewPagination.page, reviewPagination.pageSize, reviewScoreMin, reviewScoreMax]);
+
+	React.useEffect(() => {
+		if (adminTab !== "prematch") return;
+		void loadReviewMatches();
+	}, [adminTab, loadReviewMatches]);
+
 	return (
 		<Box>
 			<Stack spacing={3}>
@@ -338,14 +807,32 @@ export default function AdminJobsPage() {
 					<Typography variant="h4" fontWeight={800}>
 						Admin Monitoring
 					</Typography>
-					<Button variant="contained" onClick={loadSchedules}>
-						Refresh schedules
-					</Button>
+					{adminTab === "schedules" && (
+						<Button variant="contained" onClick={loadSchedules}>
+							Refresh schedules
+						</Button>
+					)}
 				</Stack>
 
 				{error && <Alert severity="error">{error}</Alert>}
 
-				<Card variant="outlined">
+				<Tabs
+					value={adminTab}
+					onChange={(_, value) => {
+						const next =
+							value === "prematch" ? "/admin/prematch" : "/admin/schedules";
+						navigate(next);
+					}}
+					textColor="primary"
+					indicatorColor="primary"
+				>
+					<Tab value="schedules" label="Schedules" />
+					<Tab value="prematch" label="Pre-match" />
+				</Tabs>
+
+				{adminTab === "schedules" && (
+					<>
+						<Card variant="outlined">
 					<CardContent>
 						<Stack
 							direction={{ xs: "column", md: "row" }}
@@ -444,9 +931,513 @@ export default function AdminJobsPage() {
 							</Box>
 						) : null}
 					</CardContent>
-				</Card>
+						</Card>
+					</>
+				)}
 
-				<Card variant="outlined">
+				{adminTab === "prematch" && (
+					<Stack spacing={2}>
+						<Card variant="outlined">
+						<CardContent>
+							<Stack
+								direction={{ xs: "column", md: "row" }}
+								spacing={2}
+								alignItems={{ xs: "flex-start", md: "center" }}
+								justifyContent="space-between"
+							>
+								<Typography variant="h6" fontWeight={700}>
+									Batch pre-match
+								</Typography>
+								<Stack direction="row" spacing={1}>
+									<Button
+										variant="contained"
+										onClick={runPreMatch}
+										disabled={preMatchLoading}
+									>
+										{preMatchLoading ? "Starting..." : "Run pre-match"}
+									</Button>
+								</Stack>
+							</Stack>
+
+							<Divider sx={{ my: 2 }} />
+
+							<Box sx={{ overflowX: "auto", pt: 1.5, pb: 0.5 }}>
+								<Stack
+									direction="row"
+									spacing={2}
+									alignItems="center"
+									flexWrap="nowrap"
+									sx={{ minWidth: "max-content" }}
+								>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="pre-match-source-label">Source shop</InputLabel>
+									<Select
+										labelId="pre-match-source-label"
+										label="Source shop"
+										value={preMatchRequest.sourceShop}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												sourceShop: Number(e.target.value),
+											}))
+										}
+									>
+										{SHOP_OPTIONS.map((option) => (
+											<MenuItem key={option.value} value={option.value}>
+												{option.label}
+											</MenuItem>
+										))}
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="pre-match-target-label">Target shop</InputLabel>
+									<Select
+										labelId="pre-match-target-label"
+										label="Target shop"
+										value={preMatchRequest.targetShop}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												targetShop: Number(e.target.value),
+											}))
+										}
+									>
+										{SHOP_OPTIONS.map((option) => (
+											<MenuItem key={option.value} value={option.value}>
+												{option.label}
+											</MenuItem>
+										))}
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="pre-match-mode-label">Mode</InputLabel>
+									<Select
+										labelId="pre-match-mode-label"
+										label="Mode"
+										value={preMatchRequest.mode ?? "incremental"}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												mode: String(e.target.value),
+											}))
+										}
+									>
+										<MenuItem value="incremental">Incremental</MenuItem>
+										<MenuItem value="full">Full</MenuItem>
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 220 }}>
+									<InputLabel id="pre-match-resume-label" shrink>
+										Resume Job ID
+									</InputLabel>
+									<OutlinedInput
+										label="Resume Job ID"
+										placeholder="Optional"
+										value={preMatchRequest.resumeJobId ?? ""}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												resumeJobId: e.target.value,
+											}))
+										}
+										notched
+									/>
+								</FormControl>
+								<TextField
+									label="Limit"
+									size="small"
+									type="number"
+									value={preMatchRequest.limit ?? 0}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											limit: Number(e.target.value),
+										}))
+									}
+									inputProps={{ min: 0 }}
+									sx={{ width: 120 }}
+								/>
+								<TextField
+									label="Top N"
+									size="small"
+									type="number"
+									value={preMatchRequest.topN ?? 20}
+									onChange={(e) =>
+										setPreMatchRequest((prev) => ({
+											...prev,
+											topN: Number(e.target.value),
+										}))
+									}
+									inputProps={{ min: 1, max: 50 }}
+									sx={{ width: 100 }}
+								/>
+								<FormControl size="small" sx={{ minWidth: 140 }}>
+									<InputLabel id="pre-match-llm-label">Use LLM</InputLabel>
+									<Select
+										labelId="pre-match-llm-label"
+										label="Use LLM"
+										value={preMatchRequest.useLlm ? "yes" : "no"}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												useLlm: e.target.value === "yes",
+											}))
+										}
+									>
+										<MenuItem value="no">No</MenuItem>
+										<MenuItem value="yes">Yes</MenuItem>
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="pre-match-force-label">
+										Force re-match
+									</InputLabel>
+									<Select
+										labelId="pre-match-force-label"
+										label="Force re-match"
+										value={preMatchRequest.force ? "yes" : "no"}
+										onChange={(e) =>
+											setPreMatchRequest((prev) => ({
+												...prev,
+												force: e.target.value === "yes",
+											}))
+										}
+									>
+										<MenuItem value="no">No</MenuItem>
+										<MenuItem value="yes">Yes</MenuItem>
+									</Select>
+								</FormControl>
+								</Stack>
+							</Box>
+
+							{preMatchError && (
+								<Alert severity="error" sx={{ mt: 2 }}>
+									{preMatchError}
+								</Alert>
+							)}
+
+							{preMatchJobId && (
+								<Box sx={{ mt: 2 }}>
+									<Typography variant="subtitle2" color="text.secondary">
+										Job ID
+									</Typography>
+									<Typography variant="body2">{preMatchJobId}</Typography>
+								</Box>
+							)}
+
+							{preMatchStatus && (
+								<Box sx={{ mt: 2 }}>
+									<Typography variant="subtitle2" color="text.secondary">
+										Status
+									</Typography>
+									<Stack spacing={0.5}>
+										<Typography variant="body2">
+											State: {preMatchStatus.status}
+										</Typography>
+										<Typography variant="body2">
+											{shopLabel(preMatchStatus.sourceShop)} →{" "}
+											{shopLabel(preMatchStatus.targetShop)}
+										</Typography>
+										<Typography variant="body2">
+											Mode: {preMatchStatus.mode}, Top N: {preMatchStatus.topN},
+											{" "}Limit: {preMatchStatus.limitNum}
+										</Typography>
+										<Typography variant="body2">
+											Use LLM: {preMatchStatus.useLlm ? "Yes" : "No"}
+										</Typography>
+										<Typography variant="body2">
+											Progress: {preMatchStatus.processed}/{preMatchStatus.total}
+										</Typography>
+										<Typography variant="body2">
+											Matched: {preMatchStatus.matched}, Comparable:{" "}
+											{preMatchStatus.comparable}, Failed:{" "}
+											{preMatchStatus.failed}
+										</Typography>
+										<Typography variant="body2">
+											Updated: {formatDateTime(preMatchStatus.updatedAt)}
+										</Typography>
+										{preMatchStatus.errorMessage ? (
+											<Typography variant="body2" color="error">
+												Error: {preMatchStatus.errorMessage}
+											</Typography>
+										) : null}
+									</Stack>
+								</Box>
+							)}
+						</CardContent>
+						</Card>
+
+						<Card variant="outlined">
+						<CardContent>
+							<Stack
+								direction={{ xs: "column", md: "row" }}
+								spacing={2}
+								alignItems={{ xs: "flex-start", md: "center" }}
+								justifyContent="space-between"
+							>
+								<Typography variant="h6" fontWeight={700}>
+									Match jobs
+								</Typography>
+							</Stack>
+
+							<Divider sx={{ my: 2 }} />
+
+							<Stack
+								direction={{ xs: "column", md: "row" }}
+								spacing={2}
+								alignItems={{ xs: "stretch", md: "center" }}
+								flexWrap="wrap"
+							>
+								<FormControl size="small" sx={{ minWidth: 220 }}>
+									<InputLabel id="match-jobs-status-label" shrink>
+										Status
+									</InputLabel>
+									<Select
+										labelId="match-jobs-status-label"
+										label="Status"
+										multiple
+										displayEmpty
+										value={matchJobsFilters.statuses}
+										onChange={(e) => {
+											const value = e.target.value;
+											setMatchJobsPagination((prev) => ({
+												...prev,
+												page: 0,
+											}));
+											setMatchJobsFilters((prev) => ({
+												...prev,
+												statuses:
+													typeof value === "string" ? value.split(",") : value,
+											}));
+										}}
+										input={<OutlinedInput label="Status" notched />}
+										renderValue={(selected) => {
+											const list = selected as string[];
+											if (list.length === 0) {
+												return (
+													<Typography color="text.disabled">
+														Optional
+													</Typography>
+												);
+											}
+											return list.join(", ");
+										}}
+									>
+										{["queued", "running", "completed", "failed"].map((status) => (
+											<MenuItem key={status} value={status}>
+												<Checkbox
+													checked={matchJobsFilters.statuses.includes(status)}
+												/>
+												<ListItemText primary={status} />
+											</MenuItem>
+										))}
+									</Select>
+								</FormControl>
+								<TextField
+									label="Updated from"
+									size="small"
+									type="datetime-local"
+									InputLabelProps={{ shrink: true }}
+									value={matchJobsFilters.updatedFrom}
+									onChange={(e) =>
+										{
+											setMatchJobsPagination((prev) => ({
+												...prev,
+												page: 0,
+											}));
+											setMatchJobsFilters((prev) => ({
+												...prev,
+												updatedFrom: e.target.value,
+											}));
+										}
+									}
+									sx={{
+										minWidth: 220,
+										"& input": {
+											color: matchJobsFilters.updatedFrom
+												? "text.primary"
+												: "text.disabled",
+										},
+										"& input::-webkit-datetime-edit": {
+											color: matchJobsFilters.updatedFrom
+												? "inherit"
+												: "text.disabled",
+										},
+									}}
+								/>
+								<TextField
+									label="Updated to"
+									size="small"
+									type="datetime-local"
+									InputLabelProps={{ shrink: true }}
+									value={matchJobsFilters.updatedTo}
+									onChange={(e) =>
+										{
+											setMatchJobsPagination((prev) => ({
+												...prev,
+												page: 0,
+											}));
+											setMatchJobsFilters((prev) => ({
+												...prev,
+												updatedTo: e.target.value,
+											}));
+										}
+									}
+									sx={{
+										minWidth: 220,
+										"& input": {
+											color: matchJobsFilters.updatedTo
+												? "text.primary"
+												: "text.disabled",
+										},
+										"& input::-webkit-datetime-edit": {
+											color: matchJobsFilters.updatedTo
+												? "inherit"
+												: "text.disabled",
+										},
+									}}
+								/>
+								<FormControl size="small" sx={{ minWidth: 160 }}>
+									<InputLabel id="match-jobs-sortby-label">Sort by</InputLabel>
+									<Select
+										labelId="match-jobs-sortby-label"
+										label="Sort by"
+										value={matchJobsFilters.sortBy}
+										onChange={(e) =>
+											{
+												setMatchJobsPagination((prev) => ({
+													...prev,
+													page: 0,
+												}));
+												setMatchJobsFilters((prev) => ({
+													...prev,
+													sortBy: e.target.value as "updatedAt" | "createdAt",
+												}));
+											}
+										}
+									>
+										<MenuItem value="updatedAt">Updated</MenuItem>
+										<MenuItem value="createdAt">Created</MenuItem>
+									</Select>
+								</FormControl>
+								<FormControl size="small" sx={{ minWidth: 140 }}>
+									<InputLabel id="match-jobs-sortdir-label">
+										Direction
+									</InputLabel>
+									<Select
+										labelId="match-jobs-sortdir-label"
+										label="Direction"
+										value={matchJobsFilters.sortDir}
+										onChange={(e) =>
+											{
+												setMatchJobsPagination((prev) => ({
+													...prev,
+													page: 0,
+												}));
+												setMatchJobsFilters((prev) => ({
+													...prev,
+													sortDir: e.target.value as "asc" | "desc",
+												}));
+											}
+										}
+									>
+										<MenuItem value="desc">Desc</MenuItem>
+										<MenuItem value="asc">Asc</MenuItem>
+									</Select>
+								</FormControl>
+							</Stack>
+
+							{matchJobsError && (
+								<Alert severity="error" sx={{ mt: 2 }}>
+									{matchJobsError}
+								</Alert>
+							)}
+
+							<Box sx={{ mt: 2 }}>
+								<DataGrid
+									rows={matchJobs}
+									columns={matchJobColumns}
+									getRowId={(row) => row.id}
+									autoHeight
+									loading={matchJobsLoading}
+									rowCount={matchJobsTotal}
+									paginationMode="server"
+									paginationModel={matchJobsPagination}
+									onPaginationModelChange={(model) => {
+										setMatchJobsPagination(model);
+									}}
+									pageSizeOptions={[10, 20, 50]}
+									disableRowSelectionOnClick
+								/>
+							</Box>
+						</CardContent>
+						</Card>
+
+						<Card variant="outlined">
+						<CardContent>
+							<Stack
+								direction={{ xs: "column", md: "row" }}
+								spacing={2}
+								alignItems={{ xs: "flex-start", md: "center" }}
+								justifyContent="space-between"
+							>
+								<Box>
+									<Typography variant="h6" fontWeight={700}>
+										Match review
+									</Typography>
+									<Typography variant="body2" color="text.secondary">
+										Score range: {reviewScoreMin.toFixed(2)}–{reviewScoreMax.toFixed(2)}
+									</Typography>
+								</Box>
+							</Stack>
+
+							<Divider sx={{ my: 2 }} />
+
+							{reviewError && (
+								<Alert severity="error" sx={{ mt: 2 }}>
+									{reviewError}
+								</Alert>
+							)}
+
+							<Box sx={{ mt: 2 }}>
+								<DataGrid
+									rows={reviewItems}
+									columns={reviewColumns}
+									getRowId={(row) => row.matchId}
+									autoHeight
+									rowHeight={92}
+									loading={reviewLoading}
+									rowCount={reviewTotal}
+									paginationMode="server"
+									paginationModel={reviewPagination}
+									onPaginationModelChange={(model) => {
+										setReviewPagination(model);
+									}}
+									pageSizeOptions={[10, 20, 50]}
+									disableRowSelectionOnClick
+									sx={{
+										"& .MuiDataGrid-columnHeaders": {
+											minHeight: 56,
+											maxHeight: 56,
+										},
+										"& .MuiDataGrid-cell": {
+											py: 1.5,
+											alignItems: "center",
+										},
+										"& .MuiDataGrid-row": {
+											maxHeight: "none",
+										},
+									}}
+								/>
+							</Box>
+						</CardContent>
+						</Card>
+					</Stack>
+				)}
+
+				{adminTab === "schedules" && (
+					<>
+						<Card variant="outlined">
 					<CardContent>
 						<Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
 							Schedules
@@ -470,9 +1461,9 @@ export default function AdminJobsPage() {
 							}}
 						/>
 					</CardContent>
-				</Card>
+						</Card>
 
-				<Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+						<Stack direction={{ xs: "column", md: "row" }} spacing={2}>
 					<Card variant="outlined" sx={{ flex: 1 }}>
 						<CardContent>
 							<Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
@@ -561,9 +1552,9 @@ export default function AdminJobsPage() {
 							</ResponsiveContainer>
 						</CardContent>
 					</Card>
-				</Stack>
+						</Stack>
 
-				<Card variant="outlined">
+						<Card variant="outlined">
 					<CardContent>
 						<Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
 							Recent runs
@@ -626,7 +1617,9 @@ export default function AdminJobsPage() {
 							</Box>
 						)}
 					</CardContent>
-				</Card>
+						</Card>
+					</>
+				)}
 			</Stack>
 		</Box>
 	);

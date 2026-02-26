@@ -16,13 +16,19 @@ import {
 	Pagination,
 	LinearProgress,
 	Divider,
+	IconButton,
 } from "@mui/material";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import { useMediaQuery, useTheme } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import { SHOP_OPTIONS, shopTypeName } from "./constants/shopTypes";
 import { fetchProducts, type ProductRow } from "./api/products";
 import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
+import type { CompareProduct } from "./api/compare";
+import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
+import { getStoredToken } from "./api/auth";
 
 function formatSizeValue(value?: number | null) {
 	return value == null || Number.isNaN(value) ? "-" : String(value);
@@ -111,6 +117,7 @@ export default function ProductsPage() {
 	const theme = useTheme();
 	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 	const isMdDown = useMediaQuery(theme.breakpoints.down("md"));
+	const isAuthenticated = Boolean(getStoredToken());
 	const [rows, setRows] = useState<ProductRow[]>([]);
 	const [rowCount, setRowCount] = useState(0);
 	const [loading, setLoading] = useState(false);
@@ -121,12 +128,20 @@ export default function ProductsPage() {
 		pageSize: 20,
 	});
 	const [refreshTick, setRefreshTick] = useState(0);
+	const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+	const [favoriteBusyIds, setFavoriteBusyIds] = useState<string[]>([]);
 
 	// Compare dialog state
 	const [compareOpen, setCompareOpen] = useState(false);
 	const [compareKeyword, setCompareKeyword] = useState<string>("");
 	const [compareSourceShop, setCompareSourceShop] = useState<
 		number | undefined
+	>(undefined);
+	const [compareSourceProductId, setCompareSourceProductId] = useState<
+		string | undefined
+	>(undefined);
+	const [compareSourceProduct, setCompareSourceProduct] = useState<
+		CompareProduct | undefined
 	>(undefined);
 
 	const debouncedName = useDebounce(search, 350);
@@ -135,18 +150,98 @@ export default function ProductsPage() {
 		productId: string,
 		name?: string,
 		shopTypeValue?: number | string | null,
+		row?: ProductRow,
 	) => {
 		if (!name) {
 			alert("No product name available for comparison.");
 			return;
 		}
 		setCompareKeyword(name);
+		setCompareSourceProductId(productId);
 		const source = Number(shopTypeValue ?? NaN);
 		setCompareSourceShop(
 			Number.isFinite(source) ? (source as number) : undefined,
 		);
+		if (row) {
+			const shopTypeNum = Number(row.shopType ?? NaN);
+			const sizeValue = row.sizeValue ?? null;
+			const price = row.price ?? null;
+			setCompareSourceProduct({
+				productId: row.productId,
+				name: row.name,
+				shopType: Number.isFinite(shopTypeNum) ? shopTypeNum : NaN,
+				brand: undefined,
+				sizeValue,
+				sizeUnit: row.sizeUnit ?? null,
+				size: row.size ?? null,
+				price,
+				pricePerUnit:
+					price != null && sizeValue != null && sizeValue > 0
+						? price / sizeValue
+						: null,
+			});
+		} else {
+			setCompareSourceProduct(undefined);
+		}
 		setCompareOpen(true);
 	};
+
+	const setFavoriteBusy = React.useCallback((productId: string, busy: boolean) => {
+		setFavoriteBusyIds((prev) => {
+			if (busy) {
+				return prev.includes(productId) ? prev : [...prev, productId];
+			}
+			return prev.filter((item) => item !== productId);
+		});
+	}, []);
+
+	const handleToggleFavorite = React.useCallback(
+		async (productId: string) => {
+			if (!isAuthenticated) {
+				alert("Please sign in to add items to My Favorites.");
+				return;
+			}
+			if (favoriteBusyIds.includes(productId)) return;
+			const wasFavorite = favoriteIds.has(productId);
+			setFavoriteBusy(productId, true);
+			setFavoriteIds((prev) => {
+				const next = new Set(prev);
+				if (wasFavorite) {
+					next.delete(productId);
+				} else {
+					next.add(productId);
+				}
+				return next;
+			});
+			try {
+				if (wasFavorite) {
+					await removeFavorite(productId);
+				} else {
+					await addFavorite(productId);
+				}
+			} catch (e) {
+				setFavoriteIds((prev) => {
+					const next = new Set(prev);
+					if (wasFavorite) {
+						next.add(productId);
+					} else {
+						next.delete(productId);
+					}
+					return next;
+				});
+				// eslint-disable-next-line no-console
+				console.error("Failed to toggle favorite", e);
+			} finally {
+				setFavoriteBusy(productId, false);
+			}
+		},
+		[
+			favoriteBusyIds,
+			favoriteIds,
+			isAuthenticated,
+			setFavoriteBusy,
+		],
+	);
 
 	// Fetch when filters or pagination changes
 	useEffect(() => {
@@ -181,6 +276,30 @@ export default function ProductsPage() {
 		paginationModel.pageSize,
 		refreshTick,
 	]);
+
+	useEffect(() => {
+		let active = true;
+		if (!isAuthenticated) {
+			setFavoriteIds(new Set());
+			return () => {
+				active = false;
+			};
+		}
+		const loadFavorites = async () => {
+			try {
+				const data = await fetchFavorites();
+				if (!active) return;
+				setFavoriteIds(new Set(data.map((item) => item.productId)));
+			} catch (e) {
+				// eslint-disable-next-line no-console
+				console.error("Failed to load favorites", e);
+			}
+		};
+		void loadFavorites();
+		return () => {
+			active = false;
+		};
+	}, [isAuthenticated]);
 
 	const totalPages = Math.max(
 		1,
@@ -291,6 +410,8 @@ export default function ProductsPage() {
 							const sizeText = formatSize(row);
 							const priceText = formatPrice(row.price, sizeText || undefined);
 							const accent = shopAccent(row.shopType);
+							const isFavorite = favoriteIds.has(row.productId);
+							const favoriteBusy = favoriteBusyIds.includes(row.productId);
 							return (
 								<Card
 									key={row.productId}
@@ -395,20 +516,52 @@ export default function ProductsPage() {
 												Size unit: {formatSizeUnit(row.sizeUnit)}
 											</Typography>
 										</Stack>
-										<Button
-											variant="contained"
-											size="small"
+										<Stack
+											direction="row"
+											spacing={1}
 											sx={{ mt: "auto", alignSelf: "center" }}
-											onClick={() =>
-												handleCompare(
-													row.productId,
-													row.name,
-													row.shopType,
-												)
-											}
+											alignItems="center"
 										>
-											Compare
-										</Button>
+											<Button
+												variant="contained"
+												size="small"
+												onClick={() =>
+													handleCompare(
+														row.productId,
+														row.name,
+														row.shopType,
+														row,
+													)
+												}
+											>
+												Compare
+											</Button>
+											<IconButton
+												size="small"
+												onClick={() => void handleToggleFavorite(row.productId)}
+												disabled={favoriteBusy}
+												aria-label={
+													isFavorite
+														? "Remove from My Favorites"
+														: "Add to My Favorites"
+												}
+												sx={{
+													color: accent,
+													border: "1px solid",
+													borderColor: `${accent}33`,
+													bgcolor: "#ffffff",
+													"&:hover": {
+														bgcolor: `${accent}12`,
+													},
+												}}
+											>
+												{isFavorite ? (
+													<FavoriteIcon fontSize="small" />
+												) : (
+													<FavoriteBorderIcon fontSize="small" />
+												)}
+											</IconButton>
+										</Stack>
 									</CardContent>
 								</Card>
 							);
@@ -469,6 +622,8 @@ export default function ProductsPage() {
 				open={compareOpen}
 				keyword={compareKeyword}
 				sourceShop={compareSourceShop}
+				sourceProductId={compareSourceProductId}
+				sourceProduct={compareSourceProduct}
 				onClose={() => setCompareOpen(false)}
 			/>
 		</Box>

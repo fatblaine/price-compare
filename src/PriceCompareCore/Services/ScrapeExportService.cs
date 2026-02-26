@@ -136,7 +136,14 @@ namespace PriceCompareCore.Services
                 "packageqty",
                 "categoryid",
                 "imageurl",
-                "lastseenat"
+                "lastseenat",
+                "normalizedname",
+                "normalizedbrand",
+                "sizestandardvalue",
+                "sizestandardunit",
+                "sizeunknown",
+                "brandunknown",
+                "categoryunknown"
             };
 
             await using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
@@ -157,7 +164,14 @@ namespace PriceCompareCore.Services
                     row.PackageQty?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
                     row.CategoryId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
                     row.ImageUrl ?? string.Empty,
-                    row.LastSeenAt.ToString("O", CultureInfo.InvariantCulture)
+                    row.LastSeenAt.ToString("O", CultureInfo.InvariantCulture),
+                    row.NormalizedName ?? string.Empty,
+                    row.NormalizedBrand ?? string.Empty,
+                    row.SizeStandardValue?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                    row.SizeStandardUnit ?? string.Empty,
+                    row.SizeUnknown ? "true" : "false",
+                    row.BrandUnknown ? "true" : "false",
+                    row.CategoryUnknown ? "true" : "false"
                 };
 
                 await CsvWriter.WriteRowAsync(writer, fields, ct);

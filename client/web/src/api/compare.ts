@@ -32,6 +32,8 @@ function normalizeProduct(raw: any): CompareProduct {
 		raw,
 		"price",
 		"Price",
+		"latestPrice",
+		"LatestPrice",
 		"currentPrice",
 		"CurrentPrice",
 	);
@@ -64,12 +66,24 @@ function normalizeProduct(raw: any): CompareProduct {
 	};
 }
 
+function normalizeMatchCandidate(raw: any): CompareProduct {
+	const targetRaw = read<any>(raw, "target", "Target") ?? raw;
+	const product = normalizeProduct(targetRaw);
+	const latestPrice = read<number>(raw, "latestPrice", "LatestPrice");
+	const pricePerUnit = read<number>(raw, "pricePerUnit", "PricePerUnit");
+	return {
+		...product,
+		price: latestPrice ?? product.price ?? null,
+		pricePerUnit: pricePerUnit ?? product.pricePerUnit ?? null,
+	};
+}
+
 export async function fetchCompareMatches(
 	keyword: string,
 	sourceShop: number,
 ): Promise<CompareMatches | null> {
 	const params: any = { keyword, sourceShop };
-	const url = `${API_BASE}/api/Compare`;
+	const url = `${API_BASE}/api/compare-cached`;
 	const res = await axios.get(url, { params });
 	const data = res.data ?? {};
 	const matches: any[] = read<any[]>(data, "matches", "Matches") ?? [];
@@ -91,6 +105,18 @@ export async function fetchCompareMatches(
 		.map(normalizeProduct)
 		.filter((t) => !Number.isFinite(source.shopType) || t.shopType !== source.shopType);
 	return { source, targets };
+}
+
+export async function fetchCompareMatchesByProduct(
+	sourceProductId: string,
+): Promise<CompareProduct[]> {
+	const params: any = { sourceProductId };
+	const url = `${API_BASE}/api/compare-cached/by-product`;
+	const res = await axios.get(url, { params });
+	const data = res.data ?? {};
+	const matches: any[] = read<any[]>(data, "matches", "Matches") ?? [];
+	if (!Array.isArray(matches) || matches.length === 0) return [];
+	return matches.map(normalizeMatchCandidate);
 }
 
 // Price history types and helpers

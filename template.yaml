@@ -47,6 +47,9 @@ Parameters:
   JwtSecretId:
     Type: String
     Description: Secrets Manager secret name or ARN for JwtSettings__Secret
+  OpenRouterApiKeySecretId:
+    Type: String
+    Description: Secrets Manager secret name or ARN for OpenRouter__ApiKey
   AdminEmails:
     Type: String
     Description: Comma-separated list of admin emails
@@ -152,6 +155,48 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Compare
             Method: GET
+        MatchRunPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Match/run
+            Method: POST
+        MatchStatusGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Match/status/{jobId}
+            Method: GET
+        MatchJobsGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Match/jobs
+            Method: GET
+        MatchProductMatchesReviewGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Match/productmatches/review
+            Method: GET
+        MatchProductMatchesUpdatePost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Match/productmatches/update
+            Method: POST
+        CompareCachedGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/compare-cached
+            Method: GET
+        CompareCachedByProductGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/compare-cached/by-product
+            Method: GET
         PriceHistoryGet:
           Type: HttpApi
           Properties:
@@ -224,6 +269,7 @@ Resources:
           Aws__ReceiptBucket: !Ref ReceiptsBucket
           DOTNET_SYSTEM_NET_DISABLEIPV6: "1"
           JwtSettings__Secret: !Sub "{{resolve:secretsmanager:${JwtSecretId}:SecretString}}"
+          OpenRouter__ApiKey: !Sub "{{resolve:secretsmanager:${OpenRouterApiKeySecretId}:SecretString}}"
           AdminEmails: !Ref AdminEmails
 
   FavoritePriceTrackingJob:
