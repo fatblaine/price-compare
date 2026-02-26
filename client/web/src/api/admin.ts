@@ -162,6 +162,44 @@ export type MatchJobQuery = {
 	sortDir?: "asc" | "desc";
 };
 
+export type ProductMatchReviewItem = {
+	matchId: string;
+	score: number;
+	matchType?: string | null;
+	method?: string | null;
+	updatedAt: string;
+	sourceProductId: string;
+	sourceName: string;
+	sourceShopType?: number | null;
+	sourceShopName: string;
+	sourceImageUrl?: string | null;
+	targetProductId: string;
+	targetName: string;
+	targetShopType?: number | null;
+	targetShopName: string;
+	targetImageUrl?: string | null;
+};
+
+export type ProductMatchReviewResponse = {
+	items: ProductMatchReviewItem[];
+	total: number;
+	page: number;
+	pageSize: number;
+};
+
+export type ProductMatchReviewQuery = {
+	minScore?: number;
+	maxScore?: number;
+	page?: number;
+	pageSize?: number;
+};
+
+export type ProductMatchUpdateRequest = {
+	matchId: string;
+	matchType: "same_product" | "comparable";
+	score?: number;
+};
+
 export async function runMatchJob(
 	payload: MatchRunRequest,
 ): Promise<{ jobId: string }> {
@@ -182,5 +220,24 @@ export async function fetchMatchJobs(
 	params: MatchJobQuery,
 ): Promise<MatchJobListResponse> {
 	const res = await axios.get(`${API_BASE}/api/Match/jobs`, { params });
+	return res.data;
+}
+
+export async function fetchProductMatchReview(
+	params: ProductMatchReviewQuery,
+): Promise<ProductMatchReviewResponse> {
+	const res = await axios.get(`${API_BASE}/api/Match/productmatches/review`, {
+		params,
+	});
+	return res.data;
+}
+
+export async function updateProductMatch(
+	payload: ProductMatchUpdateRequest,
+): Promise<{ success: boolean }> {
+	const res = await axios.post(
+		`${API_BASE}/api/Match/productmatches/update`,
+		payload,
+	);
 	return res.data;
 }

@@ -173,6 +173,18 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Match/jobs
             Method: GET
+        MatchProductMatchesReviewGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Match/productmatches/review
+            Method: GET
+        MatchProductMatchesUpdatePost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Match/productmatches/update
+            Method: POST
         CompareCachedGet:
           Type: HttpApi
           Properties:
