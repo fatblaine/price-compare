@@ -16,11 +16,13 @@ namespace PriceCompareWeb.Controllers
     public class MatchController : ControllerBase
     {
         private readonly IMatchJobService _matchJobService;
+        private readonly IMatchLlmReviewService _llmReviewService;
         private readonly AppDbContext _db;
 
-        public MatchController(IMatchJobService matchJobService, AppDbContext db)
+        public MatchController(IMatchJobService matchJobService, IMatchLlmReviewService llmReviewService, AppDbContext db)
         {
             _matchJobService = matchJobService;
+            _llmReviewService = llmReviewService;
             _db = db;
         }
 
@@ -162,6 +164,28 @@ namespace PriceCompareWeb.Controllers
             }
 
             var jobId = await _matchJobService.StartAsync(request);
+            return Ok(new { jobId });
+        }
+
+        [HttpPost("llm-review/run")]
+        public async Task<IActionResult> RunLlmReview([FromBody] MatchLlmReviewRequest request)
+        {
+            if (request == null)
+            {
+                return BadRequest("Request body is required.");
+            }
+
+            if (request.SourceShop == request.TargetShop)
+            {
+                return BadRequest("SourceShop and TargetShop must be different.");
+            }
+
+            if (request.TopN < 1) request.TopN = 1;
+            if (request.TopN > 50) request.TopN = 50;
+
+            if (request.Limit < 0) request.Limit = 0;
+
+            var jobId = await _llmReviewService.StartAsync(request);
             return Ok(new { jobId });
         }
 

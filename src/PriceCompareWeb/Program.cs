@@ -54,6 +54,7 @@ builder.Services.Configure<OpenRouterOptions>(
 // Match job services
 builder.Services.AddScoped<IMatchJobService, MatchJobService>();
 builder.Services.AddScoped<IProductMatchingService, ProductMatchingService>();
+builder.Services.AddScoped<IMatchLlmReviewService, MatchLlmReviewService>();
 
 // OpenRouter services
 builder.Services.AddHttpClient("OpenRouter", client =>
