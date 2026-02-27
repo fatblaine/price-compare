@@ -510,12 +510,6 @@ export default function AdminJobsPage() {
 					: "-",
 		},
 		{
-			field: "matchType",
-			headerName: "Match type",
-			width: 140,
-			valueFormatter: (value) => (value ? String(value) : "-"),
-		},
-		{
 			field: "updatedAt",
 			headerName: "Updated",
 			width: 180,
