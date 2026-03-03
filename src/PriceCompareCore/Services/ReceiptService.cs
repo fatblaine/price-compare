@@ -131,6 +131,21 @@ namespace PriceCompareCore.Services
             return result;
         }
 
+        public async Task<bool> DeleteReceiptAsync(int id, Guid userId)
+        {
+            var receipt = await _db.Receipts
+                .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
+
+            if (receipt == null)
+            {
+                return false;
+            }
+
+            _db.Receipts.Remove(receipt);
+            await _db.SaveChangesAsync();
+            return true;
+        }
+
         public async Task UpdateReceiptItemsAsync(
             int receiptId,
             Guid userId,

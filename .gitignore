@@ -236,3 +236,7 @@ tools/KeywordMiner/appsettings.json
 !.gitignore
 !.gitattributes
 .fake
+
+.claude/
+docs/
+CLAUDE.md

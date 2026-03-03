@@ -137,6 +137,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Receipts/{id}/items
             Method: PUT
+        ReceiptsDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Receipts/{id}
+            Method: DELETE
         ReceiptUploadAndParsePost:
           Type: HttpApi
           Properties:
