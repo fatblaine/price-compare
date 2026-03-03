@@ -138,6 +138,13 @@ namespace PriceCompareWeb.Controllers
             });
         }
 
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> DeleteReceipt(int id)
+        {
+            var deleted = await _service.DeleteReceiptAsync(id, CurrentUserId);
+            return deleted ? NoContent() : NotFound();
+        }
+
         /// <summary>
         /// Replace the items of a receipt with the list provided by the client.
         /// Existing items are updated when an id is supplied; new items are created when id is null or &lt;= 0;

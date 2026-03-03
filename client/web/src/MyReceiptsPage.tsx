@@ -31,6 +31,7 @@ import {
 	fetchReceiptDetail,
 	uploadAndParseReceipt,
 	updateReceiptItems,
+	deleteReceipt,
 	type ParsedReceiptItem,
 	type UpdateReceiptItemPayload,
 	type ReceiptDetail,
@@ -41,6 +42,7 @@ import { addFavorite } from "./api/favorites";
 import { fetchProducts, type ProductRow } from "./api/products";
 import { useDebounce } from "./hooks/useDebounce";
 import CloseIcon from "@mui/icons-material/Close";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 interface EditableReceiptItem {
 	id?: number | null;
@@ -86,6 +88,8 @@ export default function MyReceiptsPage() {
 	const [productOptions, setProductOptions] = React.useState<ProductRow[]>([]);
 	const [productSearchLoading, setProductSearchLoading] = React.useState(false);
 	const debouncedProductQuery = useDebounce(productSearchQuery, 350);
+	const [deletingId, setDeletingId] = React.useState<number | null>(null);
+	const [confirmDeleteId, setConfirmDeleteId] = React.useState<number | null>(null);
 
 	// Load receipt list once on mount.
 	React.useEffect(() => {
@@ -181,6 +185,24 @@ export default function MyReceiptsPage() {
 
 	const handleSelect = (id: number) => {
 		setSelectedId(id);
+	};
+
+	const handleDeleteConfirm = async (id: number) => {
+		setDeletingId(id);
+		setConfirmDeleteId(null);
+		try {
+			await deleteReceipt(id);
+			setReceipts((prev) => prev.filter((r) => r.id !== id));
+			if (selectedId === id) {
+				setSelectedId(null);
+				setDetail(null);
+			}
+		} catch (e) {
+			// eslint-disable-next-line no-console
+			console.error("Failed to delete receipt", e);
+		} finally {
+			setDeletingId(null);
+		}
 	};
 
 	const handleUploadClick = () => {
@@ -524,12 +546,56 @@ export default function MyReceiptsPage() {
 										const dateText = r.purchaseDate
 											? new Date(r.purchaseDate).toLocaleString()
 											: "-";
+										const isConfirming = confirmDeleteId === r.id;
+										const isDeleting = deletingId === r.id;
 										return (
 											<ListItem
 												key={r.id}
 												disableGutters
+												secondaryAction={
+													isConfirming ? (
+														<Stack direction="row" spacing={0.5} sx={{ pr: 1 }}>
+															<Button
+																size="small"
+																color="error"
+																variant="contained"
+																disabled={isDeleting}
+																onClick={() => void handleDeleteConfirm(r.id)}
+																sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+															>
+																{isDeleting ? (
+																	<CircularProgress size={14} sx={{ color: "white" }} />
+																) : (
+																	"Yes"
+																)}
+															</Button>
+															<Button
+																size="small"
+																disabled={isDeleting}
+																onClick={() => setConfirmDeleteId(null)}
+																sx={{ minWidth: 0, px: 1, fontSize: 11 }}
+															>
+																No
+															</Button>
+														</Stack>
+													) : (
+														<IconButton
+															size="small"
+															aria-label="delete receipt"
+															disabled={isDeleting}
+															onClick={(e) => {
+																e.stopPropagation();
+																setConfirmDeleteId(r.id);
+															}}
+															sx={{ mr: 0.5 }}
+														>
+															<DeleteIcon fontSize="small" />
+														</IconButton>
+													)
+												}
 												sx={{
 													bgcolor: isActive ? "action.selected" : "transparent",
+													pr: isConfirming ? "120px" : "48px",
 												}}
 											>
 												<CardActionArea

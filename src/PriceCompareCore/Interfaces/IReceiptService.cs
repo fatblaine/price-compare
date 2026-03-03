@@ -20,5 +20,11 @@ namespace PriceCompareCore.Interfaces
             int receiptId,
             Guid userId,
             IEnumerable<UpdateReceiptItemModel> items);
+
+        /// <summary>
+        /// Delete a receipt owned by the given user. Receipt items are removed via cascade.
+        /// Returns false if the receipt does not exist or belongs to a different user.
+        /// </summary>
+        Task<bool> DeleteReceiptAsync(int id, Guid userId);
     }
 }
