@@ -36,5 +36,6 @@ namespace PriceCompareData.Entities.Common
         public const string WOOLWORTHS_HALF_PRICE_PRODUCTS = "WoolworthsHalfPriceProducts";
         public const string WOOLWORTHS_BUY_MORE_SAVE_MORE_PRODUCTS = "WoolworthsBuyMoreSaveMoreProducts";
         public const string WOOLWORTHS_SUMMER_PRICE_PRODUCTS = "WoolworthsSummerPriceProducts";
+        public const string WOOLWORTHS_AUTUMN_PRICE_PRODUCTS = "WoolworthsAutumnPriceProducts";
     }
 }

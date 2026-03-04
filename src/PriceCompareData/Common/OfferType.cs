@@ -33,5 +33,6 @@ namespace PriceCompareData.Common
         public const int DELIVER_MORE_RANGE = 23;
         public const int BUY_MORE_SAVE_MORE = 24;
         public const int SUMMER_PRICE = 25;
+        public const int AUTUMN_PRICE = 26;
     }
 }
