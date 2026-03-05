@@ -29,7 +29,22 @@ namespace PriceCompareCore.Services
 
             try
             {
-                var query = _db.Products.AsNoTracking().AsQueryable();
+                // Derived table: one MAX per shop type — executed once, not per row.
+                // Avoids the correlated subquery that caused the 30-second timeout.
+                var latestPerShop = _db.Products
+                    .AsNoTracking()
+                    .Where(p => p.ShopType.HasValue)
+                    .GroupBy(p => p.ShopType)
+                    .Select(g => new { ShopType = g.Key, MaxDate = g.Max(p => p.LastSeenAt.Date) });
+
+                var query = _db.Products
+                    .AsNoTracking()
+                    .Join(
+                        latestPerShop,
+                        p => new { p.ShopType, Date = p.LastSeenAt.Date },
+                        l => new { l.ShopType, Date = l.MaxDate },
+                        (p, l) => p
+                    );
 
                 if (!string.IsNullOrWhiteSpace(name))
                 {
