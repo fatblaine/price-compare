@@ -15,7 +15,6 @@ import {
 	Chip,
 	Pagination,
 	LinearProgress,
-	Divider,
 	IconButton,
 } from "@mui/material";
 import FavoriteIcon from "@mui/icons-material/Favorite";
@@ -26,17 +25,9 @@ import { SHOP_OPTIONS, shopTypeName } from "./constants/shopTypes";
 import { fetchProducts, type ProductRow } from "./api/products";
 import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
-import type { CompareProduct } from "./api/compare";
+import { fetchCompareMatchesByProduct, type CompareProduct } from "./api/compare";
 import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
 import { getStoredToken } from "./api/auth";
-
-function formatSizeValue(value?: number | null) {
-	return value == null || Number.isNaN(value) ? "-" : String(value);
-}
-
-function formatSizeUnit(value?: string | null) {
-	return value && value.trim() !== "" ? value : "-";
-}
 
 function formatSize(row: ProductRow) {
 	if (row.size && row.size.trim() !== "") return row.size;
@@ -130,6 +121,7 @@ export default function ProductsPage() {
 	const [refreshTick, setRefreshTick] = useState(0);
 	const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 	const [favoriteBusyIds, setFavoriteBusyIds] = useState<string[]>([]);
+	const [compareDataMap, setCompareDataMap] = useState<Record<string, CompareProduct | null>>({});
 
 	// Compare dialog state
 	const [compareOpen, setCompareOpen] = useState(false);
@@ -301,6 +293,33 @@ export default function ProductsPage() {
 		};
 	}, [isAuthenticated]);
 
+	useEffect(() => {
+		if (rows.length === 0) {
+			setCompareDataMap({});
+			return;
+		}
+		setCompareDataMap({});
+		let cancelled = false;
+		for (const row of rows) {
+			fetchCompareMatchesByProduct(row.productId)
+				.then((targets) => {
+					if (cancelled) return;
+					const best =
+						targets.find(
+							(t) => t.matchType === "same_product" && t.price != null,
+						) ?? null;
+					setCompareDataMap((prev) => ({ ...prev, [row.productId]: best }));
+				})
+				.catch(() => {
+					if (cancelled) return;
+					setCompareDataMap((prev) => ({ ...prev, [row.productId]: null }));
+				});
+		}
+		return () => {
+			cancelled = true;
+		};
+	}, [rows]);
+
 	const totalPages = Math.max(
 		1,
 		Math.ceil(rowCount / Math.max(1, paginationModel.pageSize)),
@@ -412,6 +431,18 @@ export default function ProductsPage() {
 							const accent = shopAccent(row.shopType);
 							const isFavorite = favoriteIds.has(row.productId);
 							const favoriteBusy = favoriteBusyIds.includes(row.productId);
+							const compareTarget = compareDataMap[row.productId];
+							let recommendationText: string | null = null;
+							if (compareTarget && row.price != null && compareTarget.price != null) {
+								const diff = compareTarget.price - row.price;
+								if (Math.abs(diff) < 0.001) {
+									recommendationText = "Both stores have the same price";
+								} else if (diff < 0) {
+									recommendationText = `${shopTypeName(compareTarget.shopType)} is cheaper! (save $${Math.abs(diff).toFixed(2)})`;
+								} else {
+									recommendationText = `${shopTypeName(row.shopType)} is cheaper! (save $${diff.toFixed(2)})`;
+								}
+							}
 							return (
 								<Card
 									key={row.productId}
@@ -507,15 +538,15 @@ export default function ProductsPage() {
 												Promo: {row.promoText}
 											</Typography>
 										)}
-										<Divider />
-										<Stack spacing={0.3}>
-											<Typography variant="body2" color="text.secondary">
-												Size value: {formatSizeValue(row.sizeValue)}
+										{recommendationText && (
+											<Typography
+												variant="caption"
+												fontWeight={600}
+												sx={{ textAlign: "center" }}
+											>
+												{recommendationText}
 											</Typography>
-											<Typography variant="body2" color="text.secondary">
-												Size unit: {formatSizeUnit(row.sizeUnit)}
-											</Typography>
-										</Stack>
+										)}
 										<Stack
 											direction="row"
 											spacing={1}

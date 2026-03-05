@@ -19,6 +19,7 @@ export interface CompareProduct {
 	shopType: number;
 	price?: number | null;
 	pricePerUnit?: number | null;
+	matchType?: string | null;
 }
 
 export interface CompareMatches {
@@ -71,10 +72,12 @@ function normalizeMatchCandidate(raw: any): CompareProduct {
 	const product = normalizeProduct(targetRaw);
 	const latestPrice = read<number>(raw, "latestPrice", "LatestPrice");
 	const pricePerUnit = read<number>(raw, "pricePerUnit", "PricePerUnit");
+	const matchType = read<string | null>(raw, "matchType", "MatchType") ?? null;
 	return {
 		...product,
 		price: latestPrice ?? product.price ?? null,
 		pricePerUnit: pricePerUnit ?? product.pricePerUnit ?? null,
+		matchType,
 	};
 }
 
@@ -102,7 +105,7 @@ export async function fetchCompareMatches(
 	const rawTargets = read<any[]>(match, "targets", "Targets") ?? [];
 	const source = normalizeProduct(rawSource);
 	const targets = rawTargets
-		.map(normalizeProduct)
+		.map(normalizeMatchCandidate)
 		.filter((t) => !Number.isFinite(source.shopType) || t.shopType !== source.shopType);
 	return { source, targets };
 }
