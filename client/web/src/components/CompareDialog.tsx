@@ -346,6 +346,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 									)}
 								</Stack>
 							)}
+
 						</Stack>
 
 						<Divider />
