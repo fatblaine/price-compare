@@ -554,6 +554,7 @@ export default function ProductsPage() {
 											<Typography
 												variant="caption"
 												fontWeight={600}
+												className="recommendation-text"
 												sx={{ textAlign: "center" }}
 											>
 												{recommendationText}
