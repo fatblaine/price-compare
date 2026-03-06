@@ -38,6 +38,14 @@ function createTourDriver() {
 				},
 			},
 			{
+				element: ".recommendation-text",
+				popover: {
+					title: "Purchase Recommendation",
+					description:
+						"When a matching product is found at another store, we show which shop is cheaper and how much you can save.",
+				},
+			},
+			{
 				element: ".favorite-btn",
 				popover: {
 					title: "Save Favourites",

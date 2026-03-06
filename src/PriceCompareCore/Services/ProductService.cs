@@ -64,10 +64,24 @@ namespace PriceCompareCore.Services
                 _logger.LogInformation("GetProducts count done total={Total}", total);
 
                 var hasFilter = !string.IsNullOrWhiteSpace(name) || shopType.HasValue || categoryId.HasValue;
-                // Avoid full-table sort by name when listing all products; use PK order unless filtered.
+
+                // Materialize same_product source IDs once into a List<Guid>.
+                // EF Core / Npgsql translates List.Contains() to "= ANY(@ids)" — a single fast lookup
+                // per row using the product PK, avoiding a correlated subquery on every row.
+                var sameProductIds = await _db.ProductMatches
+                    .Where(m => m.MatchType == "same_product")
+                    .Select(m => m.SourceProductId)
+                    .Distinct()
+                    .ToListAsync();
+
                 var orderedQuery = hasFilter
-                    ? query.OrderBy(p => p.Name).ThenBy(p => p.ProductId)
-                    : query.OrderBy(p => p.ProductId);
+                    ? query
+                        .OrderByDescending(p => sameProductIds.Contains(p.ProductId) ? 1 : 0)
+                        .ThenBy(p => p.Name)
+                        .ThenBy(p => p.ProductId)
+                    : query
+                        .OrderByDescending(p => sameProductIds.Contains(p.ProductId) ? 1 : 0)
+                        .ThenBy(p => p.ProductId);
 
                 var itemsQuery = orderedQuery
                     .Skip((page - 1) * pageSize)
