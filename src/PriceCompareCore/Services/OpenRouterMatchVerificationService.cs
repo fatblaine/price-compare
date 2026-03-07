@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -21,15 +22,18 @@ namespace PriceCompareCore.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly OpenRouterOptions _options;
         private readonly ILogger<OpenRouterMatchVerificationService> _logger;
+        private readonly LlmLogOptions _logOptions;
 
         public OpenRouterMatchVerificationService(
             IHttpClientFactory httpClientFactory,
             IOptions<OpenRouterOptions> options,
-            ILogger<OpenRouterMatchVerificationService> logger)
+            ILogger<OpenRouterMatchVerificationService> logger,
+            IOptions<LlmLogOptions> logOptions)
         {
             _httpClientFactory = httpClientFactory;
             _options = options.Value;
             _logger = logger;
+            _logOptions = logOptions.Value;
         }
 
         public async Task<string> VerifyAsync(Product source, IReadOnlyList<Product> candidates)
@@ -81,6 +85,10 @@ namespace PriceCompareCore.Services
                 Encoding.UTF8,
                 "application/json");
 
+            // rawContent 保存 LLM 返回的原始字符串，用于写日志
+            var rawContent = string.Empty;
+            string decision;
+
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutSeconds));
@@ -88,20 +96,34 @@ namespace PriceCompareCore.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("OpenRouter returned {Status}.", (int)resp.StatusCode);
-                    return "uncertain";
+                    decision = "uncertain";
                 }
-
-                var json = await resp.Content.ReadAsStringAsync(cts.Token);
-                var parsed = JsonSerializer.Deserialize<ChatResponse>(json);
-
-                var content = parsed?.choices?.FirstOrDefault()?.message?.content?.Trim()?.ToLowerInvariant();
-                return NormalizeDecision(content);
+                else
+                {
+                    var json = await resp.Content.ReadAsStringAsync(cts.Token);
+                    var parsed = JsonSerializer.Deserialize<ChatResponse>(json);
+                    // 保留原始返回（未 normalize），便于日志中排查 LLM 返回异常值
+                    rawContent = parsed?.choices?.FirstOrDefault()?.message?.content?.Trim() ?? string.Empty;
+                    decision = NormalizeDecision(rawContent.ToLowerInvariant());
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "OpenRouter match verification failed.");
-                return "uncertain";
+                decision = "uncertain";
             }
+
+            // 写 JSONL 日志，失败不影响主匹配流程
+            try
+            {
+                await AppendLlmLogAsync(source, top, system, user, rawContent, decision);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "LLM log write failed, ignoring.");
+            }
+
+            return decision;
         }
 
         private static string BuildPrompt(Product source, IReadOnlyList<Product> candidates)
@@ -124,6 +146,51 @@ namespace PriceCompareCore.Services
         {
             return $"{p.Brand} {p.Name} | Size {p.SizeValue}{p.SizeUnit} | Category {p.CategoryId}";
         }
+
+        // 把单次 LLM 调用的完整信息追加写入当天的 JSONL 文件
+        // 每行一个独立 JSON 对象，方便 jq 等工具逐行处理
+        private async Task AppendLlmLogAsync(
+            Product source,
+            IReadOnlyList<Product> candidates,
+            string systemPrompt,
+            string userPrompt,
+            string rawResponse,
+            string decision)
+        {
+            var record = new
+            {
+                timestamp   = DateTime.UtcNow,
+                model       = _options.Model,
+                prompt      = new { system = systemPrompt, user = userPrompt },
+                rawResponse,                          // LLM 原始返回，未经 normalize
+                decision,                             // normalize 后的最终决定
+                source      = MapProduct(source),
+                candidates  = candidates.Select(MapProduct)
+            };
+
+            // WriteIndented=false 保证每条记录是单行，符合 JSONL 格式
+            var line = JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = false });
+
+            var dir  = _logOptions.OutputDir;
+            var file = Path.Combine(dir, $"{DateTime.UtcNow:yyyy-MM-dd}.jsonl");
+
+            // 目录不存在时自动创建，幂等
+            Directory.CreateDirectory(dir);
+
+            // AppendAllTextAsync：open → write → close，无需持有文件句柄，天然避免锁问题
+            await File.AppendAllTextAsync(file, line + "\n");
+        }
+
+        // 只提取日志需要的字段，不序列化整个 EF 实体（避免循环引用和冗余数据）
+        private static object MapProduct(Product p) => new
+        {
+            productId = p.ProductId,
+            name      = p.Name,
+            brand     = p.Brand,
+            shopType  = p.ShopType,
+            sizeValue = p.SizeValue,
+            sizeUnit  = p.SizeUnit
+        };
 
         private static string NormalizeDecision(string? raw)
         {

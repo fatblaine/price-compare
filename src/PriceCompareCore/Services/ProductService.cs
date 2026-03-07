@@ -29,7 +29,22 @@ namespace PriceCompareCore.Services
 
             try
             {
-                var query = _db.Products.AsNoTracking().AsQueryable();
+                // Derived table: one MAX per shop type — executed once, not per row.
+                // Avoids the correlated subquery that caused the 30-second timeout.
+                var latestPerShop = _db.Products
+                    .AsNoTracking()
+                    .Where(p => p.ShopType.HasValue)
+                    .GroupBy(p => p.ShopType)
+                    .Select(g => new { ShopType = g.Key, MaxDate = g.Max(p => p.LastSeenAt.Date) });
+
+                var query = _db.Products
+                    .AsNoTracking()
+                    .Join(
+                        latestPerShop,
+                        p => new { p.ShopType, Date = p.LastSeenAt.Date },
+                        l => new { l.ShopType, Date = l.MaxDate },
+                        (p, l) => p
+                    );
 
                 if (!string.IsNullOrWhiteSpace(name))
                 {
@@ -49,10 +64,24 @@ namespace PriceCompareCore.Services
                 _logger.LogInformation("GetProducts count done total={Total}", total);
 
                 var hasFilter = !string.IsNullOrWhiteSpace(name) || shopType.HasValue || categoryId.HasValue;
-                // Avoid full-table sort by name when listing all products; use PK order unless filtered.
+
+                // Materialize same_product source IDs once into a List<Guid>.
+                // EF Core / Npgsql translates List.Contains() to "= ANY(@ids)" — a single fast lookup
+                // per row using the product PK, avoiding a correlated subquery on every row.
+                var sameProductIds = await _db.ProductMatches
+                    .Where(m => m.MatchType == "same_product")
+                    .Select(m => m.SourceProductId)
+                    .Distinct()
+                    .ToListAsync();
+
                 var orderedQuery = hasFilter
-                    ? query.OrderBy(p => p.Name).ThenBy(p => p.ProductId)
-                    : query.OrderBy(p => p.ProductId);
+                    ? query
+                        .OrderByDescending(p => sameProductIds.Contains(p.ProductId) ? 1 : 0)
+                        .ThenBy(p => p.Name)
+                        .ThenBy(p => p.ProductId)
+                    : query
+                        .OrderByDescending(p => sameProductIds.Contains(p.ProductId) ? 1 : 0)
+                        .ThenBy(p => p.ProductId);
 
                 var itemsQuery = orderedQuery
                     .Skip((page - 1) * pageSize)

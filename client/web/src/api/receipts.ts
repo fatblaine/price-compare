@@ -69,6 +69,11 @@ export async function updateReceiptItems(
 	await axios.put(url, items);
 }
 
+export async function deleteReceipt(id: number): Promise<void> {
+	const url = `${API_BASE}/api/Receipts/${id}`;
+	await axios.delete(url);
+}
+
 export async function uploadAndParseReceipt(
 	file: File,
 ): Promise<UploadAndParseResponse> {

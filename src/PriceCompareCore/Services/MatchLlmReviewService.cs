@@ -124,14 +124,18 @@ namespace PriceCompareCore.Services
                     sourceIds = sourceIds.Take(limit);
                 }
 
+                // Freeze IDs before the loop so that writes during processing
+                // (setting method='llm') do not shrink the query result set and
+                // cause Skip() to jump over unprocessed sources.
+                var frozenIds = await sourceIds.ToListAsync();
                 var processed = 0;
 
                 for (var page = 0; ; page++)
                 {
-                    var batch = await sourceIds
+                    var batch = frozenIds
                         .Skip(page * PageSize)
                         .Take(PageSize)
-                        .ToListAsync();
+                        .ToList();
 
                     if (batch.Count == 0)
                     {

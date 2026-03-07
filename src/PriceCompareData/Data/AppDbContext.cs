@@ -51,12 +51,20 @@ namespace PriceCompareData.Data
                   modelBuilder.Entity<Product>().HasIndex(p => new { p.ShopType, p.NormalizedName });
                   modelBuilder.Entity<Product>()
                       .HasIndex(p => new { p.CategoryId, p.SizeStandardUnit, p.SizeStandardValue });
+                  // Index to support per-shop latest-scrape-date filter in ProductService
+                  modelBuilder.Entity<Product>()
+                      .HasIndex(p => new { p.ShopType, p.LastSeenAt })
+                      .HasDatabaseName("IX_Products_ShopType_LastSeenAt");
 
                   // ProductMatch
                   modelBuilder.Entity<ProductMatch>(entity =>
                   {
                         entity.ToTable("productmatch");
                         entity.HasKey(e => e.Id);
+
+                        // Index for same_product sort: SELECT sourceproductid WHERE matchtype = 'same_product'
+                        entity.HasIndex(e => new { e.MatchType, e.SourceProductId })
+                              .HasDatabaseName("IX_ProductMatch_MatchType_SourceProductId");
 
                         entity.Property(e => e.Id).HasColumnName("id");
                         entity.Property(e => e.SourceProductId).HasColumnName("sourceproductid");
