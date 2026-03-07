@@ -51,6 +51,9 @@ builder.Services.Configure<ScrapeExportOptions>(
 builder.Services.Configure<OpenRouterOptions>(
     builder.Configuration.GetSection("OpenRouter"));
 
+builder.Services.Configure<LlmLogOptions>(
+     builder.Configuration.GetSection("LlmLog"));
+
 // Match job services
 builder.Services.AddScoped<IMatchJobService, MatchJobService>();
 builder.Services.AddScoped<IProductMatchingService, ProductMatchingService>();
