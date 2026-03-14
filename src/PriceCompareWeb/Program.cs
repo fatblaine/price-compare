@@ -81,7 +81,12 @@ builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
 builder.Services.AddAWSService<Amazon.Scheduler.IAmazonScheduler>();
 
 // Add services to the container.
-builder.Services.AddControllers();
+var exposeScrapingEndpoints = builder.Configuration.GetValue<bool>("Scraping:ExposeHttpEndpoints");
+builder.Services.AddControllers(options =>
+{
+    if (!exposeScrapingEndpoints)
+        options.Conventions.Add(new PriceCompareWeb.Infrastructure.DisableControllerConvention("Scraping"));
+});
 builder.Services.AddEndpointsApiExplorer();
 // Swagger with JWT support
 builder.Services.AddSwaggerGen(c =>

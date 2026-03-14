@@ -9,7 +9,7 @@ namespace PriceCompareData.Entities.Common
     {
         public const string COLES_BASE_URL = "https://www.coles.com.au";
         // Next.js build id used in Coles _next/data URLs. Update this when Coles deploys.
-        public const string COLES_NEXT_BUILD_ID = "20260226.8-d17cfe0a58d12bdda7eb0bae264e48600cd2d6a6";
+        public const string COLES_NEXT_BUILD_ID = "20260304.2-be79f23f30e761b8972fc135b629be1fc507f6ca";
         public const string COLES_NEXT_DATA_BASE = COLES_BASE_URL + "/_next/data/" + COLES_NEXT_BUILD_ID;
     }
 }
