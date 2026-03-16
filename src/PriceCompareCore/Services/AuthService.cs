@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -34,19 +32,9 @@ namespace PriceCompareCore.Services
 
         public async Task<string> Login(string email, string password)
         {
-            List<User> list = await _db.Users.ToListAsync();
-            User found = null;
+            User? found = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
 
-            foreach (User u in list)
-            {
-                if (u.Email == email && _hasher.VerifyPassword(password, u.PasswordHash))
-                {
-                    found = u;
-                    break;
-                }
-            }
-
-            if (found == null)
+            if (found == null || !_hasher.VerifyPassword(password, found.PasswordHash))
             {
                 throw new Exception("Invalid email or password");
             }
@@ -56,13 +44,10 @@ namespace PriceCompareCore.Services
 
         public async Task<string> Register(string email, string password)
         {
-            List<User> list = await _db.Users.ToListAsync();
-            foreach (User u in list)
+            bool exists = await _db.Users.AnyAsync(u => u.Email == email);
+            if (exists)
             {
-                if (u.Email == email)
-                {
-                    throw new Exception("Email already exists");
-                }
+                throw new Exception("Email already exists");
             }
 
             User newUser = new User();
