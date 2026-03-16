@@ -4,23 +4,24 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity;
 
 namespace PriceCompareCore.Utils
 {
     public class PasswordHasher
     {
+        private readonly IPasswordHasher<object> _inner = new PasswordHasher<object>();
+        private static readonly object _dummy = new object();
+
         public string HashPassword(string password)
         {
-            SHA256 sha = SHA256.Create();
-            byte[] bytes = Encoding.UTF8.GetBytes(password);
-            byte[] hash = sha.ComputeHash(bytes);
+            return _inner.HashPassword(_dummy, password);
+        }
 
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < hash.Length; i++)
-            {
-                sb.Append(hash[i].ToString("x2"));
-            }
-            return sb.ToString();
+        public bool VerifyPassword(string password, string storedHash)
+        {
+            var result = _inner.VerifyHashedPassword(_dummy, storedHash, password);
+            return result != PasswordVerificationResult.Failed;
         }
     }
 }

@@ -34,14 +34,12 @@ namespace PriceCompareCore.Services
 
         public async Task<string> Login(string email, string password)
         {
-            string hash = _hasher.HashPassword(password);
-
             List<User> list = await _db.Users.ToListAsync();
             User found = null;
 
             foreach (User u in list)
             {
-                if (u.Email == email && u.PasswordHash == hash)
+                if (u.Email == email && _hasher.VerifyPassword(password, u.PasswordHash))
                 {
                     found = u;
                     break;
