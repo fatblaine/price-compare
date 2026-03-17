@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Text;
 using System.Linq;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.Lambda.AspNetCoreServer.Hosting;
@@ -84,6 +86,29 @@ builder.Services.AddAWSService<Amazon.Scheduler.IAmazonScheduler>();
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
 {
     o.MultipartBodyLengthLimit = 10_485_760; // 10 MB
+});
+
+// Rate limiting: cap OCR uploads to 3 per user per 24 h to prevent cost abuse
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("ocr-per-user", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 3,
+                Window = TimeSpan.FromHours(24),
+                QueueLimit = 0
+            }));
+
+    options.OnRejected = async (rejectedContext, cancellationToken) =>
+    {
+        rejectedContext.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        rejectedContext.HttpContext.Response.ContentType = "application/json";
+        await rejectedContext.HttpContext.Response.WriteAsync(
+            """{"error":"daily_limit_exceeded","message":"You have used all 3 free OCR scans for today. Try again tomorrow."}""",
+            cancellationToken);
+    };
 });
 
 // Add services to the container.
@@ -513,6 +538,7 @@ app.UseCors("Default");
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapControllers();
 
