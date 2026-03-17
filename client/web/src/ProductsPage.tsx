@@ -550,16 +550,18 @@ export default function ProductsPage() {
 												Promo: {row.promoText}
 											</Typography>
 										)}
-										{recommendationText && (
-											<Typography
-												variant="caption"
-												fontWeight={600}
-												className="recommendation-text"
-												sx={{ textAlign: "center" }}
-											>
-												{recommendationText}
-											</Typography>
-										)}
+										<Box sx={{ minHeight: "1.5em" }}>
+											{recommendationText && (
+												<Typography
+													variant="caption"
+													fontWeight={600}
+													className="recommendation-text"
+													sx={{ textAlign: "center" }}
+												>
+													{recommendationText}
+												</Typography>
+											)}
+										</Box>
 										<Stack
 											direction="row"
 											spacing={1}
