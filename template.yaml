@@ -61,7 +61,9 @@ Resources:
     Properties:
       CorsConfiguration:
         AllowOrigins:
-          - "*"
+          - "http://pricecompare-frontend-prod.s3-website-ap-southeast-2.amazonaws.com"
+          - "http://pricecompare-frontend-dev.s3-website-ap-southeast-2.amazonaws.com"
+          - "http://localhost:3000"
         AllowMethods:
           - GET
           - POST
