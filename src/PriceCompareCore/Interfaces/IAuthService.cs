@@ -7,7 +7,12 @@ namespace PriceCompareCore.Interfaces
 {
     public interface IAuthService
     {
-        Task<string> Register(string email, string password);
+        /// <summary>Generates OTP, caches pending registration, sends verification email.</summary>
+        Task Register(string email, string password);
+
+        /// <summary>Verifies OTP, creates user in DB, returns JWT.</summary>
+        Task<string> VerifyEmail(string email, string otp);
+
         Task<string> Login(string email, string password);
     }
 }
