@@ -33,7 +33,7 @@ namespace PriceCompareWeb.Controllers
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Register failed for {Email}", request.Email);
-                return BadRequest(ex.Message);
+                return BadRequest("Registration failed");
             }
         }
 
@@ -49,7 +49,7 @@ namespace PriceCompareWeb.Controllers
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Login failed for {Email}", request.Email);
-                return Unauthorized(ex.Message);
+                return Unauthorized("Invalid credentials");
             }
         }
     }

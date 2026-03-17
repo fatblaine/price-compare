@@ -80,6 +80,12 @@ builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
 // AWS Scheduler client for reading schedules.
 builder.Services.AddAWSService<Amazon.Scheduler.IAmazonScheduler>();
 
+// M4 fix: cap multipart upload size at 10 MB to prevent DoS via oversized file uploads
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = 10_485_760; // 10 MB
+});
+
 // Add services to the container.
 var exposeScrapingEndpoints = builder.Configuration.GetValue<bool>("Scraping:ExposeHttpEndpoints");
 builder.Services.AddControllers(options =>
@@ -116,20 +122,18 @@ builder.Services.AddHttpContextAccessor();
 
 // CORS
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (allowedOrigins == null || allowedOrigins.Length == 0)
+    throw new InvalidOperationException(
+        "Cors:AllowedOrigins is not configured. " +
+        "Add at least one allowed origin in appsettings.json or via environment variable " +
+        "Cors__AllowedOrigins__0=https://yourdomain.com");
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Default", policy =>
     {
-        if (allowedOrigins != null && allowedOrigins.Length > 0)
-        {
-            policy.WithOrigins(allowedOrigins);
-        }
-        else
-        {
-            policy.AllowAnyOrigin();
-        }
-
-        policy.AllowAnyHeader()
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
               .AllowAnyMethod();
     });
 });
@@ -435,8 +439,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             // Use UTF8 to avoid losing bytes if secret contains non-ASCII chars
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtSettings.Audience,
             NameClaimType = ClaimTypes.NameIdentifier,
             ClockSkew = TimeSpan.Zero
         };
