@@ -88,6 +88,9 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
     o.MultipartBodyLengthLimit = 10_485_760; // 10 MB
 });
 
+// In-memory cache for pending email verifications (OTP TTL = 15 min)
+builder.Services.AddMemoryCache();
+
 // Rate limiting: cap OCR uploads to 3 per user per 24 h to prevent cost abuse
 builder.Services.AddRateLimiter(options =>
 {

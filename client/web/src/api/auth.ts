@@ -63,12 +63,26 @@ export async function login(email: string, password: string): Promise<string> {
 export async function register(
 	email: string,
 	password: string,
-): Promise<string> {
+): Promise<void> {
 	const url = `${API_BASE}/api/Auth/register`;
-	const res = await axios.post(url, { email, password });
-	const userId: string | undefined = res.data?.userId;
-	if (!userId) {
-		throw new Error("Register failed: invalid response from server");
+	await axios.post(url, { email, password });
+}
+
+export async function verifyEmail(
+	email: string,
+	otp: string,
+): Promise<string> {
+	const url = `${API_BASE}/api/Auth/verify-email`;
+	const res = await axios.post(url, { email, otp });
+	const token: string | undefined = res.data?.token;
+	if (!token) {
+		throw new Error("Verification failed: invalid response from server");
 	}
-	return userId;
+	if (typeof window !== "undefined") {
+		clearGuestSession();
+		localStorage.setItem(TOKEN_KEY, token);
+		localStorage.setItem(EMAIL_KEY, email);
+	}
+	axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+	return token;
 }
