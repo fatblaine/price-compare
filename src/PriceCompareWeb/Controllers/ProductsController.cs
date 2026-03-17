@@ -43,6 +43,7 @@ namespace PriceCompareWeb.Controllers
         {
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 20;
+            if (pageSize > 200) pageSize = 200;
 
             try
             {

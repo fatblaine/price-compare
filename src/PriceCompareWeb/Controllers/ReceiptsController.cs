@@ -50,19 +50,8 @@ namespace PriceCompareWeb.Controllers
         [HttpPost("{id:int}/upload")]
         public async Task<IActionResult> Upload(int id, IFormFile file)
         {
-            if (file == null || file.Length == 0)
-            {
-                return BadRequest("File is required");
-            }
-
-            // 简单类型检查
-            string contentType = file.ContentType;
-            if (contentType != "image/jpeg" &&
-                contentType != "image/png" &&
-                contentType != "application/pdf")
-            {
-                return BadRequest("Only jpg/png/pdf are supported");
-            }
+            var error = await ValidateFileAsync(file);
+            if (error != null) return BadRequest(error);
 
             await _processingService.ProcessUploadedReceiptAsync(id, CurrentUserId.ToString(), file);
 
@@ -83,18 +72,8 @@ namespace PriceCompareWeb.Controllers
         [HttpPost("upload-and-parse")]
         public async Task<IActionResult> UploadAndParse(IFormFile file)
         {
-            if (file == null || file.Length == 0)
-            {
-                return BadRequest("File is required");
-            }
-
-            string contentType = file.ContentType;
-            if (contentType != "image/jpeg" &&
-                contentType != "image/png" &&
-                contentType != "application/pdf")
-            {
-                return BadRequest("Only jpg/png/pdf are supported");
-            }
+            var error = await ValidateFileAsync(file);
+            if (error != null) return BadRequest(error);
 
             // 1. Create a basic receipt record for the current user.
             //    Store name / purchase date will be filled by OCR later.
@@ -136,6 +115,34 @@ namespace PriceCompareWeb.Controllers
                 productNames,
                 items
             });
+        }
+
+        private static async Task<string?> ValidateFileAsync(IFormFile file)
+        {
+            const long MaxBytes = 10_485_760; // 10 MB
+
+            if (file == null || file.Length == 0)
+                return "File is required";
+
+            if (file.Length > MaxBytes)
+                return "File exceeds 10 MB limit";
+
+            // Magic-byte verification — do not trust client-supplied Content-Type
+            var header = new byte[8];
+            int read;
+            using (var stream = file.OpenReadStream())
+                read = await stream.ReadAsync(header, 0, header.Length);
+
+            bool isJpeg = read >= 3 && header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF;
+            bool isPng  = read >= 8
+                       && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47
+                       && header[4] == 0x0D && header[5] == 0x0A && header[6] == 0x1A && header[7] == 0x0A;
+            bool isPdf  = read >= 4 && header[0] == 0x25 && header[1] == 0x50 && header[2] == 0x44 && header[3] == 0x46;
+
+            if (!isJpeg && !isPng && !isPdf)
+                return "Only jpg/png/pdf are supported";
+
+            return null;
         }
 
         [HttpDelete("{id:int}")]

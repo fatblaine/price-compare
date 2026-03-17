@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -34,21 +32,9 @@ namespace PriceCompareCore.Services
 
         public async Task<string> Login(string email, string password)
         {
-            string hash = _hasher.HashPassword(password);
+            User? found = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
 
-            List<User> list = await _db.Users.ToListAsync();
-            User found = null;
-
-            foreach (User u in list)
-            {
-                if (u.Email == email && u.PasswordHash == hash)
-                {
-                    found = u;
-                    break;
-                }
-            }
-
-            if (found == null)
+            if (found == null || !_hasher.VerifyPassword(password, found.PasswordHash))
             {
                 throw new Exception("Invalid email or password");
             }
@@ -58,13 +44,10 @@ namespace PriceCompareCore.Services
 
         public async Task<string> Register(string email, string password)
         {
-            List<User> list = await _db.Users.ToListAsync();
-            foreach (User u in list)
+            bool exists = await _db.Users.AnyAsync(u => u.Email == email);
+            if (exists)
             {
-                if (u.Email == email)
-                {
-                    throw new Exception("Email already exists");
-                }
+                throw new Exception("Email already exists");
             }
 
             User newUser = new User();
@@ -90,6 +73,8 @@ namespace PriceCompareCore.Services
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Email, user.Email)
                 }),
+                Issuer = _jwt.Issuer,
+                Audience = _jwt.Audience,
                 Expires = DateTime.UtcNow.AddMinutes(_jwt.ExpireMinutes),
                 SigningCredentials = new SigningCredentials(
                     new SymmetricSecurityKey(key),
