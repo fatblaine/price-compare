@@ -73,6 +73,8 @@ namespace PriceCompareCore.Services
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Email, user.Email)
                 }),
+                Issuer = _jwt.Issuer,
+                Audience = _jwt.Audience,
                 Expires = DateTime.UtcNow.AddMinutes(_jwt.ExpireMinutes),
                 SigningCredentials = new SigningCredentials(
                     new SymmetricSecurityKey(key),
