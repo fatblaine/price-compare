@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.DTOs;
 using PriceCompareWeb.Controllers.Models;
@@ -70,6 +71,7 @@ namespace PriceCompareWeb.Controllers
         ///  4) return parsed items plus the new receipt id (and keep a flat productNames array for backward compatibility).
         /// </remarks>
         [HttpPost("upload-and-parse")]
+        [EnableRateLimiting("ocr-per-user")]
         public async Task<IActionResult> UploadAndParse(IFormFile file)
         {
             var error = await ValidateFileAsync(file);
