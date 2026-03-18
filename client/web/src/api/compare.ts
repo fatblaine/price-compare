@@ -138,7 +138,7 @@ export async function fetchPriceHistory(
 	if (offerType != null && Number.isFinite(offerType)) {
 		params.offerType = offerType;
 	}
-	const url = `${API_BASE}/api/Scraping/priceHistory`;
+	const url = `${API_BASE}/api/Products/priceHistory`;
 	const res = await axios.get(url, { params });
 	const arr = Array.isArray(res.data) ? res.data : [];
 	return arr

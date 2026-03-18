@@ -209,7 +209,7 @@ Resources:
           Type: HttpApi
           Properties:
             ApiId: !Ref AppHttpApi
-            Path: /api/Scraping/priceHistory
+            Path: /api/Products/priceHistory
             Method: GET
         AuthLoginPost:
           Type: HttpApi
@@ -222,6 +222,12 @@ Resources:
           Properties:
             ApiId: !Ref AppHttpApi
             Path: /api/Auth/register
+            Method: POST
+        AuthVerifyEmailPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Auth/verify-email
             Method: POST
         FavoritesGet:
           Type: HttpApi
