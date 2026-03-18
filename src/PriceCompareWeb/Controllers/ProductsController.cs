@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PriceCompareData.Data;
+using Microsoft.AspNetCore.Authorization;
 
 namespace PriceCompareWeb.Controllers
 {
@@ -139,6 +140,57 @@ namespace PriceCompareWeb.Controllers
             {
                 _logger.LogError(ex, "Failed to get products");
                 return StatusCode(500, "Failed to get products");
+            }
+        }
+
+        /// <summary>
+        /// Returns price history for a given product name and shop.
+        /// Moved here from ScrapingController (BTS-129) because ScrapingController
+        /// is disabled in production via DisableControllerConvention.
+        /// </summary>
+        [HttpGet("priceHistory")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetPriceHistory(
+            [FromQuery] string name,
+            [FromQuery] int shopType,
+            [FromQuery] int? offerType = null)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return BadRequest("name is required");
+
+            try
+            {
+                _logger.LogInformation(
+                    "GetPriceHistory name={Name} shopType={ShopType} offerType={OfferType}",
+                    name, shopType, offerType);
+
+                var query = _db.PriceHistory
+                    .AsNoTracking()
+                    .Where(p => p.Name == name && p.ShopType == shopType);
+
+                if (offerType.HasValue)
+                    query = query.Where(p => p.OfferType == offerType.Value);
+
+                var history = await query
+                    .OrderBy(p => p.ScrapedAt)
+                    .Select(p => new
+                    {
+                        scrapedAt    = p.ScrapedAt,
+                        currentPrice = p.CurrentPrice,
+                        promoText    = p.PromoText
+                    })
+                    .ToListAsync();
+
+                _logger.LogInformation(
+                    "GetPriceHistory returned {Count} records for name={Name} shopType={ShopType}",
+                    history.Count, name, shopType);
+
+                return Ok(history);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get price history for name={Name} shopType={ShopType}", name, shopType);
+                return StatusCode(500, "Failed to get price history");
             }
         }
     }
