@@ -93,7 +93,7 @@ export default function LoginPage(props: LoginPageProps) {
 								{title}
 							</Typography>
 							<Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-								Use your email and password to access Price-Compare.
+								Use your email and password to access Price-peer.
 							</Typography>
 						</Box>
 

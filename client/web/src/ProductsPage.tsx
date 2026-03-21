@@ -68,7 +68,7 @@ function ProductImage({
 		return (
 			<Box
 				sx={{
-					height: 170,
+					height: { xs: 130, sm: 170 },
 					borderRadius: 2.5,
 					bgcolor: "#f5f5f7",
 					display: "flex",

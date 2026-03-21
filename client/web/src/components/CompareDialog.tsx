@@ -295,7 +295,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 									spacing={2}
 									alignItems="center"
 								>
-									<FormControl size="small" sx={{ minWidth: 260 }}>
+									<FormControl size="small" fullWidth={isXs} sx={{ minWidth: { xs: "100%", sm: 260 } }}>
 										<InputLabel id="target-label">Target</InputLabel>
 										<Select
 											labelId="target-label"

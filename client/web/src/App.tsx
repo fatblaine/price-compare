@@ -249,7 +249,7 @@ function App() {
 								width: { xs: "100%", md: "auto" },
 							}}
 						>
-							Price-Compare
+							Price-peer
 						</Typography>
 						{showTabs && (
 							<Tabs
