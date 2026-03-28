@@ -559,7 +559,7 @@ export default function MyReceiptsPage() {
 							</Typography>
 						</Box>
 						<Divider />
-						<Box sx={{ maxHeight: 420, overflowY: "auto" }}>
+						<Box sx={{ maxHeight: { xs: "none", md: 420 }, overflowY: { xs: "visible", md: "auto" } }}>
 							{loadingList ? (
 								<Box
 									sx={{
@@ -633,7 +633,7 @@ export default function MyReceiptsPage() {
 												}
 												sx={{
 													bgcolor: isActive ? "action.selected" : "transparent",
-													pr: isConfirming ? "120px" : "48px",
+													pr: isConfirming ? "96px" : "48px",
 												}}
 											>
 												<CardActionArea
@@ -730,7 +730,7 @@ export default function MyReceiptsPage() {
 										No product names were extracted for this receipt.
 									</Typography>
 								) : (
-									<List dense sx={{ maxHeight: 260, overflowY: "auto" }}>
+									<List dense>
 										{detail.items.map((it) => (
 											<ListItem
 												key={it.id}

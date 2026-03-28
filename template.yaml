@@ -61,6 +61,8 @@ Resources:
     Properties:
       CorsConfiguration:
         AllowOrigins:
+          - "https://www.price-peer.com"
+          - "https://price-peer.com"
           - "http://pricecompare-frontend-prod.s3-website-ap-southeast-2.amazonaws.com"
           - "http://pricecompare-frontend-dev.s3-website-ap-southeast-2.amazonaws.com"
           - "http://localhost:3000"

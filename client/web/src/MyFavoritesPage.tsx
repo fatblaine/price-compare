@@ -178,32 +178,8 @@ export default function MyFavoritesPage() {
 								return (
 									<ListItem
 										key={fav.id}
-										sx={{ gap: 1.5 }}
-										secondaryAction={
-											<Stack direction="row" spacing={1}>
-												<Button
-													size="small"
-													variant="contained"
-													color={fav.isActive ? "warning" : "success"}
-													onClick={() => void handleToggleAlerts(fav)}
-													disabled={isBusy}
-												>
-													{fav.isActive
-														? "Disable alerts"
-														: "Enable alerts"}
-												</Button>
-												<Button
-													size="small"
-													variant="text"
-													color="error"
-													sx={{ textTransform: "uppercase" }}
-													onClick={() => handleRequestRemove(fav)}
-													disabled={isBusy}
-												>
-													Delete
-												</Button>
-											</Stack>
-										}
+										disableGutters
+										sx={{ gap: 1.5, alignItems: "flex-start", py: 1 }}
 									>
 										<ListItemAvatar sx={{ minWidth: 0 }}>
 											<Avatar
@@ -225,7 +201,33 @@ export default function MyFavoritesPage() {
 												fav.productName || `Product ${fav.productId}`
 											}
 											secondary={secondaryText}
+											sx={{ flex: 1, minWidth: 0 }}
 										/>
+										<Stack
+											direction={{ xs: "column", sm: "row" }}
+											spacing={0.5}
+											sx={{ flexShrink: 0 }}
+										>
+											<Button
+												size="small"
+												variant="contained"
+												color={fav.isActive ? "warning" : "success"}
+												onClick={() => void handleToggleAlerts(fav)}
+												disabled={isBusy}
+											>
+												{fav.isActive ? "Disable alerts" : "Enable alerts"}
+											</Button>
+											<Button
+												size="small"
+												variant="text"
+												color="error"
+												sx={{ textTransform: "uppercase" }}
+												onClick={() => handleRequestRemove(fav)}
+												disabled={isBusy}
+											>
+												Delete
+											</Button>
+										</Stack>
 									</ListItem>
 								);
 							})}
