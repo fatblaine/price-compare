@@ -2,6 +2,7 @@ import {
 	AppBar,
 	Box,
 	Button,
+	CircularProgress,
 	Container,
 	Dialog,
 	DialogActions,
@@ -14,29 +15,29 @@ import {
 	Typography,
 } from "@mui/material";
 import React from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+	Navigate,
+	Route,
+	Routes,
+	useLocation,
+	useNavigate,
+} from "react-router-dom";
+import { useAuth } from "react-oidc-context";
+import axios from "axios";
 import ProductsPage from "./ProductsPage";
 import LoginPage from "./LoginPage";
-import RegisterPage from "./RegisterPage";
-import {
-	clearGuestSession,
-	clearToken,
-	getStoredEmail,
-	getStoredGuest,
-	getStoredToken,
-	setGuestSession,
-} from "./api/auth";
+import CallbackPage from "./CallbackPage";
+import { clearGuestSession, getStoredGuest, setGuestSession } from "./api/auth";
+import { buildCognitoLogoutUrl } from "./auth/oidcConfig";
 import { fetchAdminHealth } from "./api/admin";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
 import AdminJobsPage from "./AdminJobsPage";
 
 function App() {
-	const [token, setToken] = React.useState<string | null>(null);
-	const [userEmail, setUserEmail] = React.useState<string | null>(null);
-	const [guestMode, setGuestMode] = React.useState(false);
+	const auth = useAuth();
+	const [guestMode, setGuestMode] = React.useState(getStoredGuest);
 	const [isAdmin, setIsAdmin] = React.useState(false);
-	const [authView, setAuthView] = React.useState<"login" | "register">("login");
 	const [restrictedDialogOpen, setRestrictedDialogOpen] = React.useState(false);
 	const [pendingProtectedTab, setPendingProtectedTab] = React.useState<
 		"receipts" | "favorites" | "admin" | null
@@ -44,24 +45,28 @@ function App() {
 	const location = useLocation();
 	const navigate = useNavigate();
 
-	React.useEffect(() => {
-		const stored = getStoredToken();
-		if (stored) {
-			setToken(stored);
-			const storedEmail = getStoredEmail();
-			setUserEmail(storedEmail);
-			setGuestMode(false);
-			clearGuestSession();
-			return;
-		}
-		setToken(null);
-		setUserEmail(null);
-		setGuestMode(getStoredGuest());
-	}, []);
+	const isAuthenticated = auth.isAuthenticated;
+	const userEmail = auth.user?.profile?.email as string | undefined;
+	const isGuest = guestMode && !isAuthenticated;
+	const showTabs = isAuthenticated || isGuest;
 
+	// Keep axios Authorization header in sync with the OIDC id_token
+	React.useEffect(() => {
+		const token = auth.user?.id_token;
+		if (token) {
+			axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+			clearGuestSession();
+			setGuestMode(false);
+		} else if (!auth.isLoading) {
+			// eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+			delete axios.defaults.headers.common.Authorization;
+		}
+	}, [auth.user, auth.isLoading]);
+
+	// Check admin status whenever auth changes
 	React.useEffect(() => {
 		let active = true;
-		if (!token) {
+		if (!isAuthenticated) {
 			setIsAdmin(false);
 			return;
 		}
@@ -76,11 +81,8 @@ function App() {
 		return () => {
 			active = false;
 		};
-	}, [token]);
+	}, [isAuthenticated]);
 
-	const isAuthenticated = !!token;
-	const isGuest = guestMode && !isAuthenticated;
-	const showTabs = isAuthenticated || isGuest;
 	const mainTab = React.useMemo(() => {
 		const path = location.pathname.toLowerCase();
 		if (path.startsWith("/admin")) return "admin";
@@ -88,6 +90,7 @@ function App() {
 		if (path.startsWith("/favorites")) return "favorites";
 		return "products";
 	}, [location.pathname]);
+
 	const adminDefaultPath = "/admin/schedules";
 	const adminPath = location.pathname.startsWith("/admin/")
 		? location.pathname
@@ -96,52 +99,25 @@ function App() {
 		tab: "products" | "receipts" | "favorites" | "admin",
 	) => (tab === "admin" ? adminDefaultPath : `/${tab}`);
 
-	const handleLoggedIn = () => {
-		const stored = getStoredToken();
-		setToken(stored);
-		const storedEmail = getStoredEmail();
-		setUserEmail(storedEmail);
-		setGuestMode(false);
+	const handleLogout = async () => {
 		clearGuestSession();
-		setAuthView("login");
-		const targetTab = pendingProtectedTab ?? "products";
-		navigate(tabToPath(targetTab), { replace: true });
-		setPendingProtectedTab(null);
-	};
-
-	const handleLogout = () => {
-		clearToken();
-		clearGuestSession();
-		setToken(null);
-		setUserEmail(null);
 		setGuestMode(false);
-		navigate("/products", { replace: true });
+		await auth.removeUser(); // Clear OIDC session locally
+		window.location.href = buildCognitoLogoutUrl(); // Redirect to Cognito logout
 	};
 
 	const handleGuestLogin = () => {
-		clearToken();
 		setGuestSession();
-		setToken(null);
-		setUserEmail(null);
 		setGuestMode(true);
-		setAuthView("login");
 		navigate("/products", { replace: true });
 		setPendingProtectedTab(null);
-	};
-
-	const handleStartSignIn = () => {
-		clearGuestSession();
-		setGuestMode(false);
-		setAuthView("login");
 	};
 
 	const handleTabChange = (
 		_: React.SyntheticEvent,
 		val: "products" | "receipts" | "favorites" | "admin",
 	) => {
-		if (val === "admin" && !isAdmin) {
-			return;
-		}
+		if (val === "admin" && !isAdmin) return;
 		if (val !== "products" && !isAuthenticated) {
 			setPendingProtectedTab(val);
 			setRestrictedDialogOpen(true);
@@ -158,7 +134,7 @@ function App() {
 
 	const handleRestrictedSignIn = () => {
 		setRestrictedDialogOpen(false);
-		handleStartSignIn();
+		auth.signinRedirect();
 	};
 
 	const restrictedTarget =
@@ -171,35 +147,48 @@ function App() {
 					: "this section";
 
 	const renderMainContent = () => {
-		if (!isAuthenticated && !isGuest) {
-			return authView === "login" ? (
-				<LoginPage
-					onLoggedIn={handleLoggedIn}
-					onSwitchToRegister={() => setAuthView("register")}
-					onGuestLogin={handleGuestLogin}
-				/>
-			) : (
-				<RegisterPage
-					onLoggedIn={handleLoggedIn}
-					onSwitchToLogin={() => setAuthView("login")}
-				/>
+		// /callback must always be reachable (Cognito redirects here after login)
+		if (location.pathname === "/callback") {
+			return <CallbackPage />;
+		}
+
+		// OIDC is still initialising (e.g. processing the auth code on page load)
+		if (auth.isLoading) {
+			return (
+				<Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+					<CircularProgress />
+				</Box>
 			);
+		}
+
+		// Not signed in and not a guest → show login card
+		if (!isAuthenticated && !isGuest) {
+			return <LoginPage onGuestLogin={handleGuestLogin} />;
 		}
 
 		return (
 			<Routes>
 				<Route path="/" element={<Navigate to="/products" replace />} />
+				<Route path="/callback" element={<CallbackPage />} />
 				<Route path="/products" element={<ProductsPage />} />
 				<Route
 					path="/receipts"
 					element={
-						isAuthenticated ? <MyReceiptsPage /> : <Navigate to="/products" replace />
+						isAuthenticated ? (
+							<MyReceiptsPage />
+						) : (
+							<Navigate to="/products" replace />
+						)
 					}
 				/>
 				<Route
 					path="/favorites"
 					element={
-						isAuthenticated ? <MyFavoritesPage /> : <Navigate to="/products" replace />
+						isAuthenticated ? (
+							<MyFavoritesPage />
+						) : (
+							<Navigate to="/products" replace />
+						)
 					}
 				/>
 				<Route
@@ -320,10 +309,10 @@ function App() {
 								Log out
 							</Button>
 						)}
-						{isGuest && (
+						{(isGuest || (!isAuthenticated && !auth.isLoading)) && (
 							<Button
 								color="inherit"
-								onClick={handleStartSignIn}
+								onClick={() => auth.signinRedirect()}
 								sx={{
 									fontWeight: 500,
 									ml: { xs: 0, md: 2 },
@@ -347,9 +336,7 @@ function App() {
 				aria-labelledby="signin-required-title"
 				aria-describedby="signin-required-description"
 			>
-				<DialogTitle id="signin-required-title">
-					Sign in required
-				</DialogTitle>
+				<DialogTitle id="signin-required-title">Sign in required</DialogTitle>
 				<DialogContent>
 					<DialogContentText id="signin-required-description">
 						{restrictedTarget} is only available after signing in. Guests can

@@ -27,7 +27,7 @@ import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
 import { fetchCompareMatchesByProduct, type CompareProduct } from "./api/compare";
 import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
-import { getStoredToken } from "./api/auth";
+import { useAuth } from "react-oidc-context";
 import { useTour } from "./hooks/useTour";
 import TourButton from "./components/TourButton";
 
@@ -110,7 +110,7 @@ export default function ProductsPage() {
 	const theme = useTheme();
 	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 	const isMdDown = useMediaQuery(theme.breakpoints.down("md"));
-	const isAuthenticated = Boolean(getStoredToken());
+	const { isAuthenticated } = useAuth();
 	const [rows, setRows] = useState<ProductRow[]>([]);
 	const [rowCount, setRowCount] = useState(0);
 	const [loading, setLoading] = useState(false);
