@@ -777,7 +777,7 @@ export default function MyReceiptsPage() {
 						pr: 2,
 					}}
 				>
-					<Typography variant="h6" fontWeight={700}>
+					<Typography variant="h6" component="h2" fontWeight={700}>
 						Review parsed items
 					</Typography>
 					<IconButton
@@ -913,7 +913,7 @@ export default function MyReceiptsPage() {
 						pr: 2,
 					}}
 				>
-					<Typography variant="h6" fontWeight={700}>
+					<Typography variant="h6" component="h2" fontWeight={700}>
 						Add to My Favorites
 					</Typography>
 					<IconButton

@@ -311,21 +311,32 @@ export default function ProductsPage() {
 		}
 		setCompareDataMap({});
 		let cancelled = false;
-		for (const row of rows) {
-			fetchCompareMatchesByProduct(row.productId)
-				.then((targets) => {
+
+		const fetchWithConcurrency = async (items: typeof rows, limit: number) => {
+			let i = 0;
+			const worker = async () => {
+				while (i < items.length) {
+					const row = items[i++];
 					if (cancelled) return;
-					const best =
-						targets.find(
-							(t) => t.matchType === "same_product" && t.price != null,
-						) ?? null;
-					setCompareDataMap((prev) => ({ ...prev, [row.productId]: best }));
-				})
-				.catch(() => {
-					if (cancelled) return;
-					setCompareDataMap((prev) => ({ ...prev, [row.productId]: null }));
-				});
-		}
+					try {
+						const targets = await fetchCompareMatchesByProduct(row.productId);
+						if (cancelled) return;
+						const best =
+							targets.find(
+								(t) => t.matchType === "same_product" && t.price != null,
+							) ?? null;
+						setCompareDataMap((prev) => ({ ...prev, [row.productId]: best }));
+					} catch {
+						if (cancelled) return;
+						setCompareDataMap((prev) => ({ ...prev, [row.productId]: null }));
+					}
+				}
+			};
+			await Promise.all(Array.from({ length: limit }, worker));
+		};
+
+		void fetchWithConcurrency(rows, 3);
+
 		return () => {
 			cancelled = true;
 		};
@@ -536,6 +547,7 @@ export default function ProductsPage() {
 										<Box>
 											<Typography
 												variant="h6"
+												component="p"
 												fontWeight={700}
 												sx={{ color: accent }}
 											>
