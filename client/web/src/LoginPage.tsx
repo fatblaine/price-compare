@@ -42,7 +42,7 @@ export default function LoginPage({ onGuestLogin }: LoginPageProps) {
 				<CardContent sx={{ p: { xs: 3, sm: 4 } }}>
 					<Stack spacing={3}>
 						<Box>
-							<Typography variant={isXs ? "h5" : "h4"} fontWeight={800}>
+							<Typography variant={isXs ? "h5" : "h4"} component="h2" fontWeight={800}>
 								Welcome to Price-peer
 							</Typography>
 							<Typography

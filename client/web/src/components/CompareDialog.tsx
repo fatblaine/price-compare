@@ -133,7 +133,7 @@ function PriceCard({
 						<Typography variant="subtitle2" color="text.secondary">
 							{title}
 						</Typography>
-						<Typography variant="h5" fontWeight={700}>
+						<Typography variant="h5" component="p" fontWeight={700}>
 							{priceText}
 						</Typography>
 						{subtitle && (

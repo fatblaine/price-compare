@@ -798,7 +798,7 @@ export default function AdminJobsPage() {
 					justifyContent="space-between"
 					spacing={1.5}
 				>
-					<Typography variant="h4" fontWeight={800}>
+					<Typography variant="h4" component="h2" fontWeight={800}>
 						Admin Monitoring
 					</Typography>
 					{adminTab === "schedules" && (
@@ -833,7 +833,7 @@ export default function AdminJobsPage() {
 							spacing={2}
 							alignItems={{ xs: "flex-start", md: "center" }}
 						>
-							<Typography variant="h6" fontWeight={700}>
+							<Typography variant="h6" component="h3" fontWeight={700}>
 								Health summary
 							</Typography>
 							<FormControl size="small" sx={{ minWidth: 160 }}>
@@ -871,7 +871,7 @@ export default function AdminJobsPage() {
 									<Typography variant="subtitle2" color="text.secondary">
 										Total runs
 									</Typography>
-									<Typography variant="h6" fontWeight={700}>
+									<Typography variant="h6" component="h3" fontWeight={700}>
 										{health?.totalRuns ?? 0}
 									</Typography>
 								</Stack>
@@ -879,7 +879,7 @@ export default function AdminJobsPage() {
 									<Typography variant="subtitle2" color="text.secondary">
 										Failed runs
 									</Typography>
-									<Typography variant="h6" fontWeight={700}>
+									<Typography variant="h6" component="h3" fontWeight={700}>
 										{health?.failedRuns ?? 0}
 									</Typography>
 								</Stack>
@@ -887,7 +887,7 @@ export default function AdminJobsPage() {
 									<Typography variant="subtitle2" color="text.secondary">
 										Failure rate
 									</Typography>
-									<Typography variant="h6" fontWeight={700}>
+									<Typography variant="h6" component="h3" fontWeight={700}>
 										{health ? `${Math.round(health.failureRate * 100)}%` : "0%"}
 									</Typography>
 								</Stack>
@@ -895,7 +895,7 @@ export default function AdminJobsPage() {
 									<Typography variant="subtitle2" color="text.secondary">
 										Last failure
 									</Typography>
-									<Typography variant="h6" fontWeight={700}>
+									<Typography variant="h6" component="h3" fontWeight={700}>
 										{health?.lastFailureAtUtc
 											? formatDateTime(health.lastFailureAtUtc)
 											: "-"}
@@ -939,7 +939,7 @@ export default function AdminJobsPage() {
 								alignItems={{ xs: "flex-start", md: "center" }}
 								justifyContent="space-between"
 							>
-								<Typography variant="h6" fontWeight={700}>
+								<Typography variant="h6" component="h3" fontWeight={700}>
 									Batch pre-match
 								</Typography>
 								<Stack direction="row" spacing={1}>
@@ -1169,7 +1169,7 @@ export default function AdminJobsPage() {
 								alignItems={{ xs: "flex-start", md: "center" }}
 								justifyContent="space-between"
 							>
-								<Typography variant="h6" fontWeight={700}>
+								<Typography variant="h6" component="h3" fontWeight={700}>
 									Match jobs
 								</Typography>
 							</Stack>
@@ -1376,7 +1376,7 @@ export default function AdminJobsPage() {
 								justifyContent="space-between"
 							>
 								<Box>
-									<Typography variant="h6" fontWeight={700}>
+									<Typography variant="h6" component="h3" fontWeight={700}>
 										Match review
 									</Typography>
 									<Typography variant="body2" color="text.secondary">
@@ -1433,7 +1433,7 @@ export default function AdminJobsPage() {
 					<>
 						<Card variant="outlined">
 					<CardContent>
-						<Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+						<Typography variant="h6" component="h3" fontWeight={700} sx={{ mb: 2 }}>
 							Schedules
 						</Typography>
 						<DataGrid
@@ -1460,7 +1460,7 @@ export default function AdminJobsPage() {
 						<Stack direction={{ xs: "column", md: "row" }} spacing={2}>
 					<Card variant="outlined" sx={{ flex: 1 }}>
 						<CardContent>
-							<Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+							<Typography variant="h6" component="h3" fontWeight={700} sx={{ mb: 1 }}>
 								Selected job
 							</Typography>
 							{selectedSchedule ? (
@@ -1503,7 +1503,7 @@ export default function AdminJobsPage() {
 								justifyContent="space-between"
 								sx={{ mb: 1 }}
 							>
-								<Typography variant="h6" fontWeight={700}>
+								<Typography variant="h6" component="h3" fontWeight={700}>
 									Trend
 								</Typography>
 								<FormControl size="small" sx={{ minWidth: 120 }}>
@@ -1550,7 +1550,7 @@ export default function AdminJobsPage() {
 
 						<Card variant="outlined">
 					<CardContent>
-						<Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+						<Typography variant="h6" component="h3" fontWeight={700} sx={{ mb: 2 }}>
 							Recent runs
 						</Typography>
 						{loadingRuns || loadingStats ? (
@@ -1579,7 +1579,7 @@ export default function AdminJobsPage() {
 										<Typography variant="subtitle2" color="text.secondary">
 											Total
 										</Typography>
-										<Typography variant="h6" fontWeight={700}>
+										<Typography variant="h6" component="h3" fontWeight={700}>
 											{stats.totalRuns}
 										</Typography>
 									</Stack>
@@ -1587,7 +1587,7 @@ export default function AdminJobsPage() {
 										<Typography variant="subtitle2" color="text.secondary">
 											Failed
 										</Typography>
-										<Typography variant="h6" fontWeight={700}>
+										<Typography variant="h6" component="h3" fontWeight={700}>
 											{stats.failedRuns}
 										</Typography>
 									</Stack>
@@ -1595,7 +1595,7 @@ export default function AdminJobsPage() {
 										<Typography variant="subtitle2" color="text.secondary">
 											Failure rate
 										</Typography>
-										<Typography variant="h6" fontWeight={700}>
+										<Typography variant="h6" component="h3" fontWeight={700}>
 											{Math.round(stats.failureRate * 100)}%
 										</Typography>
 									</Stack>
@@ -1603,7 +1603,7 @@ export default function AdminJobsPage() {
 										<Typography variant="subtitle2" color="text.secondary">
 											Avg duration
 										</Typography>
-										<Typography variant="h6" fontWeight={700}>
+										<Typography variant="h6" component="h3" fontWeight={700}>
 											{formatDuration(stats.averageDurationMs)}
 										</Typography>
 									</Stack>

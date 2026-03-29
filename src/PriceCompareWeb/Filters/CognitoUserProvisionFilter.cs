@@ -37,14 +37,22 @@ namespace PriceCompareWeb.Filters
                     bool exists = await _db.Users.AnyAsync(u => u.Id == userId);
                     if (!exists)
                     {
-                        _db.Users.Add(new User
+                        try
                         {
-                            Id = userId,
-                            Email = email,
-                            PasswordHash = "", // Cognito owns credentials — not stored here
-                            CreatedAt = DateTime.UtcNow
-                        });
-                        await _db.SaveChangesAsync();
+                            _db.Users.Add(new User
+                            {
+                                Id = userId,
+                                Email = email,
+                                PasswordHash = "", // Cognito owns credentials — not stored here
+                                CreatedAt = DateTime.UtcNow
+                            });
+                            await _db.SaveChangesAsync();
+                        }
+                        catch (DbUpdateException)
+                        {
+                            // Concurrent request already inserted this user — safe to ignore
+                            _db.ChangeTracker.Clear();
+                        }
                     }
                 }
             }

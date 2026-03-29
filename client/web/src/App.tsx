@@ -326,7 +326,7 @@ function App() {
 				</Toolbar>
 			</AppBar>
 
-			<Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
+			<Container component="main" maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
 				{renderMainContent()}
 			</Container>
 
