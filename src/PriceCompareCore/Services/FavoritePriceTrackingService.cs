@@ -69,6 +69,7 @@ namespace PriceCompareCore.Services
 
         public async Task<FavoritePriceTrackingResult> CheckAndNotifyAsync()
         {
+            _logger.LogInformation("FavoritePriceTracking: starting check");
             var result = new FavoritePriceTrackingResult();
 
             var pendingAlerts = new List<PendingFavoriteAlert>();
@@ -79,8 +80,11 @@ namespace PriceCompareCore.Services
 
             if (favorites.Count == 0)
             {
+                _logger.LogInformation("FavoritePriceTracking: no active favorites, skipping");
                 return result;
             }
+
+            _logger.LogInformation("FavoritePriceTracking: loaded {Count} active favorites", favorites.Count);
 
             var productIds = favorites.Select(f => f.ProductId).Distinct().ToList();
             var userIds = favorites.Select(f => f.UserId).Distinct().ToList();
@@ -248,6 +252,7 @@ namespace PriceCompareCore.Services
 
                 try
                 {
+                    _logger.LogInformation("FavoritePriceTracking: sending digest to {Email} ({ItemCount} items)", email, ordered.Count);
                     await _emailSender.SendAsync(email, subject, body);
 
                     var now = DateTime.UtcNow;
@@ -258,6 +263,7 @@ namespace PriceCompareCore.Services
                         item.Favorite.LastNotifiedAt = now;
                         result.Sent++;
                     }
+                    _logger.LogInformation("FavoritePriceTracking: sent digest to {Email}", email);
                 }
                 catch (Exception ex)
                 {
@@ -273,6 +279,9 @@ namespace PriceCompareCore.Services
             }
 
             await _db.SaveChangesAsync();
+            _logger.LogInformation(
+                "FavoritePriceTracking: done. checked={Checked} initialized={Initialized} sent={Sent} failed={Failed} skipped={Skipped} noPrice={NoPrice} missingProductOrUser={Missing}",
+                result.Checked, result.Initialized, result.Sent, result.Failed, result.Skipped, result.NoPrice, result.MissingProductOrUser);
             return result;
         }
 
