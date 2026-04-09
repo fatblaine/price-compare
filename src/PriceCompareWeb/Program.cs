@@ -437,6 +437,9 @@ builder.Services.AddScoped<IScrapeExportService, ScrapeExportService>();
 // Products service
 builder.Services.AddScoped<PriceCompareCore.Interfaces.IProductService, PriceCompareCore.Services.ProductService>();
 
+// AI product description search
+builder.Services.AddScoped<PriceCompareCore.Services.IProductDescriptionSearchService, PriceCompareCore.Services.ProductDescriptionSearchService>();
+
 // Receipt service
 builder.Services.AddScoped<IReceiptService, ReceiptService>();
 

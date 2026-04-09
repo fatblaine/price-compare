@@ -30,6 +30,9 @@ import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
 import { useAuth } from "react-oidc-context";
 import { useTour } from "./hooks/useTour";
 import TourButton from "./components/TourButton";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import { Tooltip } from "@mui/material";
+import SearchByDescriptionDialog from "./components/SearchByDescriptionDialog";
 
 function formatSize(row: ProductRow) {
 	if (row.size && row.size.trim() !== "") return row.size;
@@ -137,6 +140,10 @@ export default function ProductsPage() {
 	const [compareSourceProduct, setCompareSourceProduct] = useState<
 		CompareProduct | undefined
 	>(undefined);
+
+	// AI search dialog state
+	const [aiSearchOpen, setAiSearchOpen] = useState(false);
+	const [aiSearchExhausted, setAiSearchExhausted] = useState(false);
 
 	const debouncedName = useDebounce(search, 350);
 	const { startTour, autoStart } = useTour();
@@ -399,7 +406,25 @@ export default function ProductsPage() {
 				>
 					Search
 				</Button>
-				<TourButton onClick={startTour} disabled={compareOpen} />
+				<Tooltip
+				title={
+					aiSearchExhausted
+						? "Daily AI search limit reached. Try again tomorrow."
+						: "Describe what you're looking for (AI search, any language)"
+				}
+			>
+				<span>
+					<IconButton
+						onClick={() => setAiSearchOpen(true)}
+						disabled={aiSearchExhausted}
+						color={aiSearchOpen ? "primary" : "default"}
+						size="small"
+					>
+						<AutoAwesomeIcon />
+					</IconButton>
+				</span>
+			</Tooltip>
+			<TourButton onClick={startTour} disabled={compareOpen} />
 			</Stack>
 
 			<Box
@@ -685,6 +710,15 @@ export default function ProductsPage() {
 				sourceProductId={compareSourceProductId}
 				sourceProduct={compareSourceProduct}
 				onClose={() => setCompareOpen(false)}
+			/>
+			<SearchByDescriptionDialog
+				open={aiSearchOpen}
+				onClose={() => setAiSearchOpen(false)}
+				onSelect={(productName) => {
+					setSearch(productName);
+					setAiSearchOpen(false);
+				}}
+				onQuotaUpdate={(remaining) => setAiSearchExhausted(remaining === 0)}
 			/>
 		</Box>
 	);
