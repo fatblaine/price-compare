@@ -62,3 +62,54 @@ export async function fetchProducts(
 
 	return { total, items };
 }
+
+// ── AI search types ──────────────────────────────────────────────────────────
+
+export interface ProductSearchItem {
+	productId: string;
+	name: string;
+	shopType?: number | null;
+	brand?: string | null;
+	sizeValue?: number | null;
+	sizeUnit?: string | null;
+	imageUrl?: string | null;
+	price?: number | null;
+	promoText?: string | null;
+}
+
+export interface DescriptionSearchResponse {
+	query: string;
+	inferredProducts: string[];
+	remainingSearches: number;
+	products: ProductSearchItem[];
+}
+
+// ── AI search function ────────────────────────────────────────────────────────
+
+export async function searchByDescription(
+	query: string,
+	topN: number = 10,
+	shopType?: number,
+): Promise<DescriptionSearchResponse> {
+	const url = `${API_BASE}/api/Products/search-by-description`;
+	const response = await fetch(url, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ query, topN, shopType: shopType ?? null }),
+	});
+
+	if (response.status === 429) {
+		const errorBody = await response.json().catch(() => ({}));
+		const err = new Error(
+			(errorBody as any).message ?? "Daily AI search limit reached. Try again tomorrow.",
+		) as Error & { status: number };
+		err.status = 429;
+		throw err;
+	}
+
+	if (!response.ok) {
+		throw new Error(`Search failed with status ${response.status}`);
+	}
+
+	return response.json() as Promise<DescriptionSearchResponse>;
+}
