@@ -163,12 +163,21 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Redis
-builder.Services.AddStackExchangeRedisCache(options =>
+// Redis — shared IDistributedCache for rate limiting across Lambda instances.
+// In local dev (no Redis), falls back to in-process memory cache.
+var redisConnectionString = builder.Configuration["Redis:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
-    options.Configuration = builder.Configuration["Redis:ConnectionString"];
-    options.InstanceName = "PriceCompare_";
-});
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "PriceCompare_";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
 
 var enableQuartzJobs = builder.Configuration.GetValue<bool?>("Scraping:EnableQuartz") ?? false;
 if (enableQuartzJobs)
