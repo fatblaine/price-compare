@@ -1,0 +1,24 @@
+<svg width="400" height="80" viewBox="0 0 400 80" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#3b82f6"/>
+<stop offset="100%" stop-color="#8b5cf6"/>
+</linearGradient>
+</defs>
+<g transform="translate(10, 8)">
+<!-- Tag 1 — solid blue -->
+<g transform="rotate(-15, 32, 32)">
+<rect x="0" y="0" width="56" height="42" rx="5" fill="#3b82f6"/>
+<circle cx="9" cy="9" r="4" fill="white" opacity="0.5"/>
+</g>
+<!-- Tag 2 — transparent purple -->
+<g transform="rotate(10, 52, 32)">
+<rect x="26" y="2" width="56" height="42" rx="5" fill="#8b5cf6" opacity="0.45"/>
+<rect x="26" y="2" width="56" height="42" rx="5" fill="none" stroke="#8b5cf6" stroke-width="2"/>
+<circle cx="35" cy="11" r="4" fill="white" opacity="0.4"/>
+</g>
+<!-- Wordmark -->
+<text x="102" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="700" fill="url(#brandGrad)">Price</text>
+<text x="102" y="52" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="300" fill="#8b5cf6" opacity="0.7">peer</text>
+</g>
+</svg>

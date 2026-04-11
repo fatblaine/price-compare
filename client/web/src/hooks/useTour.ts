@@ -16,6 +16,14 @@ function createTourDriver() {
 				},
 			},
 			{
+				element: "#ai-search-btn",
+				popover: {
+					title: "AI Search",
+					description:
+						"Can't find what you're looking for? Click here to describe it in any language — our AI will figure out the product for you. e.g. '澳大利亚最有名的饼干' or 'something sweet to put on toast'.",
+				},
+			},
+			{
 				element: "#shop-filter",
 				popover: {
 					title: "Filter by Shop",
