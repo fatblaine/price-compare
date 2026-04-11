@@ -110,6 +110,7 @@ public class ProductDescriptionSearchService : IProductDescriptionSearchService
             Given a user's description in any language, infer what product(s) they are looking for.
             Think semantically: "昆虫制作的糖浆" → "honey"; "洗头发的" → "shampoo".
             Output 1 to 5 short English product name fragments that would match actual supermarket product names.
+            IMPORTANT: Always use the singular base form of each product name (e.g. "tim tam" not "tim tams", "biscuit" not "biscuits", "chip" not "chips").
             Return ONLY a JSON array of lowercase strings. No explanation. No markdown. No code blocks.
             Example output: ["honey"] or ["shampoo", "conditioner"]
             """;
@@ -207,10 +208,14 @@ public class ProductDescriptionSearchService : IProductDescriptionSearchService
         if (keywords.Count == 0)
             return new List<ProductSearchItem>();
 
+        // Expand each keyword with singular/plural variants to handle LLM inconsistency
+        // e.g. "tim tams" also tries "tim tam"; "biscuit" also tries "biscuits"
+        var expandedKeywords = ExpandKeywordVariants(keywords);
+
         var hitCount = new Dictionary<Guid, int>();
         var productMap = new Dictionary<Guid, PriceCompareData.Entities.Compare.Product>();
 
-        foreach (var keyword in keywords)
+        foreach (var keyword in expandedKeywords)
         {
             if (string.IsNullOrWhiteSpace(keyword)) continue;
 
@@ -289,5 +294,41 @@ public class ProductDescriptionSearchService : IProductDescriptionSearchService
                 PromoText  = priceInfo.LatestPromoText
             };
         }).ToList();
+    }
+
+    /// <summary>
+    /// For each keyword, adds singular/plural variants so that "tim tams" also matches "tim tam"
+    /// and vice versa. Preserves original order; deduplicated.
+    /// </summary>
+    private static List<string> ExpandKeywordVariants(List<string> keywords)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+
+        foreach (var kw in keywords)
+        {
+            var term = kw.ToLowerInvariant().Trim();
+            if (string.IsNullOrWhiteSpace(term)) continue;
+
+            if (seen.Add(term))
+                result.Add(term);
+
+            // If ends with 's', add the de-pluralised form
+            if (term.EndsWith('s') && term.Length > 1)
+            {
+                var singular = term[..^1];
+                if (seen.Add(singular))
+                    result.Add(singular);
+            }
+            else
+            {
+                // Add the pluralised form as well
+                var plural = term + "s";
+                if (seen.Add(plural))
+                    result.Add(plural);
+            }
+        }
+
+        return result;
     }
 }
