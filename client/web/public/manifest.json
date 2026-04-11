@@ -1,7 +1,12 @@
 {
-  "short_name": "Price-peer",
-  "name": "Price-peer",
+  "short_name": "Price Peer",
+  "name": "Price Peer",
   "icons": [
+    {
+      "src": "price-peer-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
     {
       "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",

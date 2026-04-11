@@ -212,8 +212,10 @@ function App() {
 				position="sticky"
 				elevation={0}
 				sx={{
-					background:
-						"linear-gradient(90deg, #0ea5e9 0%, #6366f1 50%, #a855f7 100%)",
+					background: "linear-gradient(90deg, rgba(59,130,246,0.12) 0%, rgba(139,92,246,0.12) 100%)",
+					backdropFilter: "blur(12px)",
+					WebkitBackdropFilter: "blur(12px)",
+					borderBottom: "1px solid rgba(99, 102, 241, 0.15)",
 				}}
 			>
 				<Toolbar sx={{ py: { xs: 1, sm: 1.5 } }}>
@@ -225,27 +227,29 @@ function App() {
 							flexDirection: { xs: "column", md: "row" },
 						}}
 					>
-						<Typography
-							variant="h4"
+						<Box
 							component="h1"
 							sx={{
 								flexGrow: { xs: 0, md: 1 },
-								fontWeight: 800,
-								letterSpacing: 0.5,
-								textShadow: "0 1px 2px rgba(0,0,0,.25)",
-								fontSize: { xs: 22, sm: 26, md: 30, lg: 34 },
+								m: 0,
 								textAlign: { xs: "center", sm: "left" },
 								width: { xs: "100%", md: "auto" },
+								display: "flex",
+								justifyContent: { xs: "center", sm: "flex-start" },
 							}}
 						>
-							Price-peer
-						</Typography>
+							<Box
+								component="img"
+								src="/price-peer-logo-horizontal.svg"
+								alt="Price Peer"
+								sx={{ height: { xs: 48, sm: 58, md: 68 }, width: "auto" }}
+							/>
+						</Box>
 						{showTabs && (
 							<Tabs
 								value={mainTab}
 								onChange={handleTabChange}
-								textColor="inherit"
-								indicatorColor="secondary"
+								textColor="primary"
 								sx={{
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
@@ -255,6 +259,13 @@ function App() {
 									"& .MuiTab-root": {
 										minHeight: "auto",
 										fontSize: { xs: 12, sm: 13, md: 14 },
+										color: "text.secondary",
+									},
+									"& .MuiTab-root.Mui-selected": {
+										color: "#6366f1",
+									},
+									"& .MuiTabs-indicator": {
+										backgroundColor: "#6366f1",
 									},
 								}}
 							>
@@ -273,11 +284,11 @@ function App() {
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
 									fontWeight: 500,
+									color: "text.secondary",
 									maxWidth: { xs: 140, sm: 200 },
 									overflow: "hidden",
 									textOverflow: "ellipsis",
 									whiteSpace: "nowrap",
-									textShadow: "0 1px 1px rgba(0,0,0,0.25)",
 								}}
 							>
 								{userEmail}
@@ -290,7 +301,7 @@ function App() {
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
 									fontWeight: 500,
-									textShadow: "0 1px 1px rgba(0,0,0,0.25)",
+									color: "text.secondary",
 								}}
 							>
 								Guest access
@@ -298,12 +309,12 @@ function App() {
 						)}
 						{isAuthenticated && (
 							<Button
-								color="inherit"
 								onClick={handleLogout}
 								sx={{
 									fontWeight: 500,
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
+									color: "text.secondary",
 								}}
 							>
 								Log out
@@ -311,12 +322,15 @@ function App() {
 						)}
 						{(isGuest || (!isAuthenticated && !auth.isLoading)) && (
 							<Button
-								color="inherit"
+								variant="contained"
 								onClick={() => auth.signinRedirect()}
 								sx={{
 									fontWeight: 500,
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
+									background: "linear-gradient(90deg, #3b82f6, #8b5cf6)",
+									boxShadow: "none",
+									"&:hover": { background: "linear-gradient(90deg, #2563eb, #7c3aed)", boxShadow: "none" },
 								}}
 							>
 								Sign in

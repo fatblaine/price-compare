@@ -1,0 +1,23 @@
+<svg width="320" height="48" viewBox="0 0 320 48" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#3b82f6"/>
+<stop offset="100%" stop-color="#8b5cf6"/>
+</linearGradient>
+</defs>
+<g transform="translate(6, 6)">
+<!-- Small tag 1 — solid blue -->
+<g transform="rotate(-12, 18, 18)">
+<rect x="0" y="0" width="40" height="30" rx="4" fill="#3b82f6"/>
+<circle cx="7" cy="7" r="2.8" fill="white" opacity="0.5"/>
+</g>
+<!-- Small tag 2 — transparent purple -->
+<g transform="rotate(8, 36, 18)">
+<rect x="18" y="2" width="40" height="30" rx="4" fill="#8b5cf6" opacity="0.4"/>
+<rect x="18" y="2" width="40" height="30" rx="4" fill="none" stroke="#8b5cf6" stroke-width="1.5"/>
+<circle cx="25" cy="9" r="2.8" fill="white" opacity="0.4"/>
+</g>
+<!-- Single-line wordmark -->
+<text x="72" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="700" fill="url(#brandGrad)">Price-peer</text>
+</g>
+</svg>

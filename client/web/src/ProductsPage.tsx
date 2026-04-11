@@ -415,6 +415,7 @@ export default function ProductsPage() {
 			>
 				<span>
 					<IconButton
+						id="ai-search-btn"
 						onClick={() => setAiSearchOpen(true)}
 						disabled={aiSearchExhausted}
 						color={aiSearchOpen ? "primary" : "default"}
@@ -467,12 +468,12 @@ export default function ProductsPage() {
 						sx={{
 							display: "grid",
 							gridTemplateColumns: {
-								xs: "1fr",
-								sm: "repeat(2, minmax(0, 1fr))",
-								md: "repeat(3, minmax(0, 1fr))",
-								lg: "repeat(4, minmax(0, 1fr))",
+								xs: "repeat(2, minmax(0, 1fr))",
+								sm: "repeat(3, minmax(0, 1fr))",
+								md: "repeat(4, minmax(0, 1fr))",
+								lg: "repeat(5, minmax(0, 1fr))",
 							},
-							gap: { xs: 2, sm: 2.5, md: 3 },
+							gap: { xs: 1, sm: 1.5, md: 2 },
 						}}
 					>
 						{rows.map((row) => {
