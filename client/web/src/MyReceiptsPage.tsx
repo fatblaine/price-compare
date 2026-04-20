@@ -44,6 +44,25 @@ import { useDebounce } from "./hooks/useDebounce";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteIcon from "@mui/icons-material/Delete";
 
+const OCR_SCANS_KEY = "ocr_scans_today";
+
+function readScansToday(): number {
+	const today = new Date().toISOString().slice(0, 10);
+	try {
+		const raw = localStorage.getItem(OCR_SCANS_KEY);
+		if (!raw) return 0;
+		const { date, count } = JSON.parse(raw) as { date: string; count: number };
+		return date === today ? count : 0;
+	} catch {
+		return 0;
+	}
+}
+
+function saveScansToday(count: number): void {
+	const today = new Date().toISOString().slice(0, 10);
+	localStorage.setItem(OCR_SCANS_KEY, JSON.stringify({ date: today, count }));
+}
+
 interface EditableReceiptItem {
 	id?: number | null;
 	ocrName: string;
@@ -90,6 +109,7 @@ export default function MyReceiptsPage() {
 	const debouncedProductQuery = useDebounce(productSearchQuery, 350);
 	const [deletingId, setDeletingId] = React.useState<number | null>(null);
 	const [confirmDeleteId, setConfirmDeleteId] = React.useState<number | null>(null);
+	const [scansUsedToday, setScansUsedToday] = React.useState<number>(() => readScansToday());
 
 	// Load receipt list once on mount.
 	React.useEffect(() => {
@@ -223,6 +243,11 @@ export default function MyReceiptsPage() {
 		try {
 			const result: UploadAndParseResponse = await uploadAndParseReceipt(file);
 
+			// Track daily scan quota
+			const newCount = scansUsedToday + 1;
+			setScansUsedToday(newCount);
+			saveScansToday(newCount);
+
 			// Refresh list and select the new receipt in the sidebar.
 			setLoadingList(true);
 			const data = await fetchMyReceipts();
@@ -267,11 +292,17 @@ export default function MyReceiptsPage() {
 		} catch (e: any) {
 			// eslint-disable-next-line no-console
 			console.error("Failed to upload and parse receipt", e);
-			const message: string | undefined =
-				e?.response?.data && typeof e.response.data === "string"
-					? e.response.data
-					: e?.message;
-			setUploadError(message || "Upload failed. Please try again.");
+			if (e?.response?.status === 429) {
+				setScansUsedToday(3);
+				saveScansToday(3);
+				setUploadError("You've reached your daily limit of 3 receipt scans. Please try again tomorrow.");
+			} else {
+				const message: string | undefined =
+					e?.response?.data && typeof e.response.data === "string"
+						? e.response.data
+						: e?.message;
+				setUploadError(message || "Upload failed. Please try again.");
+			}
 		} finally {
 			setUploading(false);
 			setLoadingList(false);
@@ -475,7 +506,7 @@ export default function MyReceiptsPage() {
 					<Button
 						variant="contained"
 						onClick={handleUploadClick}
-						disabled={uploading}
+						disabled={uploading || scansUsedToday >= 3}
 						sx={{
 							width: { xs: "100%", sm: "auto" },
 						}}
@@ -486,6 +517,13 @@ export default function MyReceiptsPage() {
 							"Upload receipt"
 						)}
 					</Button>
+					<Typography
+						variant="body2"
+						color={scansUsedToday >= 3 ? "error" : "text.secondary"}
+						sx={{ mt: 0.5 }}
+					>
+						{scansUsedToday} / 3 scans used today
+					</Typography>
 					{uploadError && (
 						<Typography
 							variant="body2"
@@ -521,7 +559,7 @@ export default function MyReceiptsPage() {
 							</Typography>
 						</Box>
 						<Divider />
-						<Box sx={{ maxHeight: 420, overflowY: "auto" }}>
+						<Box sx={{ maxHeight: { xs: "none", md: 420 }, overflowY: { xs: "visible", md: "auto" } }}>
 							{loadingList ? (
 								<Box
 									sx={{
@@ -595,7 +633,7 @@ export default function MyReceiptsPage() {
 												}
 												sx={{
 													bgcolor: isActive ? "action.selected" : "transparent",
-													pr: isConfirming ? "120px" : "48px",
+													pr: isConfirming ? "96px" : "48px",
 												}}
 											>
 												<CardActionArea
@@ -692,7 +730,7 @@ export default function MyReceiptsPage() {
 										No product names were extracted for this receipt.
 									</Typography>
 								) : (
-									<List dense sx={{ maxHeight: 260, overflowY: "auto" }}>
+									<List dense>
 										{detail.items.map((it) => (
 											<ListItem
 												key={it.id}
@@ -739,7 +777,7 @@ export default function MyReceiptsPage() {
 						pr: 2,
 					}}
 				>
-					<Typography variant="h6" fontWeight={700}>
+					<Typography variant="h6" component="h2" fontWeight={700}>
 						Review parsed items
 					</Typography>
 					<IconButton
@@ -875,7 +913,7 @@ export default function MyReceiptsPage() {
 						pr: 2,
 					}}
 				>
-					<Typography variant="h6" fontWeight={700}>
+					<Typography variant="h6" component="h2" fontWeight={700}>
 						Add to My Favorites
 					</Typography>
 					<IconButton

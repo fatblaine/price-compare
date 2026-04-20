@@ -133,7 +133,7 @@ function PriceCard({
 						<Typography variant="subtitle2" color="text.secondary">
 							{title}
 						</Typography>
-						<Typography variant="h5" fontWeight={700}>
+						<Typography variant="h5" component="p" fontWeight={700}>
 							{priceText}
 						</Typography>
 						{subtitle && (
@@ -295,7 +295,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 									spacing={2}
 									alignItems="center"
 								>
-									<FormControl size="small" sx={{ minWidth: 260 }}>
+									<FormControl size="small" fullWidth={isXs} sx={{ minWidth: { xs: "100%", sm: 260 } }}>
 										<InputLabel id="target-label">Target</InputLabel>
 										<Select
 											labelId="target-label"

@@ -184,24 +184,59 @@ namespace PriceCompareWeb.Controllers
                 });
             }
 
+            // Batch-fetch all target products in one query
+            var targetIds = matches
+                .Select(m => reversed ? m.SourceProductId : m.TargetProductId)
+                .ToList();
+
+            var productMap = await _dbContext.Products
+                .AsNoTracking()
+                .Where(p => targetIds.Contains(p.ProductId))
+                .ToDictionaryAsync(p => p.ProductId);
+
+            // Batch-fetch latest prices in one GROUP BY query
+            var nameList = productMap.Values
+                .Where(p => p.ShopType.HasValue)
+                .Select(p => p.Name)
+                .Distinct()
+                .ToList();
+
+            var shopList = productMap.Values
+                .Where(p => p.ShopType.HasValue)
+                .Select(p => p.ShopType!.Value)
+                .Distinct()
+                .ToList();
+
+            var priceMap = new Dictionary<(string, int), decimal?>();
+            if (nameList.Count > 0)
+            {
+                var priceRows = await _dbContext.PriceHistory
+                    .AsNoTracking()
+                    .Where(ph => nameList.Contains(ph.Name) && ph.ShopType.HasValue && shopList.Contains(ph.ShopType!.Value))
+                    .GroupBy(ph => new { ph.Name, ph.ShopType })
+                    .Select(g => new
+                    {
+                        g.Key.Name,
+                        ShopType = (int)g.Key.ShopType!,
+                        Price = (decimal?)g.OrderByDescending(x => x.ScrapedAt).First().CurrentPrice
+                    })
+                    .ToListAsync();
+
+                foreach (var row in priceRows)
+                    priceMap[(row.Name, row.ShopType)] = row.Price;
+            }
+
             var results = new List<ProductMatchCandidate>();
 
             foreach (var m in matches)
             {
                 var targetId = reversed ? m.SourceProductId : m.TargetProductId;
-                var target = await _dbContext.Products.AsNoTracking()
-                    .FirstOrDefaultAsync(p => p.ProductId == targetId);
-
-                if (target == null)
-                {
+                if (!productMap.TryGetValue(targetId, out var target))
                     continue;
-                }
 
                 decimal? targetPrice = null;
                 if (target.ShopType.HasValue)
-                {
-                    targetPrice = await GetLatestPriceAsync(target.Name, target.ShopType.Value);
-                }
+                    priceMap.TryGetValue((target.Name, target.ShopType.Value), out targetPrice);
 
                 results.Add(new ProductMatchCandidate
                 {

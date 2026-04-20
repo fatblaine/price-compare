@@ -50,6 +50,18 @@ Parameters:
   OpenRouterApiKeySecretId:
     Type: String
     Description: Secrets Manager secret name or ARN for OpenRouter__ApiKey
+  RedisConnectionString:
+    Type: String
+    Description: StackExchange.Redis connection string for IDistributedCache (AI search rate limiting)
+    Default: ""
+    NoEcho: true
+  CognitoRegion:
+    Type: String
+    Default: "ap-southeast-2"
+  CognitoUserPoolId:
+    Type: String
+  CognitoAppClientId:
+    Type: String
   AdminEmails:
     Type: String
     Description: Comma-separated list of admin emails
@@ -61,7 +73,11 @@ Resources:
     Properties:
       CorsConfiguration:
         AllowOrigins:
-          - "*"
+          - "https://www.price-peer.com"
+          - "https://price-peer.com"
+          - "http://pricecompare-frontend-prod.s3-website-ap-southeast-2.amazonaws.com"
+          - "http://pricecompare-frontend-dev.s3-website-ap-southeast-2.amazonaws.com"
+          - "http://localhost:3000"
         AllowMethods:
           - GET
           - POST
@@ -207,8 +223,14 @@ Resources:
           Type: HttpApi
           Properties:
             ApiId: !Ref AppHttpApi
-            Path: /api/Scraping/priceHistory
+            Path: /api/Products/priceHistory
             Method: GET
+        ProductsSearchByDescriptionPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Products/search-by-description
+            Method: POST
         AuthLoginPost:
           Type: HttpApi
           Properties:
@@ -220,6 +242,12 @@ Resources:
           Properties:
             ApiId: !Ref AppHttpApi
             Path: /api/Auth/register
+            Method: POST
+        AuthVerifyEmailPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Auth/verify-email
             Method: POST
         FavoritesGet:
           Type: HttpApi
@@ -276,6 +304,10 @@ Resources:
           DOTNET_SYSTEM_NET_DISABLEIPV6: "1"
           JwtSettings__Secret: !Sub "{{resolve:secretsmanager:${JwtSecretId}:SecretString}}"
           OpenRouter__ApiKey: !Sub "{{resolve:secretsmanager:${OpenRouterApiKeySecretId}:SecretString}}"
+          Redis__ConnectionString: !Ref RedisConnectionString
+          Cognito__Region: !Ref CognitoRegion
+          Cognito__UserPoolId: !Ref CognitoUserPoolId
+          Cognito__AppClientId: !Ref CognitoAppClientId
           AdminEmails: !Ref AdminEmails
 
   FavoritePriceTrackingJob:

@@ -1,11 +1,15 @@
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using PriceCompareCore.Exceptions;
 using PriceCompareData.Data;
+using PriceCompareData.DTOs;
 
 namespace PriceCompareWeb.Controllers
 {
@@ -16,26 +20,23 @@ namespace PriceCompareWeb.Controllers
         private readonly PriceCompareCore.Interfaces.IProductService _productService;
         private readonly ILogger<ProductsController> _logger;
         private readonly AppDbContext _db;
+        private readonly PriceCompareCore.Services.IProductDescriptionSearchService _descriptionSearchService;
 
         public ProductsController(
             PriceCompareCore.Interfaces.IProductService productService,
             ILogger<ProductsController> logger,
-            AppDbContext db)
+            AppDbContext db,
+            PriceCompareCore.Services.IProductDescriptionSearchService descriptionSearchService)
         {
             _productService = productService;
             _logger = logger;
             _db = db;
+            _descriptionSearchService = descriptionSearchService;
         }
 
         /// <summary>
         /// Get products with pagination and optional filters.
         /// </summary>
-        /// <param name="page">1-based page number</param>
-        /// <param name="pageSize">items per page</param>
-        /// <param name="name">partial match on product name</param>
-        /// <param name="shopType">shop type (optional)</param>
-        /// <param name="categoryId">category id (optional)</param>
-        /// <param name="includePrice">include latest price from history</param>
         [HttpGet]
         public async Task<IActionResult> GetProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20,
             [FromQuery] string? name = null, [FromQuery] int? shopType = null, [FromQuery] int? categoryId = null,
@@ -51,7 +52,6 @@ namespace PriceCompareWeb.Controllers
                 var (total, items) = await _productService.GetProductsAsync(page, pageSize, name, shopType, categoryId);
                 _logger.LogInformation("GetProducts items={Count}", items.Count);
 
-                // build latest price map from history by (Name, ShopType)
                 var names = items
                     .Where(p => !string.IsNullOrEmpty(p.Name))
                     .Select(p => p.Name!)
@@ -139,6 +139,94 @@ namespace PriceCompareWeb.Controllers
             {
                 _logger.LogError(ex, "Failed to get products");
                 return StatusCode(500, "Failed to get products");
+            }
+        }
+
+        /// <summary>
+        /// Returns price history for a given product name and shop.
+        /// </summary>
+        [HttpGet("priceHistory")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetPriceHistory(
+            [FromQuery] string name,
+            [FromQuery] int shopType,
+            [FromQuery] int? offerType = null)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return BadRequest("name is required");
+
+            try
+            {
+                _logger.LogInformation(
+                    "GetPriceHistory name={Name} shopType={ShopType} offerType={OfferType}",
+                    name, shopType, offerType);
+
+                var query = _db.PriceHistory
+                    .AsNoTracking()
+                    .Where(p => p.Name == name && p.ShopType == shopType);
+
+                if (offerType.HasValue)
+                    query = query.Where(p => p.OfferType == offerType.Value);
+
+                var history = await query
+                    .OrderBy(p => p.ScrapedAt)
+                    .Select(p => new
+                    {
+                        scrapedAt    = p.ScrapedAt,
+                        currentPrice = p.CurrentPrice,
+                        promoText    = p.PromoText
+                    })
+                    .ToListAsync();
+
+                _logger.LogInformation(
+                    "GetPriceHistory returned {Count} records for name={Name} shopType={ShopType}",
+                    history.Count, name, shopType);
+
+                return Ok(history);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get price history for name={Name} shopType={ShopType}", name, shopType);
+                return StatusCode(500, "Failed to get price history");
+            }
+        }
+
+        /// <summary>
+        /// POST /api/Products/search-by-description
+        /// Natural language product search via LLM keyword extraction.
+        /// Rate limited to 3 LLM calls per 24 hours per user (or per IP if anonymous).
+        /// </summary>
+        [HttpPost("search-by-description")]
+        public async Task<IActionResult> SearchByDescription([FromBody] DescriptionSearchRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Query))
+                return BadRequest(new { error = "query_required", message = "Query is required." });
+
+            if (request.Query.Length > 500)
+                return BadRequest(new { error = "query_too_long", message = "Query must be 500 characters or fewer." });
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var callerId = !string.IsNullOrEmpty(userId)
+                ? $"user:{userId}"
+                : $"ip:{HttpContext.Connection.RemoteIpAddress}";
+
+            try
+            {
+                var result = await _descriptionSearchService.SearchAsync(request, callerId);
+                return Ok(result);
+            }
+            catch (AiSearchRateLimitExceededException)
+            {
+                return StatusCode(429, new
+                {
+                    error   = "daily_limit_exceeded",
+                    message = "You have used all 3 free AI searches for today. Try again tomorrow."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in SearchByDescription for callerId={CallerId}", callerId);
+                return StatusCode(500, new { error = "internal_error", message = "An unexpected error occurred." });
             }
         }
     }

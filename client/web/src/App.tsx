@@ -2,6 +2,7 @@ import {
 	AppBar,
 	Box,
 	Button,
+	CircularProgress,
 	Container,
 	Dialog,
 	DialogActions,
@@ -14,29 +15,29 @@ import {
 	Typography,
 } from "@mui/material";
 import React from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+	Navigate,
+	Route,
+	Routes,
+	useLocation,
+	useNavigate,
+} from "react-router-dom";
+import { useAuth } from "react-oidc-context";
+import axios from "axios";
 import ProductsPage from "./ProductsPage";
 import LoginPage from "./LoginPage";
-import RegisterPage from "./RegisterPage";
-import {
-	clearGuestSession,
-	clearToken,
-	getStoredEmail,
-	getStoredGuest,
-	getStoredToken,
-	setGuestSession,
-} from "./api/auth";
+import CallbackPage from "./CallbackPage";
+import { clearGuestSession, getStoredGuest, setGuestSession } from "./api/auth";
+import { buildCognitoLogoutUrl } from "./auth/oidcConfig";
 import { fetchAdminHealth } from "./api/admin";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
 import AdminJobsPage from "./AdminJobsPage";
 
 function App() {
-	const [token, setToken] = React.useState<string | null>(null);
-	const [userEmail, setUserEmail] = React.useState<string | null>(null);
-	const [guestMode, setGuestMode] = React.useState(false);
+	const auth = useAuth();
+	const [guestMode, setGuestMode] = React.useState(getStoredGuest);
 	const [isAdmin, setIsAdmin] = React.useState(false);
-	const [authView, setAuthView] = React.useState<"login" | "register">("login");
 	const [restrictedDialogOpen, setRestrictedDialogOpen] = React.useState(false);
 	const [pendingProtectedTab, setPendingProtectedTab] = React.useState<
 		"receipts" | "favorites" | "admin" | null
@@ -44,24 +45,28 @@ function App() {
 	const location = useLocation();
 	const navigate = useNavigate();
 
-	React.useEffect(() => {
-		const stored = getStoredToken();
-		if (stored) {
-			setToken(stored);
-			const storedEmail = getStoredEmail();
-			setUserEmail(storedEmail);
-			setGuestMode(false);
-			clearGuestSession();
-			return;
-		}
-		setToken(null);
-		setUserEmail(null);
-		setGuestMode(getStoredGuest());
-	}, []);
+	const isAuthenticated = auth.isAuthenticated;
+	const userEmail = auth.user?.profile?.email as string | undefined;
+	const isGuest = guestMode && !isAuthenticated;
+	const showTabs = isAuthenticated || isGuest;
 
+	// Keep axios Authorization header in sync with the OIDC id_token
+	React.useEffect(() => {
+		const token = auth.user?.id_token;
+		if (token) {
+			axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+			clearGuestSession();
+			setGuestMode(false);
+		} else if (!auth.isLoading) {
+			// eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+			delete axios.defaults.headers.common.Authorization;
+		}
+	}, [auth.user, auth.isLoading]);
+
+	// Check admin status whenever auth changes
 	React.useEffect(() => {
 		let active = true;
-		if (!token) {
+		if (!isAuthenticated) {
 			setIsAdmin(false);
 			return;
 		}
@@ -76,11 +81,8 @@ function App() {
 		return () => {
 			active = false;
 		};
-	}, [token]);
+	}, [isAuthenticated]);
 
-	const isAuthenticated = !!token;
-	const isGuest = guestMode && !isAuthenticated;
-	const showTabs = isAuthenticated || isGuest;
 	const mainTab = React.useMemo(() => {
 		const path = location.pathname.toLowerCase();
 		if (path.startsWith("/admin")) return "admin";
@@ -88,6 +90,7 @@ function App() {
 		if (path.startsWith("/favorites")) return "favorites";
 		return "products";
 	}, [location.pathname]);
+
 	const adminDefaultPath = "/admin/schedules";
 	const adminPath = location.pathname.startsWith("/admin/")
 		? location.pathname
@@ -96,52 +99,25 @@ function App() {
 		tab: "products" | "receipts" | "favorites" | "admin",
 	) => (tab === "admin" ? adminDefaultPath : `/${tab}`);
 
-	const handleLoggedIn = () => {
-		const stored = getStoredToken();
-		setToken(stored);
-		const storedEmail = getStoredEmail();
-		setUserEmail(storedEmail);
-		setGuestMode(false);
+	const handleLogout = async () => {
 		clearGuestSession();
-		setAuthView("login");
-		const targetTab = pendingProtectedTab ?? "products";
-		navigate(tabToPath(targetTab), { replace: true });
-		setPendingProtectedTab(null);
-	};
-
-	const handleLogout = () => {
-		clearToken();
-		clearGuestSession();
-		setToken(null);
-		setUserEmail(null);
 		setGuestMode(false);
-		navigate("/products", { replace: true });
+		await auth.removeUser(); // Clear OIDC session locally
+		window.location.href = buildCognitoLogoutUrl(); // Redirect to Cognito logout
 	};
 
 	const handleGuestLogin = () => {
-		clearToken();
 		setGuestSession();
-		setToken(null);
-		setUserEmail(null);
 		setGuestMode(true);
-		setAuthView("login");
 		navigate("/products", { replace: true });
 		setPendingProtectedTab(null);
-	};
-
-	const handleStartSignIn = () => {
-		clearGuestSession();
-		setGuestMode(false);
-		setAuthView("login");
 	};
 
 	const handleTabChange = (
 		_: React.SyntheticEvent,
 		val: "products" | "receipts" | "favorites" | "admin",
 	) => {
-		if (val === "admin" && !isAdmin) {
-			return;
-		}
+		if (val === "admin" && !isAdmin) return;
 		if (val !== "products" && !isAuthenticated) {
 			setPendingProtectedTab(val);
 			setRestrictedDialogOpen(true);
@@ -158,7 +134,7 @@ function App() {
 
 	const handleRestrictedSignIn = () => {
 		setRestrictedDialogOpen(false);
-		handleStartSignIn();
+		auth.signinRedirect();
 	};
 
 	const restrictedTarget =
@@ -171,35 +147,48 @@ function App() {
 					: "this section";
 
 	const renderMainContent = () => {
-		if (!isAuthenticated && !isGuest) {
-			return authView === "login" ? (
-				<LoginPage
-					onLoggedIn={handleLoggedIn}
-					onSwitchToRegister={() => setAuthView("register")}
-					onGuestLogin={handleGuestLogin}
-				/>
-			) : (
-				<RegisterPage
-					onLoggedIn={handleLoggedIn}
-					onSwitchToLogin={() => setAuthView("login")}
-				/>
+		// /callback must always be reachable (Cognito redirects here after login)
+		if (location.pathname === "/callback") {
+			return <CallbackPage />;
+		}
+
+		// OIDC is still initialising (e.g. processing the auth code on page load)
+		if (auth.isLoading) {
+			return (
+				<Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+					<CircularProgress />
+				</Box>
 			);
+		}
+
+		// Not signed in and not a guest → show login card
+		if (!isAuthenticated && !isGuest) {
+			return <LoginPage onGuestLogin={handleGuestLogin} />;
 		}
 
 		return (
 			<Routes>
 				<Route path="/" element={<Navigate to="/products" replace />} />
+				<Route path="/callback" element={<CallbackPage />} />
 				<Route path="/products" element={<ProductsPage />} />
 				<Route
 					path="/receipts"
 					element={
-						isAuthenticated ? <MyReceiptsPage /> : <Navigate to="/products" replace />
+						isAuthenticated ? (
+							<MyReceiptsPage />
+						) : (
+							<Navigate to="/products" replace />
+						)
 					}
 				/>
 				<Route
 					path="/favorites"
 					element={
-						isAuthenticated ? <MyFavoritesPage /> : <Navigate to="/products" replace />
+						isAuthenticated ? (
+							<MyFavoritesPage />
+						) : (
+							<Navigate to="/products" replace />
+						)
 					}
 				/>
 				<Route
@@ -223,8 +212,10 @@ function App() {
 				position="sticky"
 				elevation={0}
 				sx={{
-					background:
-						"linear-gradient(90deg, #0ea5e9 0%, #6366f1 50%, #a855f7 100%)",
+					background: "linear-gradient(90deg, rgba(59,130,246,0.12) 0%, rgba(139,92,246,0.12) 100%)",
+					backdropFilter: "blur(12px)",
+					WebkitBackdropFilter: "blur(12px)",
+					borderBottom: "1px solid rgba(99, 102, 241, 0.15)",
 				}}
 			>
 				<Toolbar sx={{ py: { xs: 1, sm: 1.5 } }}>
@@ -236,27 +227,29 @@ function App() {
 							flexDirection: { xs: "column", md: "row" },
 						}}
 					>
-						<Typography
-							variant="h4"
+						<Box
 							component="h1"
 							sx={{
 								flexGrow: { xs: 0, md: 1 },
-								fontWeight: 800,
-								letterSpacing: 0.5,
-								textShadow: "0 1px 2px rgba(0,0,0,.25)",
-								fontSize: { xs: 22, sm: 26, md: 30, lg: 34 },
+								m: 0,
 								textAlign: { xs: "center", sm: "left" },
 								width: { xs: "100%", md: "auto" },
+								display: "flex",
+								justifyContent: { xs: "center", sm: "flex-start" },
 							}}
 						>
-							Price-Compare
-						</Typography>
+							<Box
+								component="img"
+								src="/price-peer-logo-horizontal.svg"
+								alt="Price Peer"
+								sx={{ height: { xs: 48, sm: 58, md: 68 }, width: "auto" }}
+							/>
+						</Box>
 						{showTabs && (
 							<Tabs
 								value={mainTab}
 								onChange={handleTabChange}
-								textColor="inherit"
-								indicatorColor="secondary"
+								textColor="primary"
 								sx={{
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
@@ -266,6 +259,13 @@ function App() {
 									"& .MuiTab-root": {
 										minHeight: "auto",
 										fontSize: { xs: 12, sm: 13, md: 14 },
+										color: "text.secondary",
+									},
+									"& .MuiTab-root.Mui-selected": {
+										color: "#6366f1",
+									},
+									"& .MuiTabs-indicator": {
+										backgroundColor: "#6366f1",
 									},
 								}}
 							>
@@ -284,11 +284,11 @@ function App() {
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
 									fontWeight: 500,
+									color: "text.secondary",
 									maxWidth: { xs: 140, sm: 200 },
 									overflow: "hidden",
 									textOverflow: "ellipsis",
 									whiteSpace: "nowrap",
-									textShadow: "0 1px 1px rgba(0,0,0,0.25)",
 								}}
 							>
 								{userEmail}
@@ -301,7 +301,7 @@ function App() {
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
 									fontWeight: 500,
-									textShadow: "0 1px 1px rgba(0,0,0,0.25)",
+									color: "text.secondary",
 								}}
 							>
 								Guest access
@@ -309,25 +309,28 @@ function App() {
 						)}
 						{isAuthenticated && (
 							<Button
-								color="inherit"
 								onClick={handleLogout}
 								sx={{
 									fontWeight: 500,
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
+									color: "text.secondary",
 								}}
 							>
 								Log out
 							</Button>
 						)}
-						{isGuest && (
+						{(isGuest || (!isAuthenticated && !auth.isLoading)) && (
 							<Button
-								color="inherit"
-								onClick={handleStartSignIn}
+								variant="contained"
+								onClick={() => auth.signinRedirect()}
 								sx={{
 									fontWeight: 500,
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
+									background: "linear-gradient(90deg, #3b82f6, #8b5cf6)",
+									boxShadow: "none",
+									"&:hover": { background: "linear-gradient(90deg, #2563eb, #7c3aed)", boxShadow: "none" },
 								}}
 							>
 								Sign in
@@ -337,7 +340,7 @@ function App() {
 				</Toolbar>
 			</AppBar>
 
-			<Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
+			<Container component="main" maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
 				{renderMainContent()}
 			</Container>
 
@@ -347,9 +350,7 @@ function App() {
 				aria-labelledby="signin-required-title"
 				aria-describedby="signin-required-description"
 			>
-				<DialogTitle id="signin-required-title">
-					Sign in required
-				</DialogTitle>
+				<DialogTitle id="signin-required-title">Sign in required</DialogTitle>
 				<DialogContent>
 					<DialogContentText id="signin-required-description">
 						{restrictedTarget} is only available after signing in. Guests can

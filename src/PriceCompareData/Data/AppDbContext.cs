@@ -115,6 +115,12 @@ namespace PriceCompareData.Data
                   });
 
 
+                  // PriceHistory index for latest-price lookups: WHERE shoptype = X AND name = 'Y' ORDER BY scrapedat DESC
+                  modelBuilder.Entity<PriceHistory>()
+                      .HasIndex(p => new { p.ShopType, p.Name, p.ScrapedAt })
+                      .IsDescending(false, false, true)
+                      .HasDatabaseName("IX_PriceHistory_ShopType_Name_ScrapedAt");
+
                   // PriceHistory
                   modelBuilder.Entity<PriceHistory>()
                       .Property(p => p.PromoText)

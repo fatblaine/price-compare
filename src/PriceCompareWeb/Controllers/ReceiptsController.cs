@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Distributed;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.DTOs;
 using PriceCompareWeb.Controllers.Models;
@@ -19,12 +20,16 @@ namespace PriceCompareWeb.Controllers
         private readonly IReceiptService _service;
         private readonly IHttpContextAccessor _context;
         private readonly IReceiptProcessingService _processingService;
+        private readonly IDistributedCache _cache;
 
-        public ReceiptsController(IReceiptService service, IHttpContextAccessor context, IReceiptProcessingService processingService)
+        private const int OcrDailyLimit = 3;
+
+        public ReceiptsController(IReceiptService service, IHttpContextAccessor context, IReceiptProcessingService processingService, IDistributedCache cache)
         {
             _service = service;
             _context = context;
             _processingService = processingService;
+            _cache = cache;
         }
 
         private Guid CurrentUserId => Guid.Parse(_context.HttpContext!.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -75,6 +80,18 @@ namespace PriceCompareWeb.Controllers
             var error = await ValidateFileAsync(file);
             if (error != null) return BadRequest(error);
 
+            // Rate-limit: 3 OCR scans per user per 24 h — stored in IDistributedCache (Redis in
+            // production) so the counter is shared across all Lambda instances.
+            var usageKey = $"ocr:{CurrentUserId}";
+            var storedBytes = await _cache.GetAsync(usageKey);
+            var currentUsage = storedBytes != null ? BitConverter.ToInt32(storedBytes) : 0;
+
+            if (currentUsage >= OcrDailyLimit)
+            {
+                return StatusCode(StatusCodes.Status429TooManyRequests,
+                    new { error = "daily_limit_exceeded", message = "You have used all 3 free OCR scans for today. Try again tomorrow." });
+            }
+
             // 1. Create a basic receipt record for the current user.
             //    Store name / purchase date will be filled by OCR later.
             var dto = new ReceiptDto(
@@ -89,6 +106,15 @@ namespace PriceCompareWeb.Controllers
 
             // 2. Upload and process the image (S3 + OCR + parse + items persistence).
             await _processingService.ProcessUploadedReceiptAsync(receiptId, CurrentUserId.ToString(), file);
+
+            // Increment counter only after successful processing.
+            await _cache.SetAsync(
+                usageKey,
+                BitConverter.GetBytes(currentUsage + 1),
+                new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
+                });
 
             // 3. Load the fully processed receipt detail.
             var detail = await _service.GetReceiptAsync(receiptId, CurrentUserId);

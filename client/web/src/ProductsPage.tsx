@@ -27,9 +27,12 @@ import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
 import { fetchCompareMatchesByProduct, type CompareProduct } from "./api/compare";
 import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
-import { getStoredToken } from "./api/auth";
+import { useAuth } from "react-oidc-context";
 import { useTour } from "./hooks/useTour";
 import TourButton from "./components/TourButton";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import { Tooltip } from "@mui/material";
+import SearchByDescriptionDialog from "./components/SearchByDescriptionDialog";
 
 function formatSize(row: ProductRow) {
 	if (row.size && row.size.trim() !== "") return row.size;
@@ -68,7 +71,7 @@ function ProductImage({
 		return (
 			<Box
 				sx={{
-					height: 170,
+					height: { xs: 130, sm: 170 },
 					borderRadius: 2.5,
 					bgcolor: "#f5f5f7",
 					display: "flex",
@@ -110,7 +113,7 @@ export default function ProductsPage() {
 	const theme = useTheme();
 	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 	const isMdDown = useMediaQuery(theme.breakpoints.down("md"));
-	const isAuthenticated = Boolean(getStoredToken());
+	const { isAuthenticated } = useAuth();
 	const [rows, setRows] = useState<ProductRow[]>([]);
 	const [rowCount, setRowCount] = useState(0);
 	const [loading, setLoading] = useState(false);
@@ -137,6 +140,10 @@ export default function ProductsPage() {
 	const [compareSourceProduct, setCompareSourceProduct] = useState<
 		CompareProduct | undefined
 	>(undefined);
+
+	// AI search dialog state
+	const [aiSearchOpen, setAiSearchOpen] = useState(false);
+	const [aiSearchExhausted, setAiSearchExhausted] = useState(false);
 
 	const debouncedName = useDebounce(search, 350);
 	const { startTour, autoStart } = useTour();
@@ -311,21 +318,32 @@ export default function ProductsPage() {
 		}
 		setCompareDataMap({});
 		let cancelled = false;
-		for (const row of rows) {
-			fetchCompareMatchesByProduct(row.productId)
-				.then((targets) => {
+
+		const fetchWithConcurrency = async (items: typeof rows, limit: number) => {
+			let i = 0;
+			const worker = async () => {
+				while (i < items.length) {
+					const row = items[i++];
 					if (cancelled) return;
-					const best =
-						targets.find(
-							(t) => t.matchType === "same_product" && t.price != null,
-						) ?? null;
-					setCompareDataMap((prev) => ({ ...prev, [row.productId]: best }));
-				})
-				.catch(() => {
-					if (cancelled) return;
-					setCompareDataMap((prev) => ({ ...prev, [row.productId]: null }));
-				});
-		}
+					try {
+						const targets = await fetchCompareMatchesByProduct(row.productId);
+						if (cancelled) return;
+						const best =
+							targets.find(
+								(t) => t.matchType === "same_product" && t.price != null,
+							) ?? null;
+						setCompareDataMap((prev) => ({ ...prev, [row.productId]: best }));
+					} catch {
+						if (cancelled) return;
+						setCompareDataMap((prev) => ({ ...prev, [row.productId]: null }));
+					}
+				}
+			};
+			await Promise.all(Array.from({ length: limit }, worker));
+		};
+
+		void fetchWithConcurrency(rows, 3);
+
 		return () => {
 			cancelled = true;
 		};
@@ -388,7 +406,26 @@ export default function ProductsPage() {
 				>
 					Search
 				</Button>
-				<TourButton onClick={startTour} disabled={compareOpen} />
+				<Tooltip
+				title={
+					aiSearchExhausted
+						? "Daily AI search limit reached. Try again tomorrow."
+						: "Describe what you're looking for (AI search, any language)"
+				}
+			>
+				<span>
+					<IconButton
+						id="ai-search-btn"
+						onClick={() => setAiSearchOpen(true)}
+						disabled={aiSearchExhausted}
+						color={aiSearchOpen ? "primary" : "default"}
+						size="small"
+					>
+						<AutoAwesomeIcon />
+					</IconButton>
+				</span>
+			</Tooltip>
+			<TourButton onClick={startTour} disabled={compareOpen} />
 			</Stack>
 
 			<Box
@@ -431,12 +468,12 @@ export default function ProductsPage() {
 						sx={{
 							display: "grid",
 							gridTemplateColumns: {
-								xs: "1fr",
-								sm: "repeat(2, minmax(0, 1fr))",
-								md: "repeat(3, minmax(0, 1fr))",
-								lg: "repeat(4, minmax(0, 1fr))",
+								xs: "repeat(2, minmax(0, 1fr))",
+								sm: "repeat(3, minmax(0, 1fr))",
+								md: "repeat(4, minmax(0, 1fr))",
+								lg: "repeat(5, minmax(0, 1fr))",
 							},
-							gap: { xs: 2, sm: 2.5, md: 3 },
+							gap: { xs: 1, sm: 1.5, md: 2 },
 						}}
 					>
 						{rows.map((row) => {
@@ -536,6 +573,7 @@ export default function ProductsPage() {
 										<Box>
 											<Typography
 												variant="h6"
+												component="p"
 												fontWeight={700}
 												sx={{ color: accent }}
 											>
@@ -550,16 +588,18 @@ export default function ProductsPage() {
 												Promo: {row.promoText}
 											</Typography>
 										)}
-										{recommendationText && (
-											<Typography
-												variant="caption"
-												fontWeight={600}
-												className="recommendation-text"
-												sx={{ textAlign: "center" }}
-											>
-												{recommendationText}
-											</Typography>
-										)}
+										<Box sx={{ minHeight: "1.5em" }}>
+											{recommendationText && (
+												<Typography
+													variant="caption"
+													fontWeight={600}
+													className="recommendation-text"
+													sx={{ textAlign: "center" }}
+												>
+													{recommendationText}
+												</Typography>
+											)}
+										</Box>
 										<Stack
 											direction="row"
 											spacing={1}
@@ -671,6 +711,15 @@ export default function ProductsPage() {
 				sourceProductId={compareSourceProductId}
 				sourceProduct={compareSourceProduct}
 				onClose={() => setCompareOpen(false)}
+			/>
+			<SearchByDescriptionDialog
+				open={aiSearchOpen}
+				onClose={() => setAiSearchOpen(false)}
+				onSelect={(productName) => {
+					setSearch(productName);
+					setAiSearchOpen(false);
+				}}
+				onQuotaUpdate={(remaining) => setAiSearchExhausted(remaining === 0)}
 			/>
 		</Box>
 	);

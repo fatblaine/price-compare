@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text;
 using System.Linq;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
@@ -15,12 +14,11 @@ using PriceCompareCore.Config;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Jobs;
 using PriceCompareCore.Services;
-using PriceCompareCore.Utils;
 using PriceCompareData.Data;
+using PriceCompareWeb.Filters;
 using PriceCompareWeb.JobsLambda;
 using PriceCompareWeb.Services;
 using Quartz;
-using PriceCompareCore.Config;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -87,11 +85,13 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
 });
 
 // Add services to the container.
+builder.Services.AddScoped<CognitoUserProvisionFilter>();
 var exposeScrapingEndpoints = builder.Configuration.GetValue<bool>("Scraping:ExposeHttpEndpoints");
 builder.Services.AddControllers(options =>
 {
     if (!exposeScrapingEndpoints)
         options.Conventions.Add(new PriceCompareWeb.Infrastructure.DisableControllerConvention("Scraping"));
+    options.Filters.Add(typeof(CognitoUserProvisionFilter));
 });
 builder.Services.AddEndpointsApiExplorer();
 // Swagger with JWT support
@@ -138,12 +138,21 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Redis
-builder.Services.AddStackExchangeRedisCache(options =>
+// Redis — shared IDistributedCache for rate limiting across Lambda instances.
+// In local dev (no Redis), falls back to in-process memory cache.
+var redisConnectionString = builder.Configuration["Redis:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
-    options.Configuration = builder.Configuration["Redis:ConnectionString"];
-    options.InstanceName = "PriceCompare_";
-});
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "PriceCompare_";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
 
 var enableQuartzJobs = builder.Configuration.GetValue<bool?>("Scraping:EnableQuartz") ?? false;
 if (enableQuartzJobs)
@@ -412,6 +421,9 @@ builder.Services.AddScoped<IScrapeExportService, ScrapeExportService>();
 // Products service
 builder.Services.AddScoped<PriceCompareCore.Interfaces.IProductService, PriceCompareCore.Services.ProductService>();
 
+// AI product description search
+builder.Services.AddScoped<PriceCompareCore.Services.IProductDescriptionSearchService, PriceCompareCore.Services.ProductDescriptionSearchService>();
+
 // Receipt service
 builder.Services.AddScoped<IReceiptService, ReceiptService>();
 
@@ -422,28 +434,29 @@ builder.Services.AddScoped<IFavoriteService, FavoriteService>();
 builder.Services.AddScoped<AdminScheduleService>();
 builder.Services.AddScoped<IScrapeImportSqlService, ScrapeImportSqlService>();
 
-// Auth service
-var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>();
-if (jwtSettings == null || string.IsNullOrWhiteSpace(jwtSettings.Secret))
-{
-    throw new InvalidOperationException("JwtSettings:Secret is missing in configuration.");
-}
-builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
-builder.Services.AddSingleton<PasswordHasher>();
-builder.Services.AddScoped<IAuthService, AuthService>();
+// Cognito auth — JWT validated against the User Pool's JWKS endpoint
+var cognitoRegion = builder.Configuration["Cognito:Region"]
+    ?? throw new InvalidOperationException("Cognito:Region is missing in configuration.");
+var cognitoUserPoolId = builder.Configuration["Cognito:UserPoolId"]
+    ?? throw new InvalidOperationException("Cognito:UserPoolId is missing in configuration.");
+var cognitoAppClientId = builder.Configuration["Cognito:AppClientId"]
+    ?? throw new InvalidOperationException("Cognito:AppClientId is missing in configuration.");
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.Authority = $"https://cognito-idp.{cognitoRegion}.amazonaws.com/{cognitoUserPoolId}";
+        // MapInboundClaims = true so JWT 'sub' -> ClaimTypes.NameIdentifier and
+        // 'email' -> ClaimTypes.Email, preserving all downstream claim reads.
+        options.MapInboundClaims = true;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            // Use UTF8 to avoid losing bytes if secret contains non-ASCII chars
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
             ValidateIssuer = true,
-            ValidIssuer = jwtSettings.Issuer,
             ValidateAudience = true,
-            ValidAudience = jwtSettings.Audience,
+            ValidAudience = cognitoAppClientId,  // Cognito ID token: aud = App Client ID
             NameClaimType = ClaimTypes.NameIdentifier,
+            RoleClaimType = "cognito:groups",
             ClockSkew = TimeSpan.Zero
         };
     });
