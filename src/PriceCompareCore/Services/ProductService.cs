@@ -29,28 +29,30 @@ namespace PriceCompareCore.Services
 
             try
             {
-                // Derived table: one MAX per shop type — executed once, not per row.
-                // Avoids the correlated subquery that caused the 30-second timeout.
+                // Fix: MAX(LastSeenAt) raw timestamp — join on ShopType only, then range-filter.
+                // The old DATE(lastseenat) on both sides of the JOIN made IX_Products_ShopType_LastSeenAt
+                // unusable, causing a full table scan on every request (root cause of Disk IO exhaustion).
+                // With p.LastSeenAt >= maxAt.Date the indexed column stays on the left of >=,
+                // so PostgreSQL does an index range scan per shop type instead.
                 var latestPerShop = _db.Products
                     .AsNoTracking()
                     .Where(p => p.ShopType.HasValue)
                     .GroupBy(p => p.ShopType)
-                    .Select(g => new { ShopType = g.Key, MaxDate = g.Max(p => p.LastSeenAt.Date) });
+                    .Select(g => new { ShopType = g.Key, MaxAt = g.Max(p => p.LastSeenAt) });
 
                 var query = _db.Products
                     .AsNoTracking()
                     .Join(
                         latestPerShop,
-                        p => new { p.ShopType, Date = p.LastSeenAt.Date },
-                        l => new { l.ShopType, Date = l.MaxDate },
-                        (p, l) => p
-                    );
+                        p => p.ShopType,
+                        l => l.ShopType,
+                        (p, l) => new { Product = p, MaxAt = l.MaxAt }
+                    )
+                    .Where(x => x.Product.LastSeenAt >= x.MaxAt.Date)
+                    .Select(x => x.Product);
 
                 if (!string.IsNullOrWhiteSpace(name))
-                {
-                    // Use ILike for PostgreSQL case-insensitive matching (Npgsql)
                     query = query.Where(p => p.Name != null && EF.Functions.ILike(p.Name, $"%{name}%"));
-                }
 
                 if (shopType.HasValue)
                     query = query.Where(p => p.ShopType == shopType.Value);
@@ -65,23 +67,34 @@ namespace PriceCompareCore.Services
 
                 var hasFilter = !string.IsNullOrWhiteSpace(name) || shopType.HasValue || categoryId.HasValue;
 
-                // Materialize same_product source IDs once into a List<Guid>.
-                // EF Core / Npgsql translates List.Contains() to "= ANY(@ids)" — a single fast lookup
-                // per row using the product PK, avoiding a correlated subquery on every row.
-                var sameProductIds = await _db.ProductMatches
+                // Push same_product lookup into SQL as a correlated subquery instead of loading
+                // all GUIDs into Lambda memory and sending a large ANY(@ids) parameter each request.
+                // PostgreSQL uses IX_ProductMatch_MatchType_SourceProductId and optimises to a hash
+                // semi-join — no round-trip data transfer between DB and Lambda.
+                var sameProductSubquery = _db.ProductMatches
+                    .AsNoTracking()
                     .Where(m => m.MatchType == "same_product")
                     .Select(m => m.SourceProductId)
-                    .Distinct()
-                    .ToListAsync();
+                    .Distinct();
 
-                var orderedQuery = hasFilter
-                    ? query
-                        .OrderByDescending(p => sameProductIds.Contains(p.ProductId) ? 1 : 0)
-                        .ThenBy(p => p.Name)
-                        .ThenBy(p => p.ProductId)
-                    : query
-                        .OrderByDescending(p => sameProductIds.Contains(p.ProductId) ? 1 : 0)
-                        .ThenBy(p => p.ProductId);
+                IQueryable<Product> orderedQuery;
+                if (hasFilter)
+                {
+                    orderedQuery = query
+                        .Select(p => new { Product = p, HasMatch = sameProductSubquery.Contains(p.ProductId) })
+                        .OrderByDescending(x => x.HasMatch)
+                        .ThenBy(x => x.Product.Name)
+                        .ThenBy(x => x.Product.ProductId)
+                        .Select(x => x.Product);
+                }
+                else
+                {
+                    orderedQuery = query
+                        .Select(p => new { Product = p, HasMatch = sameProductSubquery.Contains(p.ProductId) })
+                        .OrderByDescending(x => x.HasMatch)
+                        .ThenBy(x => x.Product.ProductId)
+                        .Select(x => x.Product);
+                }
 
                 var itemsQuery = orderedQuery
                     .Skip((page - 1) * pageSize)

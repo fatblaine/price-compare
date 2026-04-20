@@ -198,12 +198,13 @@ public class ProductDescriptionSearchService : IProductDescriptionSearchService
 
     private async Task<List<ProductSearchItem>> SearchProductsAsync(List<string> keywords, int topN, int? shopTypeFilter)
     {
-        // Build a subquery for latest scrape date per shop — same Join pattern as ProductService.cs
+        // Fix: MAX(LastSeenAt) raw timestamp — same fix as ProductService.cs.
+        // Avoids DATE(lastseenat) on the indexed column, enabling IX_Products_ShopType_LastSeenAt.
         var latestPerShop = _db.Products
             .AsNoTracking()
             .Where(p => p.ShopType.HasValue)
             .GroupBy(p => p.ShopType)
-            .Select(g => new { ShopType = g.Key, MaxDate = g.Max(p => p.LastSeenAt.Date) });
+            .Select(g => new { ShopType = g.Key, MaxAt = g.Max(p => p.LastSeenAt) });
 
         if (keywords.Count == 0)
             return new List<ProductSearchItem>();
@@ -225,10 +226,13 @@ public class ProductDescriptionSearchService : IProductDescriptionSearchService
                 .AsNoTracking()
                 .Join(
                     latestPerShop,
-                    p => new { p.ShopType, Date = p.LastSeenAt.Date },
-                    l => new { l.ShopType, Date = l.MaxDate },
-                    (p, l) => p)
-                .Where(p => p.NormalizedName != null && EF.Functions.ILike(p.NormalizedName, $"%{kw}%"));
+                    p => p.ShopType,
+                    l => l.ShopType,
+                    (p, l) => new { Product = p, MaxAt = l.MaxAt }
+                )
+                .Where(x => x.Product.LastSeenAt >= x.MaxAt.Date)
+                .Where(x => x.Product.NormalizedName != null && EF.Functions.ILike(x.Product.NormalizedName, $"%{kw}%"))
+                .Select(x => x.Product);
 
             if (shopTypeFilter.HasValue)
                 query = query.Where(p => p.ShopType == shopTypeFilter.Value);
