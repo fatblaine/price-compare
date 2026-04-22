@@ -12,4 +12,19 @@ namespace PriceCompareWeb.Controllers.Models
         int PriceHistoryRows,
         int ProductRows,
         string? SqlPreview);
+
+    public record ScrapeImportAllFolderResult(
+        string ExportDir,
+        string? OutputPath,
+        int PriceHistoryRows,
+        int ProductRows,
+        bool Skipped,
+        string? Error);
+
+    public record ScrapeImportAllResult(
+        int Total,
+        int Generated,
+        int Skipped,
+        int Failed,
+        IReadOnlyList<ScrapeImportAllFolderResult> Folders);
 }

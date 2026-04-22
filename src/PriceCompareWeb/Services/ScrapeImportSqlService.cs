@@ -17,6 +17,7 @@ namespace PriceCompareWeb.Services
     public interface IScrapeImportSqlService
     {
         Task<ScrapeImportSqlResult> GenerateAsync(ScrapeImportSqlRequest request, CancellationToken ct = default);
+        Task<ScrapeImportAllResult> GenerateAllAsync(bool skipExisting, CancellationToken ct = default);
     }
 
     public class ScrapeImportSqlService : IScrapeImportSqlService
@@ -110,6 +111,53 @@ namespace PriceCompareWeb.Services
                 priceHistoryRows,
                 productRows,
                 preview);
+        }
+
+        public async Task<ScrapeImportAllResult> GenerateAllAsync(bool skipExisting, CancellationToken ct = default)
+        {
+            var root = ResolveRoot();
+            if (!Directory.Exists(root))
+            {
+                throw new InvalidOperationException($"Export root not found: {root}");
+            }
+
+            var dirs = Directory.GetDirectories(root).OrderBy(d => d).ToList();
+            var folders = new List<ScrapeImportAllFolderResult>(dirs.Count);
+            var skipped = 0;
+            var failed = 0;
+            var generated = 0;
+
+            foreach (var dir in dirs)
+            {
+                ct.ThrowIfCancellationRequested();
+                var folderName = Path.GetFileName(dir);
+                var sqlPath = Path.Combine(dir, "import.sql");
+
+                if (skipExisting && File.Exists(sqlPath))
+                {
+                    skipped++;
+                    folders.Add(new ScrapeImportAllFolderResult(folderName, sqlPath, 0, 0, Skipped: true, Error: null));
+                    continue;
+                }
+
+                try
+                {
+                    var result = await GenerateAsync(new ScrapeImportSqlRequest(folderName, null, false, null), ct);
+                    generated++;
+                    folders.Add(new ScrapeImportAllFolderResult(
+                        result.ExportDir, result.OutputPath,
+                        result.PriceHistoryRows, result.ProductRows,
+                        Skipped: false, Error: null));
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    _logger.LogError(ex, "Failed to generate SQL for {Folder}", folderName);
+                    folders.Add(new ScrapeImportAllFolderResult(folderName, null, 0, 0, Skipped: false, Error: ex.Message));
+                }
+            }
+
+            return new ScrapeImportAllResult(dirs.Count, generated, skipped, failed, folders);
         }
 
         private string ResolveRoot()
