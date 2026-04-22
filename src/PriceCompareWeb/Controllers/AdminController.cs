@@ -85,6 +85,14 @@ public class AdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("scrape-import/generate-all-sql")]
+    public async Task<IActionResult> GenerateAllScrapeSql(
+        [FromQuery] bool skipExisting = true, CancellationToken ct = default)
+    {
+        var result = await _scrapeImportSqlService.GenerateAllAsync(skipExisting, ct);
+        return Ok(result);
+    }
+
     [HttpGet("schedules/{jobName}/runs")]
     public async Task<IActionResult> GetRuns(
         string jobName,
