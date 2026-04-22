@@ -46,6 +46,7 @@ import {
 	fetchMatchJobStatus,
 	fetchProductMatchReview,
 	runMatchJob,
+	runCleanPriceHistory,
 	updateProductMatch,
 	type AdminHealth,
 	type JobRun,
@@ -219,6 +220,10 @@ export default function AdminJobsPage() {
 		Record<string, { matchType: "same_product" | "comparable"; score: string }>
 	>({});
 	const [reviewSavingIds, setReviewSavingIds] = React.useState<string[]>([]);
+	const [cleanLoading, setCleanLoading] = React.useState(false);
+	const [cleanResult, setCleanResult] = React.useState<number | null>(null);
+	const [cleanError, setCleanError] = React.useState<string | null>(null);
+
 	const location = useLocation();
 	const navigate = useNavigate();
 	const adminTab = location.pathname.includes("/prematch")
@@ -802,9 +807,37 @@ export default function AdminJobsPage() {
 						Admin Monitoring
 					</Typography>
 					{adminTab === "schedules" && (
-						<Button variant="contained" onClick={loadSchedules}>
-							Refresh schedules
-						</Button>
+						<Stack direction="row" spacing={1} alignItems="center">
+							<Button variant="contained" onClick={loadSchedules}>
+								Refresh schedules
+							</Button>
+							<Button
+								variant="outlined"
+								color="warning"
+								disabled={cleanLoading}
+								onClick={() => {
+									setCleanResult(null);
+									setCleanError(null);
+									setCleanLoading(true);
+									void runCleanPriceHistory()
+										.then((res) => setCleanResult(res.deleted))
+										.catch(() => setCleanError("Failed to clean price history."))
+										.finally(() => setCleanLoading(false));
+								}}
+							>
+								{cleanLoading ? "Cleaning…" : "Clean price history"}
+							</Button>
+							{cleanResult !== null && (
+								<Typography variant="body2" color="success.main">
+									Deleted {cleanResult} rows
+								</Typography>
+							)}
+							{cleanError && (
+								<Typography variant="body2" color="error">
+									{cleanError}
+								</Typography>
+							)}
+						</Stack>
 					)}
 				</Stack>
 
