@@ -241,3 +241,8 @@ export async function updateProductMatch(
 	);
 	return res.data;
 }
+
+export async function runCleanPriceHistory(): Promise<{ deleted: number }> {
+	const res = await axios.post(`${API_BASE}/api/admin/pricehistory/cleanup`);
+	return res.data;
+}

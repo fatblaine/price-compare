@@ -93,6 +93,17 @@ public class AdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("pricehistory/cleanup")]
+    public async Task<IActionResult> CleanPriceHistory(CancellationToken ct = default)
+    {
+        var threshold = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc)
+            .AddMonths(-2);
+        var deleted = await _db.PriceHistory
+            .Where(p => p.ScrapedAt < threshold)
+            .ExecuteDeleteAsync(ct);
+        return Ok(new { deleted });
+    }
+
     [HttpGet("schedules/{jobName}/runs")]
     public async Task<IActionResult> GetRuns(
         string jobName,
