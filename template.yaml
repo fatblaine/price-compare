@@ -41,9 +41,10 @@ Parameters:
     Default: "PriceCompare"
   FavoriteAlertsBaseUrl:
     Type: String
+    Default: "https://www.price-peer.com"
   FavoriteAlertsPath:
     Type: String
-    Default: "/"
+    Default: "/favorites"
   JwtSecretId:
     Type: String
     Description: Secrets Manager secret name or ARN for JwtSettings__Secret
@@ -297,6 +298,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/admin/schedules/{jobName}/stats
             Method: GET
+        AdminPriceHistoryCleanupPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/admin/pricehistory/cleanup
+            Method: POST
       Environment:
         Variables:
           ConnectionStrings__DefaultConnection: !Ref DbConnectionString
@@ -357,7 +364,7 @@ Resources:
     Type: AWS::Scheduler::Schedule
     Properties:
       Name: !Sub "price-compare-${Environment}-favorite-price-tracking"
-      ScheduleExpression: "cron(50 12 ? * WED *)"
+      ScheduleExpression: "cron(50 13 ? * WED *)"
       ScheduleExpressionTimezone: "Australia/Sydney"
       FlexibleTimeWindow:
         Mode: "OFF"
