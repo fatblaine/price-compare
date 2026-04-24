@@ -67,21 +67,34 @@ namespace PriceCompareCore.Services
 
                 var hasFilter = !string.IsNullOrWhiteSpace(name) || shopType.HasValue || categoryId.HasValue;
 
-                // Push same_product lookup into SQL as a correlated subquery instead of loading
-                // all GUIDs into Lambda memory and sending a large ANY(@ids) parameter each request.
-                // PostgreSQL uses IX_ProductMatch_MatchType_SourceProductId and optimises to a hash
-                // semi-join — no round-trip data transfer between DB and Lambda.
-                var sameProductSubquery = _db.ProductMatches
-                    .AsNoTracking()
-                    .Where(m => m.MatchType == "same_product")
-                    .Select(m => m.SourceProductId)
-                    .Distinct();
+                // Materialise same_product source IDs up-front into a HashSet.
+                // A correlated EXISTS in ORDER BY forces PostgreSQL to evaluate the subquery for every
+                // row before it can sort, which caused 30-second timeouts on the 28k-product table.
+                // A single indexed scan of ProductMatches (MatchType = 'same_product') is much faster,
+                // and the resulting HashSet drives an efficient = ANY(@ids) predicate in the ORDER BY.
+                HashSet<Guid> sameProductIds;
+                try
+                {
+                    using var matchCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var idList = await _db.ProductMatches
+                        .AsNoTracking()
+                        .Where(m => m.MatchType == "same_product")
+                        .Select(m => m.SourceProductId)
+                        .Distinct()
+                        .ToListAsync(matchCts.Token);
+                    sameProductIds = new HashSet<Guid>(idList);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "GetProducts same_product ID prefetch failed; ordering without match priority.");
+                    sameProductIds = new HashSet<Guid>();
+                }
 
                 IQueryable<Product> orderedQuery;
                 if (hasFilter)
                 {
                     orderedQuery = query
-                        .Select(p => new { Product = p, HasMatch = sameProductSubquery.Contains(p.ProductId) })
+                        .Select(p => new { Product = p, HasMatch = sameProductIds.Contains(p.ProductId) })
                         .OrderByDescending(x => x.HasMatch)
                         .ThenBy(x => x.Product.Name)
                         .ThenBy(x => x.Product.ProductId)
@@ -90,7 +103,7 @@ namespace PriceCompareCore.Services
                 else
                 {
                     orderedQuery = query
-                        .Select(p => new { Product = p, HasMatch = sameProductSubquery.Contains(p.ProductId) })
+                        .Select(p => new { Product = p, HasMatch = sameProductIds.Contains(p.ProductId) })
                         .OrderByDescending(x => x.HasMatch)
                         .ThenBy(x => x.Product.ProductId)
                         .Select(x => x.Product);
