@@ -1,11 +1,13 @@
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using PriceCompareCore.Exceptions;
 using PriceCompareData.Data;
@@ -21,17 +23,23 @@ namespace PriceCompareWeb.Controllers
         private readonly ILogger<ProductsController> _logger;
         private readonly AppDbContext _db;
         private readonly PriceCompareCore.Services.IProductDescriptionSearchService _descriptionSearchService;
+        private readonly IDistributedCache _cache;
+
+        private static readonly DistributedCacheEntryOptions _productsCacheOptions =
+            new() { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60) };
 
         public ProductsController(
             PriceCompareCore.Interfaces.IProductService productService,
             ILogger<ProductsController> logger,
             AppDbContext db,
-            PriceCompareCore.Services.IProductDescriptionSearchService descriptionSearchService)
+            PriceCompareCore.Services.IProductDescriptionSearchService descriptionSearchService,
+            IDistributedCache cache)
         {
             _productService = productService;
             _logger = logger;
             _db = db;
             _descriptionSearchService = descriptionSearchService;
+            _cache = cache;
         }
 
         /// <summary>
@@ -45,6 +53,23 @@ namespace PriceCompareWeb.Controllers
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 20;
             if (pageSize > 200) pageSize = 200;
+
+            // Products change once per week (scrape day). Cache the full shaped response
+            // (including latest prices) for 5 minutes to avoid repeated heavy DB queries.
+            var cacheKey = $"products:p{page}:ps{pageSize}:n{name ?? ""}:st{shopType?.ToString() ?? ""}:cat{categoryId?.ToString() ?? ""}:ip{(includePrice ? 1 : 0)}";
+            try
+            {
+                var cachedJson = await _cache.GetStringAsync(cacheKey);
+                if (cachedJson != null)
+                {
+                    _logger.LogInformation("GetProducts cache hit key={Key}", cacheKey);
+                    return Content(cachedJson, "application/json");
+                }
+            }
+            catch (Exception cacheEx)
+            {
+                _logger.LogWarning(cacheEx, "GetProducts cache read failed; proceeding without cache.");
+            }
 
             try
             {
@@ -127,13 +152,34 @@ namespace PriceCompareWeb.Controllers
                         : null)
                 }).ToList();
 
-                return Ok(new
+                var responsePayload = new
                 {
                     Page = page,
                     PageSize = pageSize,
                     Count = total,
                     Products = shaped
-                });
+                };
+                var responseJson = JsonSerializer.Serialize(responsePayload);
+
+                // Only cache when items were actually returned; a (total>0, items=[]) result means
+                // the items query timed out — caching it would lock users out for 60 minutes.
+                if (shaped.Count > 0 || total == 0)
+                {
+                    try
+                    {
+                        await _cache.SetStringAsync(cacheKey, responseJson, _productsCacheOptions);
+                    }
+                    catch (Exception cacheEx)
+                    {
+                        _logger.LogWarning(cacheEx, "GetProducts cache write failed; response still returned.");
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("GetProducts skipping cache write: total={Total} but items=0 (likely items query timeout).", total);
+                }
+
+                return Content(responseJson, "application/json");
             }
             catch (Exception ex)
             {
@@ -172,9 +218,9 @@ namespace PriceCompareWeb.Controllers
                     .OrderBy(p => p.ScrapedAt)
                     .Select(p => new
                     {
-                        scrapedAt    = p.ScrapedAt,
+                        scrapedAt = p.ScrapedAt,
                         currentPrice = p.CurrentPrice,
-                        promoText    = p.PromoText
+                        promoText = p.PromoText
                     })
                     .ToListAsync();
 
@@ -219,7 +265,7 @@ namespace PriceCompareWeb.Controllers
             {
                 return StatusCode(429, new
                 {
-                    error   = "daily_limit_exceeded",
+                    error = "daily_limit_exceeded",
                     message = "You have used all 3 free AI searches for today. Try again tomorrow."
                 });
             }
