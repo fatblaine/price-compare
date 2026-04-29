@@ -146,12 +146,19 @@ namespace PriceCompareCore.Services
             // add price histories to database
             var scrapedAt = DateTime.UtcNow;
             var today = scrapedAt.Date;
+            var tomorrow = today.AddDays(1);
+            var existingNames = new HashSet<string>(
+                await _dbContext.PriceHistory
+                    .Where(ph => ph.ShopType == ShopType.COLES &&
+                                 ph.OfferType == OfferType.DOWN_DOWN &&
+                                 ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
+                    .Select(ph => ph.Name!)
+                    .ToListAsync(),
+                StringComparer.OrdinalIgnoreCase);
+
             var priceHistoryRows = new List<PriceHistory>(allProducts.Count);
             foreach (var product in allProducts)
             {
-                bool alreadyExists = _dbContext.PriceHistory
-                .Any(p => p.Name == product.Name && p.ScrapedAt >= today && p.ScrapedAt < today.AddDays(1));
-
                 var priceHistory = new PriceHistory
                 {
                     Name = product.Name,
@@ -163,10 +170,9 @@ namespace PriceCompareCore.Services
                 };
                 priceHistoryRows.Add(priceHistory);
 
-                if (!alreadyExists)
-                {
-                    _dbContext.PriceHistory.Add(priceHistory);
-                }
+                if (existingNames.Contains(product.Name ?? string.Empty)) continue;
+                _dbContext.PriceHistory.Add(priceHistory);
+                existingNames.Add(product.Name ?? string.Empty);
             }
             await _dbContext.SaveChangesAsync();
             await _ingestion.UpsertColesDownAsync(allProducts);

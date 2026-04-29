@@ -132,29 +132,47 @@ namespace PriceCompareCore.Services
         // Upsert products into database
         private async Task UpsertAsync(IEnumerable<Product> candidates)
         {
-            foreach (var c in candidates)
-            {
-                ApplyStandardFields(c);
+            var list = candidates.ToList();
+            if (list.Count == 0) return;
 
+            foreach (var c in list) ApplyStandardFields(c);
+
+            var shopTypes = list.Select(c => c.ShopType).Distinct().ToList();
+
+            // Load all existing products for the batch's shop type(s) in one query
+            var existingProducts = await _dbContext.Products
+                .Where(p => shopTypes.Contains(p.ShopType))
+                .ToListAsync();
+
+            // Build O(1) lookups: SourceId-first, Name-fallback
+            var bySourceId = new Dictionary<(int? ShopType, string SourceId), Product>();
+            var byName = new Dictionary<(int? ShopType, string Name), Product>();
+            foreach (var p in existingProducts)
+            {
+                if (!string.IsNullOrWhiteSpace(p.SourceId))
+                    bySourceId.TryAdd((p.ShopType, p.SourceId!), p);
+                if (!string.IsNullOrWhiteSpace(p.Name))
+                    byName.TryAdd((p.ShopType, p.Name!), p);
+            }
+
+            foreach (var c in list)
+            {
                 Product? existing = null;
 
-                // try to find existing by (ShopType + SourceId)
                 if (!string.IsNullOrWhiteSpace(c.SourceId))
-                {
-                    existing = await _dbContext.Products
-                        .FirstOrDefaultAsync(x => x.ShopType == c.ShopType && x.SourceId == c.SourceId);
-                }
+                    bySourceId.TryGetValue((c.ShopType, c.SourceId!), out existing);
 
-                // try to find existing by (ShopType + Name)
-                if (existing is null)
-                {
-                    existing = await _dbContext.Products
-                        .FirstOrDefaultAsync(x => x.ShopType == c.ShopType && x.Name == c.Name);
-                }
+                if (existing is null && !string.IsNullOrWhiteSpace(c.Name))
+                    byName.TryGetValue((c.ShopType, c.Name!), out existing);
 
                 if (existing is null)
                 {
                     await _dbContext.Products.AddAsync(c);
+                    // Track newly added products to handle duplicates within the same batch
+                    if (!string.IsNullOrWhiteSpace(c.SourceId))
+                        bySourceId.TryAdd((c.ShopType, c.SourceId!), c);
+                    if (!string.IsNullOrWhiteSpace(c.Name))
+                        byName.TryAdd((c.ShopType, c.Name!), c);
                 }
                 else
                 {

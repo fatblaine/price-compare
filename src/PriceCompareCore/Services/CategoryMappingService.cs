@@ -14,6 +14,7 @@ namespace PriceCompareCore.Services
     {
         private readonly AppDbContext _dbContext;
         private readonly ILogger<CategoryMappingService>? _logger;
+        private List<PriceCompareData.Entities.Compare.CategoryKeyword>? _keywordCache;
 
         public CategoryMappingService(AppDbContext dbContext)
         {
@@ -62,7 +63,8 @@ namespace PriceCompareCore.Services
             var tokens = Regex.Split(text, @"[^a-z0-9]+")
                           .Where(t => !string.IsNullOrWhiteSpace(t))
                           .ToHashSet();
-            var keywords = _dbContext.CategoryKeywords.AsNoTracking().ToList();
+            _keywordCache ??= _dbContext.CategoryKeywords.AsNoTracking().ToList();
+            var keywords = _keywordCache;
 
             var scoreByCat = new Dictionary<int, int>();
             foreach (var kw in keywords)
