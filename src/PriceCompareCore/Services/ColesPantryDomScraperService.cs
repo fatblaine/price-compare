@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.Common;
 using PriceCompareData.Data;
@@ -227,16 +228,19 @@ namespace PriceCompareCore.Services
             }
 
             var today = scrapedAt.Date;
+            var tomorrow = today.AddDays(1);
             var priceHistoryRows = new List<PriceHistory>(products.Count);
+
+            var existingNames = new HashSet<string>(
+                await _dbContext.PriceHistory
+                    .Where(ph => ph.ShopType == ShopType.COLES && ph.OfferType == OfferType.PANTRY && ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
+                    .Select(ph => ph.Name!)
+                    .ToListAsync(ct),
+                StringComparer.OrdinalIgnoreCase);
 
             foreach (var product in products)
             {
-                var exists = _dbContext.PriceHistory.Any(ph =>
-                    ph.Name == product.Name &&
-                    ph.ShopType == ShopType.COLES &&
-                    ph.OfferType == OfferType.PANTRY &&
-                    ph.ScrapedAt >= today &&
-                    ph.ScrapedAt < today.AddDays(1));
+                var exists = existingNames.Contains(product.Name);
 
                 var priceHistory = new PriceHistory
                 {

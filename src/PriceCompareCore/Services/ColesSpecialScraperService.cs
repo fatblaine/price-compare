@@ -13,6 +13,7 @@ using PriceCompareData.Common;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
 using PriceCompareData.Entities;
+using Microsoft.EntityFrameworkCore;
 using PriceCompareData.Entities.Common;
 using PriceCompareData.Entities.History;
 
@@ -169,27 +170,30 @@ namespace PriceCompareCore.Services
             });
 
             // Step 5: Write price history
+            var today = scrapedAt.Date;
+            var tomorrow = today.AddDays(1);
+            var existingNames = new HashSet<string>(
+                await _db.PriceHistory
+                    .Where(ph => ph.ShopType == ShopType.COLES &&
+                                 ph.OfferType == OfferType.ON_SPECIAL &&
+                                 ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
+                    .Select(ph => ph.Name!)
+                    .ToListAsync(),
+                StringComparer.OrdinalIgnoreCase);
+
             foreach (var p in all)
             {
-                var today = scrapedAt.Date;
-                bool exists = _db.PriceHistory.Any(ph =>
-                    ph.Name == p.Name &&
-                    ph.ShopType == ShopType.COLES &&
-                    ph.OfferType == OfferType.ON_SPECIAL &&
-                    ph.ScrapedAt >= today && ph.ScrapedAt < today.AddDays(1));
-
-                if (!exists)
+                if (existingNames.Contains(p.Name ?? string.Empty)) continue;
+                _db.PriceHistory.Add(new PriceHistory
                 {
-                    _db.PriceHistory.Add(new PriceHistory
-                    {
-                        Name = p.Name,
-                        ImageUrl = p.ImageUrl ?? string.Empty,
-                        CurrentPrice = p.CurrentPrice,
-                        ScrapedAt = scrapedAt,
-                        OfferType = OfferType.ON_SPECIAL,
-                        ShopType = ShopType.COLES
-                    });
-                }
+                    Name = p.Name,
+                    ImageUrl = p.ImageUrl ?? string.Empty,
+                    CurrentPrice = p.CurrentPrice,
+                    ScrapedAt = scrapedAt,
+                    OfferType = OfferType.ON_SPECIAL,
+                    ShopType = ShopType.COLES
+                });
+                existingNames.Add(p.Name ?? string.Empty);
             }
             await _db.SaveChangesAsync();
 

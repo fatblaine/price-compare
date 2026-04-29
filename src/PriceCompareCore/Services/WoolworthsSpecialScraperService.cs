@@ -14,6 +14,7 @@ using PriceCompareCore.Interfaces;
 using PriceCompareData.Common;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
+using Microsoft.EntityFrameworkCore;
 using PriceCompareData.Entities.Common;
 using PriceCompareData.Entities.History;
 using PriceCompareData.Entities.Scraping;
@@ -285,27 +286,30 @@ namespace PriceCompareCore.Services
             }
 
             // 3. Store price history
+            var today = scrapedAt.Date;
+            var tomorrow = today.AddDays(1);
+            var existingNames = new HashSet<string>(
+                await _dbContext.PriceHistory
+                    .Where(ph => ph.ShopType == ShopType.WOOLWORTHS &&
+                                 ph.OfferType == OfferType.ON_SPECIAL &&
+                                 ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
+                    .Select(ph => ph.Name!)
+                    .ToListAsync(),
+                StringComparer.OrdinalIgnoreCase);
+
             foreach (var product in allProducts)
             {
-                var today = scrapedAt.Date;
-                bool exists = _dbContext.PriceHistory
-                    .Any(ph => ph.Name == product.DisplayName &&
-                               ph.ScrapedAt >= today &&
-                               ph.ScrapedAt < today.AddDays(1));
-
-                if (!exists)
+                if (existingNames.Contains(product.DisplayName ?? string.Empty)) continue;
+                _dbContext.PriceHistory.Add(new PriceHistory
                 {
-                    var priceHistory = new PriceHistory
-                    {
-                        Name = product.DisplayName,
-                        ImageUrl = product.LargeImageFile ?? string.Empty,
-                        CurrentPrice = product.Price,
-                        ScrapedAt = scrapedAt,
-                        OfferType = OfferType.ON_SPECIAL,
-                        ShopType = ShopType.WOOLWORTHS
-                    };
-                    _dbContext.PriceHistory.Add(priceHistory);
-                }
+                    Name = product.DisplayName,
+                    ImageUrl = product.LargeImageFile ?? string.Empty,
+                    CurrentPrice = product.Price,
+                    ScrapedAt = scrapedAt,
+                    OfferType = OfferType.ON_SPECIAL,
+                    ShopType = ShopType.WOOLWORTHS
+                });
+                existingNames.Add(product.DisplayName ?? string.Empty);
             }
             await _dbContext.SaveChangesAsync();
             await _ingestion.UpsertWwsAsync(allProducts);
