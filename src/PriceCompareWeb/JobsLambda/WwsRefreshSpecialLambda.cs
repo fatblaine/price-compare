@@ -26,8 +26,9 @@ namespace PriceCompareWeb.JobsLambda
             if (string.IsNullOrWhiteSpace(conn))
                 throw new InvalidOperationException("Missing database connection string.");
 
+            var csb = new Npgsql.NpgsqlConnectionStringBuilder(conn) { Pooling = false };
             var options = new DbContextOptionsBuilder<AppDbContext>()
-                .UseNpgsql(conn)
+                .UseNpgsql(csb.ConnectionString, o => o.CommandTimeout(120))
                 .Options;
             var db = new AppDbContext(options);
 
