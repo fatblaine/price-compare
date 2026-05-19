@@ -151,7 +151,7 @@
           }
         }
       },
-      "AWSSDK.Core/3.7.500.95": {
+      "AWSSDK.Core/3.7.500.96": {
         "type": "package",
         "compile": {
           "lib/net8.0/AWSSDK.Core.dll": {
@@ -164,10 +164,10 @@
           }
         }
       },
-      "AWSSDK.DynamoDBv2/3.7.513.1": {
+      "AWSSDK.DynamoDBv2/3.7.513.2": {
         "type": "package",
         "dependencies": {
-          "AWSSDK.Core": "[3.7.500.95, 4.0.0)"
+          "AWSSDK.Core": "[3.7.500.96, 4.0.0)"
         },
         "compile": {
           "lib/net8.0/AWSSDK.DynamoDBv2.dll": {
@@ -199,10 +199,10 @@
           }
         }
       },
-      "AWSSDK.Rekognition/3.7.502.55": {
+      "AWSSDK.Rekognition/3.7.502.56": {
         "type": "package",
         "dependencies": {
-          "AWSSDK.Core": "[3.7.500.95, 4.0.0)"
+          "AWSSDK.Core": "[3.7.500.96, 4.0.0)"
         },
         "compile": {
           "lib/net8.0/AWSSDK.Rekognition.dll": {
@@ -215,10 +215,10 @@
           }
         }
       },
-      "AWSSDK.S3/3.7.511.5": {
+      "AWSSDK.S3/3.7.511.6": {
         "type": "package",
         "dependencies": {
-          "AWSSDK.Core": "[3.7.500.95, 4.0.0)"
+          "AWSSDK.Core": "[3.7.500.96, 4.0.0)"
         },
         "compile": {
           "lib/net8.0/AWSSDK.S3.dll": {
@@ -231,10 +231,10 @@
           }
         }
       },
-      "AWSSDK.Scheduler/3.7.502.55": {
+      "AWSSDK.Scheduler/3.7.502.56": {
         "type": "package",
         "dependencies": {
-          "AWSSDK.Core": "[3.7.500.95, 4.0.0)"
+          "AWSSDK.Core": "[3.7.500.96, 4.0.0)"
         },
         "compile": {
           "lib/net8.0/AWSSDK.Scheduler.dll": {
@@ -3038,15 +3038,15 @@
         "logo.png"
       ]
     },
-    "AWSSDK.Core/3.7.500.95": {
-      "sha512": "q0iRQctC0n98mmqc5qksC7zNSl8ozBzyTFaCdcUtACsw5RXx5dO2EeO+AP9daVTLLszHXL61CZ7JCj8CwRMdow==",
+    "AWSSDK.Core/3.7.500.96": {
+      "sha512": "/eerYLuesPVAQoQbWthD2xJOUuoQee6nnRmbxx5aDGL6+lpBJr96Ega7rrlTj1ZbbVJQrofy31G7l1e+UwSZdw==",
       "type": "package",
-      "path": "awssdk.core/3.7.500.95",
+      "path": "awssdk.core/3.7.500.96",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
-        "awssdk.core.3.7.500.95.nupkg.sha512",
+        "awssdk.core.3.7.500.96.nupkg.sha512",
         "awssdk.core.nuspec",
         "images/AWSLogo.png",
         "lib/net35/AWSSDK.Core.dll",
@@ -3067,17 +3067,17 @@
         "tools/account-management.ps1"
       ]
     },
-    "AWSSDK.DynamoDBv2/3.7.513.1": {
-      "sha512": "rtkpz4r+M3z1SKAwDM0Htdu5JLLOB6jxKVfUqfsck1SY8gV8iQTcGnxXBn4tD6bjHJRrwwA16RGCjKGpDcGC1Q==",
+    "AWSSDK.DynamoDBv2/3.7.513.2": {
+      "sha512": "SjjKfpLq+K6+1iup8MKCDiOGWG6IHuj4BpU8auNJZxVcvRyYEc+w+q86ByFzmeegah9TG5XxaYcP/Zf7BwEDIw==",
       "type": "package",
-      "path": "awssdk.dynamodbv2/3.7.513.1",
+      "path": "awssdk.dynamodbv2/3.7.513.2",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "analyzers/dotnet/cs/AWSSDK.DynamoDBv2.CodeAnalysis.dll",
         "analyzers/dotnet/cs/SharedAnalysisCode.dll",
-        "awssdk.dynamodbv2.3.7.513.1.nupkg.sha512",
+        "awssdk.dynamodbv2.3.7.513.2.nupkg.sha512",
         "awssdk.dynamodbv2.nuspec",
         "images/AWSLogo.png",
         "lib/net35/AWSSDK.DynamoDBv2.dll",
@@ -3117,17 +3117,17 @@
         "lib/netstandard2.0/AWSSDK.Extensions.NETCore.Setup.pdb"
       ]
     },
-    "AWSSDK.Rekognition/3.7.502.55": {
-      "sha512": "noEDdMu0S8x075IDpuHjkge2P9GjkcK4lY5+5RnbguCFf+2w/s+749gU8AEXRojrnYtv5V+ucW63hhQ4ZrnjeA==",
+    "AWSSDK.Rekognition/3.7.502.56": {
+      "sha512": "LAJIvsom0WfyW/EyIDGfLqEYl1GM532n4ELzuMm8DAPfs71XrluY9onDYuhCRUrqMBuRL+uvjaRQCd05+fAu3w==",
       "type": "package",
-      "path": "awssdk.rekognition/3.7.502.55",
+      "path": "awssdk.rekognition/3.7.502.56",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "analyzers/dotnet/cs/AWSSDK.Rekognition.CodeAnalysis.dll",
         "analyzers/dotnet/cs/SharedAnalysisCode.dll",
-        "awssdk.rekognition.3.7.502.55.nupkg.sha512",
+        "awssdk.rekognition.3.7.502.56.nupkg.sha512",
         "awssdk.rekognition.nuspec",
         "images/AWSLogo.png",
         "lib/net35/AWSSDK.Rekognition.dll",
@@ -3149,17 +3149,17 @@
         "tools/uninstall.ps1"
       ]
     },
-    "AWSSDK.S3/3.7.511.5": {
-      "sha512": "+QaExRqAPOb5qAMQ9JOeWAofmef8poChLRgZsefpiLos6AFpOVoRzwkwgkp5H1ajCc7OMDldUC2oVAt4hAPdyg==",
+    "AWSSDK.S3/3.7.511.6": {
+      "sha512": "J4GKZ96qRsSixifzu2X88sfNTvh0PtfTG7wEsHfBOL/sfsBfseIsDPvrQqDr6ppW9M0pxqX8uCf/S4MY5hbU2g==",
       "type": "package",
-      "path": "awssdk.s3/3.7.511.5",
+      "path": "awssdk.s3/3.7.511.6",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "analyzers/dotnet/cs/AWSSDK.S3.CodeAnalysis.dll",
         "analyzers/dotnet/cs/SharedAnalysisCode.dll",
-        "awssdk.s3.3.7.511.5.nupkg.sha512",
+        "awssdk.s3.3.7.511.6.nupkg.sha512",
         "awssdk.s3.nuspec",
         "images/AWSLogo.png",
         "lib/net35/AWSSDK.S3.dll",
@@ -3181,17 +3181,17 @@
         "tools/uninstall.ps1"
       ]
     },
-    "AWSSDK.Scheduler/3.7.502.55": {
-      "sha512": "pO0fa3mPGscOrlbFlYfCafR0lDXQ47oE50HSs1cdzpDe8PTxP39R986V329mwFjCFX4mJBCxcAm2vhnW3r8k8w==",
+    "AWSSDK.Scheduler/3.7.502.56": {
+      "sha512": "QEsJh9suQYFKp/fQrNCrpEaKSsF/TXgpjzaqD+XWAvnocKqRqSAZT6iqt5CM3VzaMDOXXMZ535pt8QwtRx7FKw==",
       "type": "package",
-      "path": "awssdk.scheduler/3.7.502.55",
+      "path": "awssdk.scheduler/3.7.502.56",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "analyzers/dotnet/cs/AWSSDK.Scheduler.CodeAnalysis.dll",
         "analyzers/dotnet/cs/SharedAnalysisCode.dll",
-        "awssdk.scheduler.3.7.502.55.nupkg.sha512",
+        "awssdk.scheduler.3.7.502.56.nupkg.sha512",
         "awssdk.scheduler.nuspec",
         "images/AWSLogo.png",
         "lib/net35/AWSSDK.Scheduler.dll",
