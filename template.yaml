@@ -364,7 +364,7 @@ Resources:
     Type: AWS::Scheduler::Schedule
     Properties:
       Name: !Sub "price-compare-${Environment}-favorite-price-tracking"
-      ScheduleExpression: "cron(50 13 ? * WED *)"
+      ScheduleExpression: "cron(55 6 ? * WED *)"
       ScheduleExpressionTimezone: "Australia/Sydney"
       FlexibleTimeWindow:
         Mode: "OFF"

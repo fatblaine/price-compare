@@ -187,12 +187,25 @@ namespace PriceCompareCore.Services
                         break;
                     }
 
+                    // Pre-load latest match per source product for the whole page in one query
+                    var batchSourceIds = batch.Select(s => s.ProductId).ToList();
+                    var latestMatchBySource = new Dictionary<Guid, ProductMatch>();
+                    if (!request.Force)
+                    {
+                        var batchMatches = await db.ProductMatches.AsNoTracking()
+                            .Where(m => batchSourceIds.Contains(m.SourceProductId))
+                            .ToListAsync();
+                        latestMatchBySource = batchMatches
+                            .GroupBy(m => m.SourceProductId)
+                            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.UpdatedAt).First());
+                    }
+
                     foreach (var source in batch)
                     {
                         try
                         {
                             // Skip if we already have a fresh, high-confidence match.
-                            if (!request.Force && await HasFreshMatchAsync(db, source))
+                            if (!request.Force && HasFreshMatch(latestMatchBySource, source))
                             {
                                 job.Processed++;
                                 processed++;
@@ -229,7 +242,7 @@ namespace PriceCompareCore.Services
                                 }
 
                                 // Write topN candidates into productmatch.
-                                ApplyCandidates(db, source, candidates);
+                                await ApplyCandidatesAsync(db, source, candidates);
 
                                 // Update job counters.
                                 var hasSame = candidates.Any(c => c.MatchType == "same_product" || c.Score >= SameProductScore);
@@ -276,31 +289,32 @@ namespace PriceCompareCore.Services
             }
         }
 
-        private static async Task<bool> HasFreshMatchAsync(AppDbContext db, Product source)
+        private static bool HasFreshMatch(Dictionary<Guid, ProductMatch> latestBySource, Product source)
         {
-            var match = await db.ProductMatches.AsNoTracking()
-                .Where(m => m.SourceProductId == source.ProductId)
-                .OrderByDescending(m => m.UpdatedAt)
-                .FirstOrDefaultAsync();
-
-            if (match == null)
-            {
-                return false;
-            }
-
-            // Fresh if updated after last scrape and score is high enough.
-            return match.Score >= SameProductScore && match.UpdatedAt >= source.LastSeenAt;
+            return latestBySource.TryGetValue(source.ProductId, out var match)
+                && match.Score >= SameProductScore
+                && match.UpdatedAt >= source.LastSeenAt;
         }
 
-        private static void ApplyCandidates(AppDbContext db, Product source, IReadOnlyList<ProductMatchCandidate> candidates)
+        private static async Task ApplyCandidatesAsync(AppDbContext db, Product source, IReadOnlyList<ProductMatchCandidate> candidates)
         {
+            // Load existing matches for this source in one query, then upsert in-memory
+            var targetIds = candidates.Select(c => c.Target.ProductId).ToList();
+            var existingMatches = await db.ProductMatches
+                .Where(m => m.SourceProductId == source.ProductId && targetIds.Contains(m.TargetProductId))
+                .ToListAsync();
+            var byTarget = existingMatches.ToDictionary(m => m.TargetProductId);
+
             foreach (var c in candidates)
             {
-                // Upsert by (SourceProductId, TargetProductId)
-                var existing = db.ProductMatches
-                    .FirstOrDefault(m => m.SourceProductId == source.ProductId && m.TargetProductId == c.Target.ProductId);
-
-                if (existing == null)
+                if (byTarget.TryGetValue(c.Target.ProductId, out var existing))
+                {
+                    existing.Score = c.Score;
+                    existing.Method = c.Method;
+                    existing.MatchType = c.MatchType;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+                else
                 {
                     db.ProductMatches.Add(new ProductMatch
                     {
@@ -315,13 +329,6 @@ namespace PriceCompareCore.Services
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     });
-                }
-                else
-                {
-                    existing.Score = c.Score;
-                    existing.Method = c.Method;
-                    existing.MatchType = c.MatchType;
-                    existing.UpdatedAt = DateTime.UtcNow;
                 }
             }
         }

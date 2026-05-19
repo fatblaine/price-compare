@@ -15,12 +15,12 @@ namespace PriceCompareWeb.JobsLambda
     public class FavoritePriceTrackingLambda
     {
         private readonly IFavoritePriceTrackingService _trackingService;
-        private readonly string _connString;
+        private readonly AppDbContext _db;
         private readonly ILogger<FavoritePriceTrackingService> _logger;
 
         public FavoritePriceTrackingLambda()
         {
-            _connString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+            var conn = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
                 ?? throw new InvalidOperationException("Missing database connection string.");
 
             var config = new ConfigurationBuilder()
@@ -30,22 +30,16 @@ namespace PriceCompareWeb.JobsLambda
             var emailOptions = config.GetSection("Email").Get<EmailOptions>() ?? new EmailOptions();
             var favoriteSettings = config.GetSection("FavoriteAlerts").Get<FavoriteAlertSettings>() ?? new FavoriteAlertSettings();
 
-            var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
-                .UseNpgsql(_connString)
+            var csb = new Npgsql.NpgsqlConnectionStringBuilder(conn) { Pooling = false };
+            _db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+                .UseNpgsql(csb.ConnectionString, o => o.CommandTimeout(120))
                 .Options);
 
             var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
             _logger = loggerFactory.CreateLogger<FavoritePriceTrackingService>();
 
             var emailSender = new SmtpEmailSender(Options.Create(emailOptions));
-            _trackingService = new FavoritePriceTrackingService(db, emailSender, _logger, Options.Create(favoriteSettings));
-        }
-
-        private AppDbContext CreateDb()
-        {
-            return new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
-                .UseNpgsql(_connString)
-                .Options);
+            _trackingService = new FavoritePriceTrackingService(_db, emailSender, _logger, Options.Create(favoriteSettings));
         }
 
         public async Task Handler()
@@ -88,8 +82,7 @@ namespace PriceCompareWeb.JobsLambda
                     Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
                 };
 
-                using var db = CreateDb();
-                await JobRunRecorder.TryRecordAsync(db, run, _logger);
+                await JobRunRecorder.TryRecordAsync(_db, run, _logger);
             }
         }
     }

@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Playwright;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.Common;
@@ -182,16 +183,16 @@ namespace PriceCompareCore.Services
             }
 
             var today = scrapedAt.Date;
+            var tomorrow = today.AddDays(1);
             var priceHistoryRows = new List<PriceHistory>(products.Count);
+
+            var existingDict = await _dbContext.PriceHistory
+                .Where(ph => ph.ShopType == ShopType.WOOLWORTHS && ph.OfferType == OfferType.SUMMER_PRICE && ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
+                .ToDictionaryAsync(ph => ph.Name, StringComparer.OrdinalIgnoreCase, ct);
 
             foreach (var product in products)
             {
-                var existing = _dbContext.PriceHistory.FirstOrDefault(ph =>
-                    ph.Name == product.DisplayName &&
-                    ph.ShopType == ShopType.WOOLWORTHS &&
-                    ph.OfferType == OfferType.SUMMER_PRICE &&
-                    ph.ScrapedAt >= today &&
-                    ph.ScrapedAt < today.AddDays(1));
+                existingDict.TryGetValue(product.DisplayName, out var existing);
 
                 var priceHistory = new PriceHistory
                 {
