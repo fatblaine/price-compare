@@ -32,10 +32,11 @@ namespace PriceCompareTests
             var logger = new Mock<ILogger<WoolworthsSpecialScraperService>>();
             var cache = new Mock<IDistributedCache>();
             var ingestion = new Mock<PriceCompareCore.Interfaces.IIngestionService>();
+            var export = new Mock<PriceCompareCore.Interfaces.IScrapeExportService>();
             var dbContext = GetInMemoryDbContext();
 
             var service = new WoolworthsSpecialScraperService(
-                logger.Object, cache.Object, dbContext, ingestion.Object);
+                logger.Object, cache.Object, dbContext, ingestion.Object, export.Object);
 
             // Act
             var result = service.ParseProducts(fakeJson);
