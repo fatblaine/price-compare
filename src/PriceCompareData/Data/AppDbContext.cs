@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using PriceCompareData.Entities;
@@ -78,9 +79,21 @@ namespace PriceCompareData.Data
                         entity.Property(e => e.MatchType).HasColumnName("matchtype");
 
                         entity.Property(e => e.IsConfirmed).HasColumnName("isconfirmed");
-                        entity.Property(e => e.EvidenceJson)
-                              .HasColumnName("evidencejson")
-                              .HasColumnType("jsonb");
+                        var evidence = entity.Property(e => e.EvidenceJson)
+                              .HasColumnName("evidencejson");
+                        // Npgsql maps JsonDocument natively to jsonb. The InMemory provider
+                        // (used in tests) has no JsonDocument mapping since EF Core 10, so
+                        // convert to its raw text there. EF skips the converter for null values.
+                        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+                        {
+                              evidence.HasConversion(
+                                    v => v!.RootElement.GetRawText(),
+                                    v => JsonDocument.Parse(v, default));
+                        }
+                        else
+                        {
+                              evidence.HasColumnType("jsonb");
+                        }
 
                         entity.Property(e => e.CreatedAt).HasColumnName("createdat");
                         entity.Property(e => e.UpdatedAt).HasColumnName("updatedat");

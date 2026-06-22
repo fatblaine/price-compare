@@ -66,7 +66,8 @@ public class UnitTest1
             logger: NullLogger<ColesDownScraperService>.Instance,
             cache: null,
             ingestion: null,
-            dbContext: actContext);
+            dbContext: actContext,
+            export: null);
 
         var result = await service.GetPriceHistoryAsync("Apple", 1, 1);
 
