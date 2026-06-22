@@ -46,10 +46,11 @@ namespace PriceCompareTests
             var logger = new Mock<ILogger<ColesDownScraperService>>();
             var cache = new Mock<IDistributedCache>();
             var ingestion = new Mock<IIngestionService>();
+            var export = new Mock<IScrapeExportService>();
             var dbContext = GetInMemoryDbContext();
 
             var service = new ColesDownScraperService(
-                httpClient, logger.Object, cache.Object, dbContext, ingestion.Object);
+                httpClient, logger.Object, cache.Object, dbContext, ingestion.Object, export.Object);
 
             // Act
             var result = await service.GetAllDownDownProductsAsync();

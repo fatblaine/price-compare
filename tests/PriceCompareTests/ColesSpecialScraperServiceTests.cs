@@ -25,9 +25,10 @@ namespace PriceCompareTests
             var logger = new Mock<ILogger<ColesSpecialScraperService>>();
             var cache = new Mock<IDistributedCache>();
             var ingestion = new Mock<PriceCompareCore.Interfaces.IIngestionService>();
+            var export = new Mock<PriceCompareCore.Interfaces.IScrapeExportService>();
             using var dbContext = GetInMemoryDbContext();
 
-            var service = new ColesSpecialScraperService(logger.Object, cache.Object, dbContext, ingestion.Object);
+            var service = new ColesSpecialScraperService(logger.Object, cache.Object, dbContext, ingestion.Object, export.Object);
 
             await service.GetAllOnSpecialProductsAsync();
         }
