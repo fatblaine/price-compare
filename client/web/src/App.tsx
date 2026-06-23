@@ -207,15 +207,16 @@ function App() {
 	};
 
 	return (
-		<Box sx={{ bgcolor: "background.default", minHeight: "100vh" }}>
+		<Box sx={{ bgcolor: "transparent", minHeight: "100vh" }}>
 			<AppBar
 				position="sticky"
 				elevation={0}
 				sx={{
-					background: "linear-gradient(90deg, rgba(59,130,246,0.12) 0%, rgba(139,92,246,0.12) 100%)",
-					backdropFilter: "blur(12px)",
-					WebkitBackdropFilter: "blur(12px)",
-					borderBottom: "1px solid rgba(99, 102, 241, 0.15)",
+					background: "rgba(255,255,255,0.55)",
+					backdropFilter: "blur(30px) saturate(180%)",
+					WebkitBackdropFilter: "blur(30px) saturate(180%)",
+					borderBottom: "0.5px solid rgba(255,255,255,0.6)",
+					boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
 				}}
 			>
 				<Toolbar sx={{ py: { xs: 1, sm: 1.5 } }}>
@@ -250,22 +251,30 @@ function App() {
 								value={mainTab}
 								onChange={handleTabChange}
 								textColor="primary"
+								variant="scrollable"
+								scrollButtons={false}
+								allowScrollButtonsMobile
 								sx={{
 									ml: { xs: 0, md: 2 },
 									mt: { xs: 1, md: 0 },
 									minHeight: "auto",
+									maxWidth: "100%",
 									width: { xs: "100%", md: "auto" },
-									justifyContent: { xs: "center", md: "flex-start" },
+									"& .MuiTabs-flexContainer": {
+										justifyContent: { xs: "center", md: "flex-start" },
+									},
 									"& .MuiTab-root": {
 										minHeight: "auto",
+										minWidth: "auto",
+										px: { xs: 1.25, md: 2 },
 										fontSize: { xs: 12, sm: 13, md: 14 },
 										color: "text.secondary",
 									},
 									"& .MuiTab-root.Mui-selected": {
-										color: "#6366f1",
+										color: "#6e7bff",
 									},
 									"& .MuiTabs-indicator": {
-										backgroundColor: "#6366f1",
+										backgroundColor: "#6e7bff",
 									},
 								}}
 							>
@@ -277,65 +286,63 @@ function App() {
 								)}
 							</Tabs>
 						)}
-						{isAuthenticated && userEmail && (
-							<Typography
-								variant="body2"
-								sx={{
-									ml: { xs: 0, md: 2 },
-									mt: { xs: 1, md: 0 },
-									fontWeight: 500,
-									color: "text.secondary",
-									maxWidth: { xs: 140, sm: 200 },
-									overflow: "hidden",
-									textOverflow: "ellipsis",
-									whiteSpace: "nowrap",
-								}}
-							>
-								{userEmail}
-							</Typography>
-						)}
-						{isGuest && (
-							<Typography
-								variant="body2"
-								sx={{
-									ml: { xs: 0, md: 2 },
-									mt: { xs: 1, md: 0 },
-									fontWeight: 500,
-									color: "text.secondary",
-								}}
-							>
-								Guest access
-							</Typography>
-						)}
-						{isAuthenticated && (
-							<Button
-								onClick={handleLogout}
-								sx={{
-									fontWeight: 500,
-									ml: { xs: 0, md: 2 },
-									mt: { xs: 1, md: 0 },
-									color: "text.secondary",
-								}}
-							>
-								Log out
-							</Button>
-						)}
-						{(isGuest || (!isAuthenticated && !auth.isLoading)) && (
-							<Button
-								variant="contained"
-								onClick={() => auth.signinRedirect()}
-								sx={{
-									fontWeight: 500,
-									ml: { xs: 0, md: 2 },
-									mt: { xs: 1, md: 0 },
-									background: "linear-gradient(90deg, #3b82f6, #8b5cf6)",
-									boxShadow: "none",
-									"&:hover": { background: "linear-gradient(90deg, #2563eb, #7c3aed)", boxShadow: "none" },
-								}}
-							>
-								Sign in
-							</Button>
-						)}
+						<Box
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+								flexWrap: "wrap",
+								gap: 1,
+								width: { xs: "100%", md: "auto" },
+								mt: { xs: 1, md: 0 },
+								ml: { md: 2 },
+							}}
+						>
+							{isAuthenticated && userEmail && (
+								<Typography
+									variant="body2"
+									sx={{
+										fontWeight: 500,
+										color: "text.secondary",
+										maxWidth: { xs: 180, sm: 200 },
+										overflow: "hidden",
+										textOverflow: "ellipsis",
+										whiteSpace: "nowrap",
+									}}
+								>
+									{userEmail}
+								</Typography>
+							)}
+							{isGuest && (
+								<Typography
+									variant="body2"
+									sx={{ fontWeight: 500, color: "text.secondary" }}
+								>
+									Guest access
+								</Typography>
+							)}
+							{isAuthenticated && (
+								<Button
+									onClick={handleLogout}
+									sx={{ fontWeight: 500, color: "text.secondary" }}
+								>
+									Log out
+								</Button>
+							)}
+							{(isGuest || (!isAuthenticated && !auth.isLoading)) && (
+								<Button
+									variant="contained"
+									onClick={() => auth.signinRedirect()}
+									sx={{
+										fontWeight: 500,
+										background: "linear-gradient(135deg, #6e7bff, #8b6eff)",
+										"&:hover": { background: "linear-gradient(135deg, #6e7bff, #8b6eff)", filter: "brightness(1.06)" },
+									}}
+								>
+									Sign in
+								</Button>
+							)}
+						</Box>
 					</Container>
 				</Toolbar>
 			</AppBar>

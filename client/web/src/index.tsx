@@ -2,9 +2,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "react-oidc-context";
+import { ThemeProvider } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
 import "./index.css";
 import "driver.js/dist/driver.css";
 import App from "./App";
+import theme from "./theme";
 import { oidcConfig } from "./auth/oidcConfig";
 import reportWebVitals from "./reportWebVitals";
 
@@ -26,7 +29,10 @@ root.render(
 					);
 				}}
 			>
-				<App />
+				<ThemeProvider theme={theme}>
+					<CssBaseline />
+					<App />
+				</ThemeProvider>
 			</AuthProvider>
 		</BrowserRouter>
 	</React.StrictMode>,

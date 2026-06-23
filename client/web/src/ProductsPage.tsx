@@ -72,8 +72,8 @@ function ProductImage({
 			<Box
 				sx={{
 					height: { xs: 130, sm: 170 },
-					borderRadius: 2.5,
-					bgcolor: "#f5f5f7",
+					borderRadius: 4,
+					bgcolor: "rgba(255,255,255,0.55)",
 					display: "flex",
 					alignItems: "center",
 					justifyContent: "center",
@@ -102,8 +102,8 @@ function ProductImage({
 				height: 170,
 				width: "100%",
 				objectFit: "contain",
-				borderRadius: 2.5,
-				backgroundColor: "#ffffff",
+				borderRadius: 4,
+				backgroundColor: "rgba(255,255,255,0.7)",
 			}}
 		/>
 	);
@@ -356,13 +356,32 @@ export default function ProductsPage() {
 
 	return (
 		<Box sx={{ width: "100%" }}>
-			<Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
+			<Stack
+				direction={{ xs: "column", sm: "row" }}
+				spacing={2}
+				alignItems="center"
+				justifyContent="center"
+				sx={{
+					mb: 3,
+					p: 1.5,
+					borderRadius: 5,
+					width: { xs: "100%", sm: "fit-content" },
+					maxWidth: "100%",
+					mx: "auto",
+					background: "rgba(255,255,255,0.55)",
+					backdropFilter: "blur(24px) saturate(180%)",
+					WebkitBackdropFilter: "blur(24px) saturate(180%)",
+					border: "0.5px solid rgba(255,255,255,0.7)",
+					boxShadow: "0 8px 30px rgba(60,60,90,0.08)",
+				}}
+			>
 				<TextField
 					id="search-input"
 					label="Search by name"
 					variant="outlined"
 					size="small"
 					fullWidth={isXs}
+					sx={{ width: { xs: "100%", sm: 240 } }}
 					value={search}
 					onChange={(e) => {
 						setSearch(e.target.value);
@@ -399,9 +418,19 @@ export default function ProductsPage() {
 						))}
 					</Select>
 				</FormControl>
+				<Box
+					sx={{
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						flexWrap: "wrap",
+						gap: 1.5,
+						width: { xs: "100%", sm: "auto" },
+					}}
+				>
 				<Button
 					variant="contained"
-					sx={{ width: { xs: "100%", sm: "auto" } }}
+					sx={{ flexGrow: { xs: 1, sm: 0 } }}
 					onClick={() => setRefreshTick((v) => v + 1)}
 				>
 					Search
@@ -426,14 +455,18 @@ export default function ProductsPage() {
 				</span>
 			</Tooltip>
 			<TourButton onClick={startTour} disabled={compareOpen} />
+				</Box>
 			</Stack>
 
 			<Box
 				sx={{
 					position: "relative",
-					borderRadius: 4,
-					border: "1px solid #edf1f5",
-					bgcolor: "#fafafa",
+					borderRadius: 5,
+					border: "0.5px solid rgba(255,255,255,0.6)",
+					background: "rgba(255,255,255,0.35)",
+					backdropFilter: "blur(20px) saturate(180%)",
+					WebkitBackdropFilter: "blur(20px) saturate(180%)",
+					boxShadow: "0 8px 30px rgba(60,60,90,0.06)",
 					p: { xs: 1.5, sm: 2.5 },
 					overflow: "hidden",
 				}}
@@ -502,10 +535,17 @@ export default function ProductsPage() {
 									sx={{
 										display: "flex",
 										flexDirection: "column",
-										borderRadius: 3.5,
-										border: "1px solid #e8edf2",
-										bgcolor: "#ffffff",
-										boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
+										borderRadius: 6,
+										border: "0.5px solid rgba(255,255,255,0.85)",
+										background: "rgba(255,255,255,0.6)",
+										backdropFilter: "blur(24px) saturate(180%)",
+										WebkitBackdropFilter: "blur(24px) saturate(180%)",
+										boxShadow: "0 10px 34px rgba(50,55,95,0.1)",
+										transition: "transform .25s ease, box-shadow .25s ease",
+										"&:hover": {
+											transform: "translateY(-5px)",
+											boxShadow: "0 20px 48px rgba(50,55,95,0.18)",
+										},
 									}}
 								>
 									<Box
@@ -514,7 +554,7 @@ export default function ProductsPage() {
 											pt: 2.5,
 											pb: 2,
 											background:
-												"linear-gradient(180deg, #f5f5f7 0%, #ffffff 100%)",
+												"linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.4) 100%)",
 										}}
 									>
 										<ProductImage src={row.imageUrl} alt={row.name} />
