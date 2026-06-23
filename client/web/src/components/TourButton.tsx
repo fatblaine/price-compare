@@ -13,7 +13,7 @@ export default function TourButton({ onClick, disabled }: TourButtonProps) {
 			size="small"
 			onClick={onClick}
 			disabled={disabled}
-			sx={{ width: { xs: "100%", sm: "auto" }, whiteSpace: "nowrap" }}
+			sx={{ width: "auto", whiteSpace: "nowrap" }}
 		>
 			Tour / Help
 		</Button>
