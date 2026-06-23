@@ -1,13 +1,65 @@
 body {
 	margin: 0;
 	font-family:
-		-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-		"Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+		-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+		"Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+	background: #eef0f4;
 }
 
 code {
 	font-family:
 		source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+/* ===== Ambient colour-mesh background (liquid glass) ===== */
+@keyframes meshDrift {
+	0% {
+		transform: translate(0, 0) scale(1);
+	}
+	50% {
+		transform: translate(-3%, 2%) scale(1.05);
+	}
+	100% {
+		transform: translate(0, 0) scale(1);
+	}
+}
+
+body::before {
+	content: "";
+	position: fixed;
+	inset: -20%;
+	z-index: 0;
+	pointer-events: none;
+	animation: meshDrift 28s ease-in-out infinite;
+	background:
+		radial-gradient(40% 40% at 18% 22%, rgba(120, 135, 255, 0.55), transparent 70%),
+		radial-gradient(38% 38% at 82% 18%, rgba(255, 140, 180, 0.45), transparent 70%),
+		radial-gradient(45% 45% at 75% 80%, rgba(120, 205, 255, 0.5), transparent 70%),
+		radial-gradient(40% 40% at 25% 85%, rgba(180, 160, 255, 0.45), transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	body::before {
+		animation: none;
+	}
+}
+
+/* App content must sit above the ambient mesh */
+#root {
+	position: relative;
+	z-index: 1;
+}
+
+/* ===== Custom scrollbar ===== */
+*::-webkit-scrollbar {
+	width: 10px;
+}
+*::-webkit-scrollbar-thumb {
+	background: rgba(120, 120, 128, 0.3);
+	border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
 }
