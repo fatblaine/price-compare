@@ -67,47 +67,20 @@ namespace PriceCompareCore.Services
 
                 var hasFilter = !string.IsNullOrWhiteSpace(name) || shopType.HasValue || categoryId.HasValue;
 
-                // Materialise same_product source IDs up-front into a HashSet.
-                // A correlated EXISTS in ORDER BY forces PostgreSQL to evaluate the subquery for every
-                // row before it can sort, which caused 30-second timeouts on the 28k-product table.
-                // A single indexed scan of ProductMatches (MatchType = 'same_product') is much faster,
-                // and the resulting HashSet drives an efficient = ANY(@ids) predicate in the ORDER BY.
-                HashSet<Guid> sameProductIds;
-                try
-                {
-                    using var matchCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                    var idList = await _db.ProductMatches
-                        .AsNoTracking()
-                        .Where(m => m.MatchType == "same_product")
-                        .Select(m => m.SourceProductId)
-                        .Distinct()
-                        .ToListAsync(matchCts.Token);
-                    sameProductIds = new HashSet<Guid>(idList);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "GetProducts same_product ID prefetch failed; ordering without match priority.");
-                    sameProductIds = new HashSet<Guid>();
-                }
-
-                IQueryable<Product> orderedQuery;
-                if (hasFilter)
-                {
-                    orderedQuery = query
-                        .Select(p => new { Product = p, HasMatch = sameProductIds.Contains(p.ProductId) })
-                        .OrderByDescending(x => x.HasMatch)
-                        .ThenBy(x => x.Product.Name)
-                        .ThenBy(x => x.Product.ProductId)
-                        .Select(x => x.Product);
-                }
-                else
-                {
-                    orderedQuery = query
-                        .Select(p => new { Product = p, HasMatch = sameProductIds.Contains(p.ProductId) })
-                        .OrderByDescending(x => x.HasMatch)
-                        .ThenBy(x => x.Product.ProductId)
-                        .Select(x => x.Product);
-                }
+                // same_product-first ordering removed (BTS-148).
+                // Previously this prefetched ALL same_product source IDs (a full scan of the 276k-row
+                // productmatch table on every request) and used a multi-thousand-element = ANY(@ids)
+                // expression inside ORDER BY. That forced PostgreSQL to read and sort the entire
+                // current-product set before paging, which timed out (30s) once the instance was
+                // throttled to baseline disk IO — returning empty "no products" and never caching,
+                // so every subsequent request re-ran the heavy query (a self-sustaining IO death spiral).
+                // Ordering now uses only (Name, ProductId), which can use the IX_Products_ShopType_Name
+                // index when a shop filter is applied. The frontend (ProductsPage useMemo over
+                // compareDataMap) already sorts same_product matches first within the visible page, so
+                // only cross-page match concentration is dropped — an acceptable trade-off.
+                IQueryable<Product> orderedQuery = hasFilter
+                    ? query.OrderBy(p => p.Name).ThenBy(p => p.ProductId)
+                    : query.OrderBy(p => p.ProductId);
 
                 var itemsQuery = orderedQuery
                     .Skip((page - 1) * pageSize)
