@@ -274,6 +274,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Favorites/{productId}
             Method: PUT
+        AdminWhoAmIGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/admin/whoami
+            Method: GET
         AdminSchedulesGet:
           Type: HttpApi
           Properties:
