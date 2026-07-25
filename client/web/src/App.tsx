@@ -29,7 +29,7 @@ import LoginPage from "./LoginPage";
 import CallbackPage from "./CallbackPage";
 import { clearGuestSession, getStoredGuest, setGuestSession } from "./api/auth";
 import { buildCognitoLogoutUrl } from "./auth/oidcConfig";
-import { fetchAdminHealth } from "./api/admin";
+import { fetchAdminWhoAmI } from "./api/admin";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
 import AdminJobsPage from "./AdminJobsPage";
@@ -72,7 +72,7 @@ function App() {
 		}
 		(async () => {
 			try {
-				await fetchAdminHealth(1);
+				await fetchAdminWhoAmI();
 				if (active) setIsAdmin(true);
 			} catch {
 				if (active) setIsAdmin(false);

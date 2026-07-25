@@ -16,6 +16,10 @@ namespace PriceCompareWeb.Controllers.Models
         int? LastRunDurationMs,
         string? LastRunErrorMessage);
 
+    public record AdminWhoAmIDto(
+        bool IsAdmin,
+        string? Email);
+
     public record AdminFailureDto(
         string JobName,
         string Source,

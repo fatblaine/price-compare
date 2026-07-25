@@ -473,6 +473,13 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireAssertion(ctx =>
         {
+            // An unverified email proves nothing about who owns it, so an allow-listed
+            // address alone must not grant admin. Cognito emits email_verified as a JSON
+            // boolean; the JWT handler stringifies it with no contractual casing.
+            var emailVerified = ctx.User.FindFirstValue("email_verified");
+            if (!string.Equals(emailVerified, "true", StringComparison.OrdinalIgnoreCase))
+                return false;
+
             var email = ctx.User.FindFirstValue(ClaimTypes.Email);
             return !string.IsNullOrWhiteSpace(email) &&
                    adminEmails.Any(a => string.Equals(a, email, StringComparison.OrdinalIgnoreCase));

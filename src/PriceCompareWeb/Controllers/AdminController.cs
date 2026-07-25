@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,16 @@ public class AdminController : ControllerBase
         _db = db;
         _scheduleService = scheduleService;
         _scrapeImportSqlService = scrapeImportSqlService;
+    }
+
+    /// <summary>
+    /// Cheapest possible probe of the AdminOnly policy: the frontend calls this on every
+    /// login just to learn whether it is allowed through, so it must not touch the DB.
+    /// </summary>
+    [HttpGet("whoami")]
+    public IActionResult WhoAmI()
+    {
+        return Ok(new AdminWhoAmIDto(true, User.FindFirstValue(ClaimTypes.Email)));
     }
 
     [HttpGet("schedules")]
