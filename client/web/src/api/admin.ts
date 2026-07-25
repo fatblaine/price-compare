@@ -56,6 +56,18 @@ export type AdminHealth = {
 	recentFailures: AdminFailure[];
 };
 
+export type AdminWhoAmI = {
+	isAdmin: boolean;
+	email?: string | null;
+};
+
+// Lightweight probe of the AdminOnly policy: resolves for admins, rejects (403)
+// for everyone else. Does no DB work server-side, unlike fetchAdminHealth.
+export async function fetchAdminWhoAmI(): Promise<AdminWhoAmI> {
+	const res = await axios.get(`${API_BASE}/api/admin/whoami`);
+	return res.data;
+}
+
 export async function fetchAdminSchedules(source?: string): Promise<JobSchedule[]> {
 	const params = source ? { source } : undefined;
 	const res = await axios.get(`${API_BASE}/api/admin/schedules`, { params });
