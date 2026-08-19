@@ -197,8 +197,22 @@ namespace PriceCompareCore.Services
                     continue;
                 }
 
-                if (fav.LastNotifiedPrice.HasValue &&
-                    latestPrice >= fav.LastNotifiedPrice.Value)
+                var dropAmount = oldPrice.Value - latestPrice;
+                decimal? dropPercent = null;
+                if (oldPrice.Value > 0)
+                {
+                    dropPercent = (dropAmount / oldPrice.Value) * 100m;
+                }
+
+                // Noise filter only. The previous "must beat the all-time lowest
+                // notified price" gate (latestPrice >= LastNotifiedPrice) was removed:
+                // it silenced genuine week-over-week drops whenever the new price was
+                // still above an earlier notified low (e.g. $28 -> $14 after a prior
+                // $9 alert). We now notify on any week-over-week drop; MinDropPercent
+                // (default 0) optionally skips trivial dips. Duplicate sends are still
+                // prevented by isDrop (a flat price is not a drop) plus NotifyCooldown.
+                if (_settings.MinDropPercent > 0m &&
+                    (!dropPercent.HasValue || dropPercent.Value < _settings.MinDropPercent))
                 {
                     result.Skipped++;
                     continue;
@@ -212,13 +226,6 @@ namespace PriceCompareCore.Services
                     TriggeredAt = DateTime.UtcNow,
                     Status = "Pending"
                 };
-
-                var dropAmount = oldPrice.Value - latestPrice;
-                decimal? dropPercent = null;
-                if (oldPrice.Value > 0)
-                {
-                    dropPercent = (dropAmount / oldPrice.Value) * 100m;
-                }
 
                 var favoritesUrl = BuildFavoritesUrl();
 
