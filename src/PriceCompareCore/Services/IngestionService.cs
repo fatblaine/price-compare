@@ -139,9 +139,31 @@ namespace PriceCompareCore.Services
 
             var shopTypes = list.Select(c => c.ShopType).Distinct().ToList();
 
-            // Load all existing products for the batch's shop type(s) in one query
+            // Load only the existing products this batch could possibly match, keyed the same way
+            // the lookups below are (SourceId first, Name as fallback).
+            //
+            // This previously loaded EVERY product for the shop type on every scraper run. With ~26
+            // weekly scrapers each pulling the whole shop catalogue into memory (and into the EF
+            // change tracker), that was the single largest source of Supabase read pressure and of
+            // scraper runtime. A batch is typically a few hundred to a couple of thousand rows, so
+            // scoping the query is an order-of-magnitude reduction. Npgsql translates these
+            // Contains() calls to `= ANY(@p)` (one array parameter each), not a giant IN list.
+            var batchSourceIds = list
+                .Where(c => !string.IsNullOrWhiteSpace(c.SourceId))
+                .Select(c => c.SourceId!)
+                .Distinct()
+                .ToList();
+
+            var batchNames = list
+                .Where(c => !string.IsNullOrWhiteSpace(c.Name))
+                .Select(c => c.Name!)
+                .Distinct()
+                .ToList();
+
             var existingProducts = await _dbContext.Products
-                .Where(p => shopTypes.Contains(p.ShopType))
+                .Where(p => shopTypes.Contains(p.ShopType)
+                            && ((p.SourceId != null && batchSourceIds.Contains(p.SourceId))
+                                || (p.Name != null && batchNames.Contains(p.Name))))
                 .ToListAsync();
 
             // Build O(1) lookups: SourceId-first, Name-fallback
