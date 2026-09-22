@@ -3,7 +3,6 @@
 PriceCompare is a full-stack app that scrapes, stores and compares grocery prices from Coles and Woolworths (Australia). Users can browse and search products, compare an item against its precomputed match at the other supermarket, view price history, track favourites with price-drop email alerts, and upload receipts for OCR parsing.
 
 - Production: <https://www.price-peer.com>
-- S3 static site: <http://pricecompare-frontend-prod.s3-website-ap-southeast-2.amazonaws.com>
 
 ---
 
