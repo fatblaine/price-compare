@@ -1,198 +1,240 @@
-# PriceCompare: Grocery Price Tracker for Woolworths & Coles
+# PriceCompare (Price Peer): Grocery Price Tracker for Coles & Woolworths
 
-PriceCompare is a full‑stack app that tracks and compares grocery prices from Woolworths and Coles. It supports searching, basic product listing with filters, price comparison across shops, and 7‑day price history visualisation.
+PriceCompare is a full-stack app that scrapes, stores and compares grocery prices from Coles and Woolworths (Australia). Users can browse and search products, compare an item against its precomputed match at the other supermarket, view price history, track favourites with price-drop email alerts, and upload receipts for OCR parsing.
 
-The backend is an ASP.NET Core Web API (net8.0) with EF Core and scheduled jobs; the frontend is React + TypeScript using MUI DataGrid. Scrapers ingest “Down Down” and “On Special” items and write both a product base table and price history.
-
-URL: <http://pricecompare-frontend-prod.s3-website-ap-southeast-2.amazonaws.com>
+- Production: <https://www.price-peer.com>
+- S3 static site: <http://pricecompare-frontend-prod.s3-website-ap-southeast-2.amazonaws.com>
 
 ---
 
 ## Features
 
-- Favorite price tracking with digest email alerts (per user, biggest drop first)
-- List and filter products by name and shop (server‑side pagination)
-- Compare a selected product with similar items from the other shop
-- 7‑day price trend chart (Coles and Woolworths)
-- Scraping endpoints to ingest Coles/Woolworths specials and “Down Down” items
-- Redis caching for scraped results (optional)
-- Swagger for API exploration (Development)
+- **Product browsing** – server-side paginated list with name/shop/category filters, latest price and promo text (latest per-shop scrape only; responses cached for 5 minutes).
+- **Cross-shop comparison** – compare dialog backed by precomputed `productmatch` rows (`same_product` / `comparable`), with a purchase recommendation on each product card ("X is cheaper! (save $Y)").
+- **Price history chart** – per-product price trend (Recharts).
+- **AI description search** – find products from a free-text description (OpenRouter embeddings, rate-limited per user/IP).
+- **Favourites & price alerts** – weekly job compares the latest price against last week's; all drops for a user go into one digest email, sorted by % drop.
+- **Receipts** – upload a receipt image → S3 → AWS Rekognition OCR → parsed line items matched to products; items can be edited afterwards.
+- **Admin console** (`/admin`, allow-listed verified emails only) – job schedules and run history/health, match-job runner, LLM match review, and a manual match review/override grid.
+- **Onboarding tour** – guided walkthrough built with driver.js.
+
+---
+
+## Architecture
+
+```
+Scrapers (local, Quartz) ──► IngestionService ──► PostgreSQL (Supabase)
+        │                      upsert product +        ▲
+        └─► optional SQL export  write pricehistory     │
+             (exports/) ──► tools/run-sql-imports.ps1 ──┘
+
+Match job (exact → vector → fallback, optional LLM verify) ──► productmatch
+Compare endpoints read productmatch (no realtime matching on the hot path)
+
+React SPA (S3) ──► API Gateway (HTTP API) ──► PriceCompareApi Lambda (ASP.NET Core)
+EventBridge Scheduler ──► FavoritePriceTrackingJob Lambda ──► SMTP digest email
+```
+
+| Project | Role |
+|---|---|
+| `src/PriceCompareWeb` | ASP.NET Core Web API: controllers, DI wiring and Quartz schedule (`Program.cs`), Lambda job entry points (`JobsLambda/`) |
+| `src/PriceCompareCore` | Business logic: scrapers, ingestion, matching, favourites, receipts, Quartz jobs |
+| `src/PriceCompareData` | EF Core `AppDbContext`, entities, DTOs, constants (`ShopType`, `OfferType`) |
+| `client/web` | React 19 + TypeScript SPA |
+| `tests/PriceCompareTests` | xUnit tests |
+| `tools/` | Deployment / import PowerShell scripts, `KeywordMiner` (category keyword mining utility) |
 
 ---
 
 ## Tech Stack
 
-- Backend: .NET 8, ASP.NET Core Web API, EF Core, Quartz, Swagger
-- Database: PostgreSQL (Npgsql) at runtime; legacy migrations were created for SQL Server
-- Caching: Redis (optional, falls back to in‑memory for jobs)
-- Scraping: HtmlAgilityPack (Coles Down Down), Playwright (Coles On Special), custom JSON parsing
-- Frontend: React 19, TypeScript, MUI (+ X DataGrid), Axios, Recharts
-- CI: GitHub Actions
-- IaC/Deploy: AWS SAM; Lambda ZIP + container image jobs
+- **Backend:** .NET 10 (LTS, SDK pinned in `global.json`), ASP.NET Core, EF Core 10 + Npgsql, Quartz.NET, Polly, Swagger, `Amazon.Lambda.AspNetCoreServer.Hosting`
+- **Database:** PostgreSQL (Supabase in dev/prod)
+- **Cache:** Redis via `IDistributedCache` (Upstash in the cloud), falls back to in-memory when unset
+- **Scraping:** HtmlAgilityPack + JSON parsing (Coles category/Down Down pages, Woolworths promo pages); Playwright for the legacy Coles/Woolworths On-Special scrapers
+- **AI:** OpenRouter – embeddings (`openai/text-embedding-3-small`) and LLM match verification (`deepseek/deepseek-chat-v3.1` by default)
+- **Auth:** AWS Cognito (OIDC in the SPA via `react-oidc-context`; the API validates the Cognito ID token)
+- **Frontend:** React 19, TypeScript, MUI 7 + MUI X DataGrid, Recharts, Axios, React Router 6, Biome
+- **AWS:** SAM, Lambda (`dotnet10`), API Gateway HTTP API, S3, Rekognition, EventBridge Scheduler, Secrets Manager
+- **CI:** GitHub Actions
 
 ---
 
 ## Prerequisites
 
-- .NET SDK 8.0+
-- Node.js 18+ and npm
-- PostgreSQL 14+ (or a PostgreSQL instance such as Supabase)
-- Redis (optional, for caching)
-- Docker (optional, for Lambda container jobs)
+- .NET SDK 10.0.x
+- Node.js 20 and npm
+- PostgreSQL 14+ (or a Supabase project)
+- An AWS Cognito user pool + app client (required – the API refuses to start without Cognito config)
+- Optional: Redis, AWS credentials (S3/Rekognition for receipts), SMTP account (alert emails), OpenRouter API key (matching / description search)
+- Deploy only: AWS CLI + AWS SAM CLI
 
 ---
 
 ## Quick Start (Local)
 
-1. Configure database connection
+### 1. Configure the backend
 
-- Set `ConnectionStrings__DefaultConnection` to a PostgreSQL connection string.
-  - Option A (environment variable):
-    - Windows (PowerShell): `setx ConnectionStrings__DefaultConnection "Host=localhost;Port=5432;Database=pricecompare;Username=postgres;Password=postgres"`
-    - macOS/Linux: `export ConnectionStrings__DefaultConnection='Host=localhost;Port=5432;Database=pricecompare;Username=postgres;Password=postgres'`
-  - Option B (file): edit `src/PriceCompareWeb/appsettings.Development.json`.
+Create `src/PriceCompareWeb/appsettings.Development.json` (gitignored) or use environment variables (`__` as the section separator). Minimum settings:
 
-Important: Existing EF Core migrations under `src/PriceCompareData/Migrations` were generated for SQL Server, not PostgreSQL. If you use PostgreSQL locally, ensure the schema exists (manually or by regenerating migrations for Npgsql). Alternatively, switch back to SQL Server in `Program.cs` and use the provided migrations.
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=pricecompare;Username=postgres;Password=postgres"
+  },
+  "Cognito": {
+    "Region": "ap-southeast-2",
+    "UserPoolId": "<user-pool-id>",
+    "AppClientId": "<app-client-id>"
+  },
+  "Admin": { "Emails": [ "you@example.com" ] },
+  "Scraping": { "EnableQuartz": false, "ExposeHttpEndpoints": false },
+  "OpenRouter": { "ApiKey": "" }
+}
+```
 
-2. (Optional) Enable Redis caching
+> The schema is managed outside EF migrations. The migrations under `src/PriceCompareData/Migrations` are legacy SQL Server migrations and do not match the current PostgreSQL schema – point the app at an existing database (or a copy of one).
 
-- Set `Redis__ConnectionString` (e.g., `localhost:6379`). Some Lambda jobs read `USE_REDIS=true` and `Redis__ConnectionString` to decide between Redis and in‑memory cache.
+### 2. Run the API
 
-3. Run the backend API
+```bash
+cd src/PriceCompareWeb
+dotnet run
+```
 
-- `cd src/PriceCompareWeb`
-- `dotnet restore`
-- `dotnet run`
+The API listens on `http://localhost:5005`; Swagger UI is at `http://localhost:5005/swagger` in `Development`. Paste a Cognito **ID token** (without the `Bearer ` prefix) to call authenticated endpoints.
 
-The API listens on `http://localhost:5005` (see `Properties/launchSettings.json`). Swagger is available at `http://localhost:5005/swagger` in Development.
+### 3. Run the frontend
 
-4. Run the frontend (React)
+Create `client/web/.env.local` from `client/web/.env.example` and fill in the Cognito values. Leave `REACT_APP_API_BASE` unset locally so requests go through the CRA proxy to `http://localhost:5005`.
 
-- `cd client/web`
-- `npm install`
-- `npm start`
+```bash
+cd client/web
+npm install
+npm start          # or, from the repo root: ./tools/start-frontend-local.ps1
+```
 
-The app opens at `http://localhost:3000` and proxies API requests to `http://localhost:5005` (see `client/web/package.json` → `proxy`).
+The app opens at `http://localhost:3000`.
 
-5. Ingest sample data (via API)
+---
 
-Call any of these to seed products + price history:
+## Data Pipeline
 
-- `GET /api/Scraping/coles/on-special/all`
-- `GET /api/Scraping/woolworths/on-special/all`
-- `GET /api/Scraping/coles/down-down/all`
+Scrapers **run locally**, not in AWS (Coles sits behind Imperva bot protection, so scraping is kept on a local machine).
 
-These endpoints persist price history and upsert the products table. After ingestion, use the UI’s search and compare features.
+1. Start the API locally with `Scraping:EnableQuartz=true`. Quartz runs the weekly scrape jobs every **Wednesday (Australia/Sydney)**, one at a time behind a shared lock:
+   - 00:05–03:15 – 20 Coles jobs (Down Down + 19 categories), every 10 min
+   - 03:45–06:15 – 5 Woolworths jobs (Lower Shelf, Everyday Low Price, Half Price, Buy More Save More, seasonal price)
+   - 06:55 – favourite price tracking (local copy of the Lambda job)
+   - Quarterly (first Tuesday of every 3rd month, 06:00) – price history cleanup
+2. Each run upserts the `product` table (matched by `SourceId`, then name) and appends to `pricehistory`.
+3. With `ScrapeExport:Enabled=true`, results are also exported to `src/PriceCompareWeb/exports/`. Generate import SQL (`POST /api/admin/scrape-import/generate-all-sql`, local only) and apply it to the target database with:
+
+   ```powershell
+   $env:SUPABASE_CONN = "postgresql://user:pass@host:5432/postgres"
+   ./tools/run-sql-imports.ps1            # -DryRun to preview, -Filter woolworths to narrow
+   ```
+4. Run a match job from the admin console (or `POST /api/Match/run`) to refresh `productmatch`.
+
+Manual scrape endpoints under `/api/Scraping/*` exist but are disabled unless `Scraping:ExposeHttpEndpoints=true`.
 
 ---
 
 ## API Overview
 
-- Products
+| Area | Endpoints | Auth |
+|---|---|---|
+| Products | `GET /api/Products` (`page`, `pageSize` ≤ 200, `name`, `shopType`, `categoryId`, `includePrice`)<br>`GET /api/Products/priceHistory` (`name`, `shopType`, `offerType?`)<br>`POST /api/Products/search-by-description` | public |
+| Compare | `GET /api/compare-cached` (`keyword`, `sourceShop`, `topN`)<br>`GET /api/compare-cached/by-product` (`sourceProductId`, `topN`)<br>`GET /api/Compare` (legacy realtime compare) | public |
+| Favourites | `GET /api/Favorites`, `POST/PUT/DELETE /api/Favorites/{productId}`, `POST /api/Favorites/price-check` | user |
+| Receipts | `GET/POST /api/Receipts`, `GET/DELETE /api/Receipts/{id}`, `POST /api/Receipts/{id}/upload`, `PUT /api/Receipts/{id}/items`, `POST /api/Receipts/upload-and-parse` | user |
+| Match | `POST /api/Match/run`, `POST /api/Match/llm-review/run`, `GET /api/Match/status/{jobId}`, `GET /api/Match/jobs`, `GET /api/Match/productmatches/review`, `POST /api/Match/productmatches/update` | admin |
+| Admin | `GET /api/admin/whoami`, `GET /api/admin/health`, `GET /api/admin/schedules`, `GET /api/admin/schedules/{jobName}/runs`, `GET /api/admin/schedules/{jobName}/stats`, `POST /api/admin/pricehistory/cleanup`, `POST /api/admin/scrape-import/*` (local only) | admin |
 
-  - `GET /api/Products`
-    - Query: `page` (1‑based), `pageSize`, `name?`, `shopType?`, `categoryId?`
-    - Returns: `{ Page, PageSize, Count, Products }`
+Constants: `shopType` – `0` Coles, `1` Woolworths. `offerType` – see `src/PriceCompareData/Common/OfferType.cs`.
 
-- Compare
+**Admin policy (`AdminOnly`)** requires a Cognito token with `email_verified = true` and an email in the allow-list (`Admin:Emails` or the comma-separated `AdminEmails` env var). An empty allow-list denies everyone. The frontend admin route guard is UX only.
 
-  - `GET /api/Compare?keyword={name}&sourceShop={0|1}`
-    - `sourceShop`: 0 = Coles, 1 = Woolworths
-    - Returns: `{ matches: [ { source, targets[] } ] }` where each product includes fields like `name`, `shopType`, `size`, `price?`, `pricePerUnit?` (if available in history)
-
-- Price History
-
-  - `GET /api/Scraping/priceHistory?name={name}&offerType={0|1}&shopType={0|1}`
-    - `offerType`: 0 = Down Down, 1 = On Special
-    - `shopType`: 0 = Coles, 1 = Woolworths
-
-- Favorites and Price Alerts
-  - `GET /api/Favorites`
-    - Returns the current user’s favorite items.
-  - `POST /api/Favorites/{productId}`
-    - Adds a product to favorites.
-  - `DELETE /api/Favorites/{productId}`
-    - Removes a product from favorites.
-  - `PUT /api/Favorites/{productId}`
-    - Updates favorite state (active/inactive).
-  - `POST /api/Favorites/price-check`
-    - Runs the price tracking job and sends a single digest email per user.
-    - Items are sorted by percentage drop (desc), then amount drop (desc).
-    - Each email links back to the favorites page.
-
-- Scraping (ingestion)
-  - `GET /api/Scraping/coles/down-down/all`
-    - Query: `Name?`, `MinPrice?`, `MaxPrice?`, `IsSponsored?`
-  - `GET /api/Scraping/coles/on-special/all`
-    - Query: `Name?`, `MinPrice?`, `MaxPrice?`, `IsSponsored?`
-  - `GET /api/Scraping/woolworths/on-special/all`
-    - Query: `Name?`, `MinPrice?`, `MaxPrice?`, `IsOnSpecial?`
-
-Notes
-
-- The product list (`/api/Products`) returns the product base table; the “price” field in the table is derived from price history and may be empty if not yet scraped.
-- The frontend’s compare dialog fetches current history to display a weekly trend.
-
----
-
-## Background Jobs
-
-Quartz schedules weekly scraping and quarterly cleanup (see `src/PriceCompareWeb/Program.cs`):
-
-- Coles Down Down: Wednesdays 02:00 UTC
-- Coles On Special: Wednesdays 03:00 UTC
-- Woolworths On Special: Wednesdays 04:00 UTC
-- Clean old history: Quarterly (first Thursday, 01:00 UTC)
-
-AWS Lambda jobs are available for “On Special” scrapers and cleanup (see `template.yaml` and `src/PriceCompareWeb/JobsLambda/*`). Container‑based jobs use Playwright and ship Chromium in the image (`Dockerfile.ColesSpecial`, `Dockerfile.WwsSpecial`).
+> In production every route must also be declared as an `Events` entry on `PriceCompareApi` in `template.yaml`, otherwise API Gateway returns 404.
 
 ---
 
 ## Configuration
 
-Environment variables and settings
+| Key | Description |
+|---|---|
+| `ConnectionStrings:DefaultConnection` | PostgreSQL connection string |
+| `Cognito:Region` / `UserPoolId` / `AppClientId` | Cognito settings for JWT validation (required) |
+| `Admin:Emails` / `AdminEmails` | Admin allow-list (array in config / comma-separated env var) |
+| `Cors:AllowedOrigins` | Allowed origins (required; startup fails if empty) |
+| `Redis:ConnectionString` | Optional Redis; in-memory cache when blank |
+| `Scraping:EnableQuartz` | Run the in-process Quartz schedule |
+| `Scraping:ExposeHttpEndpoints` | Enable `/api/Scraping/*` |
+| `ScrapeExport:Enabled` / `ExportDir` / `BatchSize` | Export scrape results for SQL import |
+| `OpenRouter:ApiKey` / `Model` / `EmbeddingModel` | OpenRouter AI settings (Secrets Manager in AWS) |
+| `Aws:Region` / `Aws:ReceiptBucket` | Receipt image storage |
+| `Rekognition:MinConfidence` | Minimum OCR line confidence |
+| `Email:*` | SMTP settings for alert emails |
+| `FavoriteAlerts:BaseUrl` / `FavoritesPath` / `MinDropPercent` | Links in alert emails; optional minimum % drop to alert |
+| `TARGET_JOB` | Lambda job selector (`FAVORITE_TRACK`, `COLES_SPECIAL`, `WWS_SPECIAL`) |
 
-- `ConnectionStrings__DefaultConnection`: PostgreSQL connection string
-- `FavoriteAlerts__BaseUrl`: frontend base URL for email links
-- `FavoriteAlerts__FavoritesPath`: favorites page path (e.g., `/` or `/favorites`)
-- `Redis__ConnectionString` (optional): Redis endpoint for API caching
-- `USE_REDIS` (optional, jobs): set to `true` to force Redis in Lambda jobs
-- `ASPNETCORE_ENVIRONMENT`: set `Development` to enable Swagger
-- `TARGET_JOB` (jobs only): `COLES_SPECIAL` or `WWS_SPECIAL` for container Lambda entry
+Frontend (`client/web/.env.local`): `REACT_APP_API_BASE`, `REACT_APP_COGNITO_REGION`, `REACT_APP_COGNITO_USER_POOL_ID`, `REACT_APP_COGNITO_APP_CLIENT_ID`, `REACT_APP_COGNITO_DOMAIN`.
 
-Ports
-
-- API: `http://localhost:5005`
-- UI: `http://localhost:3000` (proxies to 5005)
-
----
-
-## Testing
-
-- Backend tests: `dotnet test -s coverage.runsettings` (see `tests/PriceCompareTests`)
-- Frontend tests: `npm test` in `client/web`
-
----
-
-## Deploy (AWS SAM)
-
-The `template.yaml` defines:
-
-- `PriceCompareApi` (ZIP Lambda + API Gateway)
-- Weekly `ColesRefreshJob` and `WwsRefreshSpecialJob` (container images)
-- `CleanPriceHistoryJob` (ZIP Lambda)
-
-Typical steps:
-
-1. `sam build`
-2. `sam deploy --guided --parameter-overrides DbConnectionString="<postgres-connection>"`
-
-Provide the PostgreSQL connection string via the `DbConnectionString` parameter.
+Never commit real secrets – keep them in `appsettings.Development.json`, environment variables, `samconfig.toml` (all gitignored) or AWS Secrets Manager.
 
 ---
 
-## Notes & Limitations
+## Testing & Linting
 
-- Migrations provider: EF migrations under `src/PriceCompareData/Migrations` target SQL Server. Runtime currently uses Npgsql (PostgreSQL). For a clean PostgreSQL setup, regenerate migrations for Npgsql or use an existing compatible database.
-- Secrets: don’t commit real connection strings in `appsettings*.json`. Prefer environment variables or user‑secrets.
-- Scrapers: Coles “On Special” uses Playwright with Chromium. Local API usage does not require Playwright; the container job images include it.
+```bash
+# Backend
+dotnet build PriceCompareSolution.sln
+dotnet test tests/PriceCompareTests --settings coverage.runsettings
+
+# Frontend (client/web)
+npm test
+npx tsc --noEmit
+npm run check      # Biome lint + format check
+```
+
+---
+
+## Deployment
+
+### Backend (AWS SAM)
+
+`template.yaml` defines:
+
+- `AppHttpApi` – API Gateway HTTP API
+- `PriceCompareApi` – ZIP Lambda (`dotnet10`) serving the Web API
+- `FavoritePriceTrackingJob` – ZIP Lambda triggered by EventBridge Scheduler, Wednesdays 06:55 Australia/Sydney
+- `FrontendBucket` / `ReceiptsBucket` – S3 buckets (`pricecompare-frontend-{env}`, `pricecompare-receipts-{env}`)
+
+```bash
+sam build
+sam deploy --config-env dev     # or: --config-env prod
+```
+
+Parameters (DB connection string, SMTP, Cognito IDs, admin emails, Redis, Secrets Manager IDs) come from `samconfig.toml`. The Playwright scrapers (`Dockerfile.ColesSpecial`, `Dockerfile.WwsSpecial`) are for local container builds only and are not deployed.
+
+### Frontend (S3)
+
+```powershell
+./tools/deploy-frontend-dev.ps1     # builds with the dev API base and syncs to pricecompare-frontend-dev
+./tools/deploy-frontend-prod.ps1    # same for prod
+```
+
+### GitHub Actions
+
+- `Deploy Backend (AWS SAM)` and `Deploy Frontend (S3)` – manual (`workflow_dispatch`) deploys
+- `Jira Key Check` – requires a Jira key (e.g. `BTS-123`) in PR titles and in commit messages pushed to `main` / `dev`
+
+---
+
+## Known Limitations
+
+- EF migrations are legacy (SQL Server) and do not reflect the PostgreSQL schema.
+- `pricehistory` has no FK to `product`; prices are joined by product name.
+- Coles uses Imperva bot protection, which can silently block scrapes (HTTP 200 challenge page → 0 products).
+- Match / LLM review jobs run as fire-and-forget background tasks, which a Lambda freeze can interrupt – run large jobs locally.
+- The favourites job runs weekly, so mid-week price dips that recover are not detected.
