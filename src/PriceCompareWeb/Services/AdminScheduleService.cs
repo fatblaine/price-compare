@@ -214,7 +214,9 @@ namespace PriceCompareWeb.Services
             var schedulerFactory = _services.GetService<ISchedulerFactory>();
             if (schedulerFactory == null)
             {
-                return new List<JobScheduleDto>();
+                // Quartz is disabled in the API Lambda (Scraping__EnableQuartz=false) and only runs on the
+                // local scraping machine, so list the jobs from job_definitions instead of the live scheduler.
+                return GetQuartzSchedulesFromDefinitions(defMap);
             }
 
             var scheduler = await schedulerFactory.GetScheduler(ct);
@@ -263,6 +265,53 @@ namespace PriceCompareWeb.Services
             }
 
             return output;
+        }
+
+        private List<JobScheduleDto> GetQuartzSchedulesFromDefinitions(
+            Dictionary<(string JobName, string Source), JobDefinition> defMap)
+        {
+            return defMap.Values
+                .Where(d => d.Source == "quartz")
+                .Select(d =>
+                {
+                    var timezone = string.IsNullOrWhiteSpace(d.Timezone) ? "UTC" : d.Timezone;
+                    return new JobScheduleDto(
+                        JobName: d.JobName,
+                        Source: "quartz",
+                        ScheduleExpression: d.ScheduleExpression ?? string.Empty,
+                        Timezone: timezone,
+                        Enabled: d.Enabled,
+                        Description: d.Description,
+                        NextFireTimeUtc: d.Enabled ? ComputeNextQuartzFireTimeUtc(d.ScheduleExpression, timezone) : null,
+                        LastRunTimeUtc: null,
+                        LastRunStatus: null,
+                        LastRunDurationMs: null,
+                        LastRunErrorMessage: null);
+                })
+                .ToList();
+        }
+
+        private DateTime? ComputeNextQuartzFireTimeUtc(string? cronExpression, string timezoneId)
+        {
+            if (string.IsNullOrWhiteSpace(cronExpression))
+            {
+                return null;
+            }
+
+            try
+            {
+                var expression = new CronExpression(cronExpression.Trim())
+                {
+                    TimeZone = ResolveTimeZone(timezoneId)
+                };
+
+                return expression.GetNextValidTimeAfter(DateTimeOffset.UtcNow)?.UtcDateTime;
+            }
+            catch (FormatException ex)
+            {
+                _logger.LogWarning(ex, "Invalid Quartz cron expression in job_definitions: {CronExpression}", cronExpression);
+                return null;
+            }
         }
 
         private async Task AttachLatestRunsAsync(List<JobScheduleDto> schedules, CancellationToken ct)

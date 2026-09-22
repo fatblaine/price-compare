@@ -322,6 +322,7 @@ Resources:
           Cognito__UserPoolId: !Ref CognitoUserPoolId
           Cognito__AppClientId: !Ref CognitoAppClientId
           AdminEmails: !Ref AdminEmails
+          Scraping__EnableQuartz: "false"
 
   FavoritePriceTrackingJob:
     Type: AWS::Serverless::Function
