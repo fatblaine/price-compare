@@ -143,10 +143,16 @@ builder.Services.AddCors(options =>
 var redisConnectionString = builder.Configuration["Redis:ConnectionString"];
 if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
+    // BTS-154: dev and prod share one Upstash instance but point at different databases, so the
+    // key prefix must carry the environment — otherwise one environment serves the other's cached
+    // product pages.
+    var cacheEnvironment = builder.Configuration["Cache:Environment"]
+        ?? builder.Environment.EnvironmentName;
+
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.Configuration = redisConnectionString;
-        options.InstanceName = "PriceCompare_";
+        options.InstanceName = $"PriceCompare_{cacheEnvironment}_";
     });
 }
 else
