@@ -20,7 +20,11 @@ Parameters:
       - prod
   DbConnectionString:
     Type: String
-    Description: PostgreSQL connection string for AppDbContext (Npgsql)
+    Description: >-
+      PostgreSQL connection string for AppDbContext (Npgsql). Use Supavisor transaction mode
+      (Port=6543;Pooling=false;No Reset On Close=true): every Lambda instance keeps its own
+      client-side pool, so session mode (5432) runs out of connections under concurrency
+      (XX000 EMAXCONNSESSION). DbConnectionStringNormalizer caps the pool if pooling is left on.
   EmailHost:
     Type: String
   EmailPort:
