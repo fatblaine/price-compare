@@ -488,6 +488,10 @@ builder.Services.AddAuthorization(options =>
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
+// BTS-155: cap the per-instance Npgsql pool so concurrent Lambda instances cannot exhaust
+// Supabase's connection limit (see Infrastructure/DbConnectionStringNormalizer).
+connectionString = PriceCompareWeb.Infrastructure.DbConnectionStringNormalizer.Normalize(connectionString);
+
 // builder.Services.AddDbContext<AppDbContext>(options =>
 //     options.UseSqlServer(connectionString));
 
@@ -508,8 +512,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 {
     try
     {
-        var csb = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
-        var safe = $"Host={csb.Host};Port={csb.Port};Database={csb.Database};Username={csb.Username};SslMode={csb.SslMode};TrustServerCertificate={csb.TrustServerCertificate};Pooling={csb.Pooling};";
+        var safe = PriceCompareWeb.Infrastructure.DbConnectionStringNormalizer.Describe(connectionString);
         app.Logger.LogInformation("DB connection (sanitized): {ConnectionString}", safe);
     }
     catch (Exception ex)
