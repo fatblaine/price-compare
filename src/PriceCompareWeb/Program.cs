@@ -492,9 +492,15 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 //     options.UseSqlServer(connectionString));
 
 // use PostgreSQL instead of SQL Server
+// BTS-152: UseModel loads the compiled model from PriceCompareData/CompiledModels instead of
+// rebuilding it from OnModelCreating on every cold start. Regenerate it with
+// `dotnet ef dbcontext optimize -p src/PriceCompareData -s src/PriceCompareData -o CompiledModels
+//  -n PriceCompareData.CompiledModels` whenever an entity or OnModelCreating changes
+// (CompiledModelUpToDateTests guards this).
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, npgsqlOptions =>
-        npgsqlOptions.CommandTimeout(120)));
+            npgsqlOptions.CommandTimeout(120))
+        .UseModel(PriceCompareData.CompiledModels.AppDbContextModel.Instance));
 
 var app = builder.Build();
 

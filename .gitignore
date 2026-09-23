@@ -241,3 +241,5 @@ tools/KeywordMiner/appsettings.json
 docs/
 CLAUDE.md
 AGENTS.md
+cold-start-stats.sh
+measure-cold.sh
