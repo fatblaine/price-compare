@@ -39,6 +39,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>02447f8d-a506-4b0e-961a-67b9f444fe3b</UserSecretsId>
+    <!-- BTS-152: precompile IL to native code at publish time so Lambda cold starts skip most JIT work.
+         Publish-only, so local `dotnet run` and debugging are unaffected. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <Target Name="RemovePlaywrightWindowsDriver" AfterTargets="Publish">
