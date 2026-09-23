@@ -25,7 +25,7 @@ import { SHOP_OPTIONS, shopTypeName } from "./constants/shopTypes";
 import { fetchProducts, type ProductRow } from "./api/products";
 import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
-import { fetchCompareMatchesByProduct, type CompareProduct } from "./api/compare";
+import { fetchBestMatchesByProducts, type CompareProduct } from "./api/compare";
 import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
 import { useAuth } from "react-oidc-context";
 import { useTour } from "./hooks/useTour";
@@ -319,30 +319,23 @@ export default function ProductsPage() {
 		setCompareDataMap({});
 		let cancelled = false;
 
-		const fetchWithConcurrency = async (items: typeof rows, limit: number) => {
-			let i = 0;
-			const worker = async () => {
-				while (i < items.length) {
-					const row = items[i++];
-					if (cancelled) return;
-					try {
-						const targets = await fetchCompareMatchesByProduct(row.productId);
-						if (cancelled) return;
-						const best =
-							targets.find(
-								(t) => t.matchType === "same_product" && t.price != null,
-							) ?? null;
-						setCompareDataMap((prev) => ({ ...prev, [row.productId]: best }));
-					} catch {
-						if (cancelled) return;
-						setCompareDataMap((prev) => ({ ...prev, [row.productId]: null }));
-					}
-				}
-			};
-			await Promise.all(Array.from({ length: limit }, worker));
+		// BTS-153: one batch request for the whole page. Previously this fired one
+		// request per product (3 at a time), which also forced extra Lambda cold starts.
+		const loadBestMatches = async () => {
+			const ids = rows.map((row) => row.productId);
+			try {
+				const best = await fetchBestMatchesByProducts(ids);
+				if (cancelled) return;
+				setCompareDataMap(best);
+			} catch {
+				if (cancelled) return;
+				setCompareDataMap(
+					Object.fromEntries(ids.map((id) => [id, null])),
+				);
+			}
 		};
 
-		void fetchWithConcurrency(rows, 3);
+		void loadBestMatches();
 
 		return () => {
 			cancelled = true;

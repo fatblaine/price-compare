@@ -220,6 +220,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/compare-cached/by-product
             Method: GET
+        CompareCachedByProductsPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/compare-cached/by-products
+            Method: POST
         PriceHistoryGet:
           Type: HttpApi
           Properties:

@@ -122,6 +122,25 @@ export async function fetchCompareMatchesByProduct(
 	return matches.map(normalizeMatchCandidate);
 }
 
+// BTS-153: one request per page of product cards instead of one per product.
+// The backend applies the same selection rule the cards used to apply client-side:
+// the best same_product candidate that has a price, or null.
+export async function fetchBestMatchesByProducts(
+	sourceProductIds: string[],
+): Promise<Record<string, CompareProduct | null>> {
+	if (sourceProductIds.length === 0) return {};
+	const url = `${API_BASE}/api/compare-cached/by-products`;
+	const res = await axios.post(url, { sourceProductIds });
+	const data = res.data ?? {};
+	const results = read<Record<string, any>>(data, "results", "Results") ?? {};
+	const out: Record<string, CompareProduct | null> = {};
+	for (const id of sourceProductIds) {
+		const raw = results[id] ?? null;
+		out[id] = raw ? normalizeMatchCandidate(raw) : null;
+	}
+	return out;
+}
+
 // Price history types and helpers
 export interface PriceHistoryPoint {
 	scrapedAt: string; // ISO date time
