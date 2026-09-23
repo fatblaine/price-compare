@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using PriceCompareData.Common;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
+using PriceCompareData.Entities.Compare;
+using PriceCompareWeb.Controllers.Models;
 
 namespace PriceCompareWeb.Controllers
 {
@@ -14,6 +16,9 @@ namespace PriceCompareWeb.Controllers
     [Route("api/compare-cached")]
     public class CompareCachedController : ControllerBase
     {
+        private const int MaxBatchSize = 50;
+        private const string MatchTypeSameProduct = "same_product";
+
         private readonly AppDbContext _dbContext;
 
         public CompareCachedController(AppDbContext dbContext)
@@ -255,6 +260,186 @@ namespace PriceCompareWeb.Controllers
                 Reason = results.Count > 0 ? null : "target_not_found",
                 Matches = results
             });
+        }
+
+        /// <summary>
+        /// Read-only compare (cached), batched. Returns the best same_product candidate per source
+        /// product — one request and a fixed four queries for a whole page of product cards,
+        /// instead of one request (and up to four queries) per product.
+        /// Selection matches by-product exactly: forward matches first, reverse only when a product
+        /// has no forward match at all, ordered by score then updatedAt, then the first
+        /// same_product candidate that has a price.
+        /// </summary>
+        [HttpPost("by-products")]
+        public async Task<IActionResult> CompareCachedByProducts([FromBody] BatchCompareRequest request)
+        {
+            var sourceIds = (request?.SourceProductIds ?? new List<Guid>())
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList();
+
+            if (sourceIds.Count == 0)
+            {
+                return BadRequest("sourceProductIds is required.");
+            }
+
+            if (sourceIds.Count > MaxBatchSize)
+            {
+                return BadRequest($"sourceProductIds must contain at most {MaxBatchSize} ids.");
+            }
+
+            var topN = NormaliseTopN(request!.TopN);
+            var candidatesBySource = await LoadCandidatesAsync(sourceIds, topN);
+
+            var results = new Dictionary<string, ProductMatchCandidate?>(sourceIds.Count);
+            foreach (var sourceId in sourceIds)
+            {
+                candidatesBySource.TryGetValue(sourceId, out var candidates);
+                results[sourceId.ToString()] = candidates?
+                    .FirstOrDefault(c => c.MatchType == MatchTypeSameProduct && c.LatestPrice != null);
+            }
+
+            return Ok(new { results });
+        }
+
+        private static int NormaliseTopN(int topN)
+        {
+            if (topN < 1) return 1;
+            if (topN > 20) return 20;
+            return topN;
+        }
+
+        /// <summary>
+        /// Loads precomputed match candidates for several source products using a fixed number of
+        /// queries: forward matches, reverse matches (only for sources with no forward match),
+        /// target products, and latest prices.
+        /// </summary>
+        private async Task<Dictionary<Guid, List<ProductMatchCandidate>>> LoadCandidatesAsync(
+            IReadOnlyCollection<Guid> sourceIds, int topN)
+        {
+            // (sourceProductId, match, reversed) — reversed means the source product is the match target.
+            var matchesBySource = new Dictionary<Guid, List<(ProductMatch Match, bool Reversed)>>();
+
+            var forward = await _dbContext.ProductMatches
+                .AsNoTracking()
+                .Where(m => sourceIds.Contains(m.SourceProductId))
+                .ToListAsync();
+
+            foreach (var group in forward.GroupBy(m => m.SourceProductId))
+            {
+                matchesBySource[group.Key] = OrderAndTake(group, topN)
+                    .Select(m => (m, false))
+                    .ToList();
+            }
+
+            var missing = sourceIds.Where(id => !matchesBySource.ContainsKey(id)).ToList();
+            if (missing.Count > 0)
+            {
+                var reverse = await _dbContext.ProductMatches
+                    .AsNoTracking()
+                    .Where(m => missing.Contains(m.TargetProductId))
+                    .ToListAsync();
+
+                foreach (var group in reverse.GroupBy(m => m.TargetProductId))
+                {
+                    matchesBySource[group.Key] = OrderAndTake(group, topN)
+                        .Select(m => (m, true))
+                        .ToList();
+                }
+            }
+
+            var targetIds = matchesBySource.Values
+                .SelectMany(list => list.Select(x => x.Reversed ? x.Match.SourceProductId : x.Match.TargetProductId))
+                .Distinct()
+                .ToList();
+
+            if (targetIds.Count == 0)
+            {
+                return new Dictionary<Guid, List<ProductMatchCandidate>>();
+            }
+
+            var productMap = await _dbContext.Products
+                .AsNoTracking()
+                .Where(p => targetIds.Contains(p.ProductId))
+                .ToDictionaryAsync(p => p.ProductId);
+
+            var priceMap = await LoadLatestPricesAsync(productMap.Values);
+
+            var output = new Dictionary<Guid, List<ProductMatchCandidate>>(matchesBySource.Count);
+            foreach (var (sourceId, matches) in matchesBySource)
+            {
+                var candidates = new List<ProductMatchCandidate>(matches.Count);
+                foreach (var (match, reversed) in matches)
+                {
+                    var targetId = reversed ? match.SourceProductId : match.TargetProductId;
+                    if (!productMap.TryGetValue(targetId, out var target))
+                    {
+                        continue;
+                    }
+
+                    decimal? targetPrice = null;
+                    if (target.ShopType.HasValue)
+                    {
+                        priceMap.TryGetValue((target.Name, target.ShopType.Value), out targetPrice);
+                    }
+
+                    candidates.Add(new ProductMatchCandidate
+                    {
+                        Target = target,
+                        Score = match.Score,
+                        Method = match.Method ?? string.Empty,
+                        MatchType = match.MatchType,
+                        LatestPrice = targetPrice,
+                        PricePerUnit = GetPricePerUnit(targetPrice, target.SizeValue)
+                    });
+                }
+
+                output[sourceId] = candidates;
+            }
+
+            return output;
+        }
+
+        private static IEnumerable<ProductMatch> OrderAndTake(IEnumerable<ProductMatch> matches, int topN) =>
+            matches
+                .OrderByDescending(m => m.Score)
+                .ThenByDescending(m => m.UpdatedAt)
+                .Take(topN);
+
+        /// <summary>
+        /// Latest price per (name, shopType) for the given products, in one GROUP BY query.
+        /// </summary>
+        private async Task<Dictionary<(string, int), decimal?>> LoadLatestPricesAsync(IEnumerable<Product> products)
+        {
+            var priceMap = new Dictionary<(string, int), decimal?>();
+
+            var withShop = products.Where(p => p.ShopType.HasValue).ToList();
+            var nameList = withShop.Select(p => p.Name).Distinct().ToList();
+            var shopList = withShop.Select(p => p.ShopType!.Value).Distinct().ToList();
+
+            if (nameList.Count == 0)
+            {
+                return priceMap;
+            }
+
+            var priceRows = await _dbContext.PriceHistory
+                .AsNoTracking()
+                .Where(ph => nameList.Contains(ph.Name) && ph.ShopType.HasValue && shopList.Contains(ph.ShopType!.Value))
+                .GroupBy(ph => new { ph.Name, ph.ShopType })
+                .Select(g => new
+                {
+                    g.Key.Name,
+                    ShopType = (int)g.Key.ShopType!,
+                    Price = (decimal?)g.OrderByDescending(x => x.ScrapedAt).First().CurrentPrice
+                })
+                .ToListAsync();
+
+            foreach (var row in priceRows)
+            {
+                priceMap[(row.Name, row.ShopType)] = row.Price;
+            }
+
+            return priceMap;
         }
 
         private async Task<decimal?> GetLatestPriceAsync(string name, int shopType)
