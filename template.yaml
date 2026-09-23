@@ -71,6 +71,19 @@ Parameters:
     Type: String
     Description: Comma-separated list of admin emails
     Default: ""
+  ApiWarmupEnabled:
+    Type: String
+    Description: >-
+      Keep one API instance and the default products cache entry warm with a scheduled ping every
+      5 minutes. Cold starts cost 3-6s on first request, and at this traffic level nearly every
+      visit hits one (BTS-154).
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+
+Conditions:
+  ApiWarmupOn: !Equals [ !Ref ApiWarmupEnabled, "true" ]
 
 Resources:
   AppHttpApi:
@@ -333,6 +346,70 @@ Resources:
           Cognito__AppClientId: !Ref CognitoAppClientId
           AdminEmails: !Ref AdminEmails
           Scraping__EnableQuartz: "false"
+          Cache__Environment: !Ref Environment
+
+  # BTS-154: invoke the API Lambda directly (not through API Gateway) with a synthetic
+  # HTTP API v2 event for GET /api/Products?page=1&pageSize=20 — the same request, and the same
+  # cache key, the frontend issues on landing.
+  ApiWarmupSchedule:
+    Type: AWS::Scheduler::Schedule
+    Condition: ApiWarmupOn
+    Properties:
+      Name: !Sub "price-compare-${Environment}-api-warmup"
+      ScheduleExpression: "rate(5 minutes)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt PriceCompareApi.Arn
+        RoleArn: !GetAtt ApiWarmupScheduleRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 0
+        Input: |
+          {
+            "version": "2.0",
+            "routeKey": "GET /api/Products",
+            "rawPath": "/api/Products",
+            "rawQueryString": "page=1&pageSize=20",
+            "headers": {
+              "host": "warmup.internal",
+              "x-forwarded-proto": "https",
+              "user-agent": "price-compare-warmer"
+            },
+            "queryStringParameters": { "page": "1", "pageSize": "20" },
+            "requestContext": {
+              "routeKey": "GET /api/Products",
+              "stage": "$default",
+              "requestId": "warmup",
+              "http": {
+                "method": "GET",
+                "path": "/api/Products",
+                "protocol": "HTTP/1.1",
+                "sourceIp": "127.0.0.1",
+                "userAgent": "price-compare-warmer"
+              }
+            },
+            "isBase64Encoded": false
+          }
+
+  ApiWarmupScheduleRole:
+    Type: AWS::IAM::Role
+    Condition: ApiWarmupOn
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeApiWarmup
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt PriceCompareApi.Arn
 
   FavoritePriceTrackingJob:
     Type: AWS::Serverless::Function

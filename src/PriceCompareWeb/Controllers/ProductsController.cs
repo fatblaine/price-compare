@@ -25,8 +25,16 @@ namespace PriceCompareWeb.Controllers
         private readonly PriceCompareCore.Services.IProductDescriptionSearchService _descriptionSearchService;
         private readonly IDistributedCache _cache;
 
+        // BTS-154: products change once a week (scrape import), so a 60-minute TTL mostly meant
+        // users paying for the rebuild. The cache key carries a data version (see
+        // GetDataVersionAsync) so a fresh import invalidates entries immediately despite the long TTL.
         private static readonly DistributedCacheEntryOptions _productsCacheOptions =
-            new() { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60) };
+            new() { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24) };
+
+        private static readonly DistributedCacheEntryOptions _dataVersionCacheOptions =
+            new() { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) };
+
+        private const string DataVersionCacheKey = "products:data-version";
 
         public ProductsController(
             PriceCompareCore.Interfaces.IProductService productService,
@@ -56,7 +64,8 @@ namespace PriceCompareWeb.Controllers
 
             // Products change once per week (scrape day). Cache the full shaped response
             // (including latest prices) for 5 minutes to avoid repeated heavy DB queries.
-            var cacheKey = $"products:p{page}:ps{pageSize}:n{name ?? ""}:st{shopType?.ToString() ?? ""}:cat{categoryId?.ToString() ?? ""}:ip{(includePrice ? 1 : 0)}";
+            var dataVersion = await GetDataVersionAsync();
+            var cacheKey = $"products:v{dataVersion}:p{page}:ps{pageSize}:n{name ?? ""}:st{shopType?.ToString() ?? ""}:cat{categoryId?.ToString() ?? ""}:ip{(includePrice ? 1 : 0)}";
             try
             {
                 var cachedJson = await _cache.GetStringAsync(cacheKey);
@@ -186,6 +195,54 @@ namespace PriceCompareWeb.Controllers
                 _logger.LogError(ex, "Failed to get products");
                 return StatusCode(500, "Failed to get products");
             }
+        }
+
+        /// <summary>
+        /// Latest scrape timestamp, used as a cache-key component so a weekly import invalidates the
+        /// cached product pages straight away instead of waiting out the 24-hour TTL. The lookup
+        /// itself is cached for 5 minutes and is an index scan on (shoptype, lastseenat).
+        /// </summary>
+        private async Task<string> GetDataVersionAsync()
+        {
+            try
+            {
+                var cached = await _cache.GetStringAsync(DataVersionCacheKey);
+                if (!string.IsNullOrEmpty(cached))
+                {
+                    return cached;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Data version cache read failed; querying the database.");
+            }
+
+            string version;
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var latest = await _db.Products
+                    .AsNoTracking()
+                    .MaxAsync(p => (DateTime?)p.LastSeenAt, cts.Token);
+                version = latest?.ToString("yyyyMMddHHmm") ?? "none";
+            }
+            catch (Exception ex)
+            {
+                // Never fail the request over the version lookup — fall back to a shared bucket.
+                _logger.LogWarning(ex, "Data version query failed; using the fallback cache version.");
+                return "unknown";
+            }
+
+            try
+            {
+                await _cache.SetStringAsync(DataVersionCacheKey, version, _dataVersionCacheOptions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Data version cache write failed.");
+            }
+
+            return version;
         }
 
         /// <summary>
