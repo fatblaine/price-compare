@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using PriceCompareCore.Exceptions;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.Common;
 using PriceCompareData.Data;
@@ -76,18 +77,26 @@ namespace PriceCompareCore.Services
             var maxPages = GetMaxPages();
             var scrapedAt = DateTime.UtcNow;
 
+            Exception? stoppedEarly = null;
+
             for (var page = 1; page <= maxPages && all.Count < hardCap; page++)
             {
                 var url = BuildDataUrl(page);
                 _logger.LogInformation("Coles JSON: fetching page {Page}: {Url}", page, url);
 
-                var json = await FetchJsonAsync(url, ct);
-                if (string.IsNullOrWhiteSpace(json))
+                List<ColesDownProduct> pageItems;
+                try
                 {
+                    var json = await ColesDomFetchGuard.FetchJsonAsync(_httpClient, url, _logger, ct);
+                    pageItems = ParseProducts(json, scrapedAt, seenIds, seenNames);
+                }
+                catch (ColesScrapeException ex) when (all.Count > 0)
+                {
+                    // Keep what the earlier pages returned, but still fail the run below.
+                    stoppedEarly = ex;
                     break;
                 }
 
-                var pageItems = ParseProducts(json, scrapedAt, seenIds, seenNames);
                 if (pageItems.Count == 0)
                 {
                     break;
@@ -97,6 +106,7 @@ namespace PriceCompareCore.Services
             }
 
             _logger.LogInformation("Coles JSON: extracted {Count} products.", all.Count);
+            ColesDomFetchGuard.EnsureProducts(all.Count, BuildDataUrl(1));
 
             await _cache.SetStringAsync(
                 CacheKey.COLES_CHIPS_CHOCOLATES_SNACKS_DOM_PRODUCTS,
@@ -109,27 +119,12 @@ namespace PriceCompareCore.Services
 
             await PersistAndExportAsync(all, scrapedAt, ct);
 
+            if (stoppedEarly != null)
+            {
+                throw ColesDomFetchGuard.PartialFailure(all.Count, stoppedEarly);
+            }
+
             return all.Take(limit).ToList();
-        }
-
-        private async Task<string?> FetchJsonAsync(string url, CancellationToken ct)
-        {
-            try
-            {
-                using var resp = await _httpClient.GetAsync(url, ct);
-                if (!resp.IsSuccessStatusCode)
-                {
-                    _logger.LogWarning("Coles JSON: non-OK status {Status} for {Url}", (int)resp.StatusCode, url);
-                    return null;
-                }
-
-                return await resp.Content.ReadAsStringAsync(ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Coles JSON: request failed for {Url}", url);
-                return null;
-            }
         }
 
         private static List<ColesDownProduct> ParseProducts(
@@ -144,9 +139,9 @@ namespace PriceCompareCore.Services
             {
                 dto = JsonSerializer.Deserialize<ColesChipsChocolatesSnacksApiResponse>(json, JsonOptions);
             }
-            catch
+            catch (JsonException ex)
             {
-                return results;
+                throw ColesDomFetchGuard.ParseFailure(ex);
             }
 
             var items = dto?.PageProps?.SearchResults?.Results;

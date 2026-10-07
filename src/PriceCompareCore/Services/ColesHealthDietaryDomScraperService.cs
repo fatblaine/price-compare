@@ -20,9 +20,9 @@ using PriceCompareData.Entities.History;
 
 namespace PriceCompareCore.Services
 {
-    public class ColesHealthBeautyDomScraperService : IColesHealthBeautyDomScraperService
+    public class ColesHealthDietaryDomScraperService : IColesHealthDietaryDomScraperService
     {
-        private const string DefaultDataUrl = WebInfo.COLES_NEXT_DATA_BASE + "/en/browse/health-beauty.json?slug=health-beauty";
+        private const string DefaultDataUrl = WebInfo.COLES_NEXT_DATA_BASE + "/en/browse/health-dietary.json?slug=health-dietary";
         private const string BaseUrl = "https://www.coles.com.au";
         private const string ImageBase = "https://cdn.productimages.coles.com.au/productimages";
         private const string DefaultUa =
@@ -30,7 +30,7 @@ namespace PriceCompareCore.Services
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
         private readonly HttpClient _httpClient;
-        private readonly ILogger<ColesHealthBeautyDomScraperService> _logger;
+        private readonly ILogger<ColesHealthDietaryDomScraperService> _logger;
         private readonly IDistributedCache _cache;
         private readonly AppDbContext _dbContext;
         private readonly IIngestionService _ingestion;
@@ -38,9 +38,9 @@ namespace PriceCompareCore.Services
 
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-        public ColesHealthBeautyDomScraperService(
+        public ColesHealthDietaryDomScraperService(
             HttpClient httpClient,
-            ILogger<ColesHealthBeautyDomScraperService> logger,
+            ILogger<ColesHealthDietaryDomScraperService> logger,
             IDistributedCache cache,
             AppDbContext dbContext,
             IIngestionService ingestion,
@@ -63,10 +63,10 @@ namespace PriceCompareCore.Services
             if (limit <= 0) limit = hardCap;
             if (limit > hardCap) limit = hardCap;
 
-            // var cached = await _cache.GetStringAsync(CacheKey.COLES_HEALTH_BEAUTY_DOM_PRODUCTS, ct);
+            // var cached = await _cache.GetStringAsync(CacheKey.COLES_HEALTH_DIETARY_DOM_PRODUCTS, ct);
             // if (!string.IsNullOrWhiteSpace(cached))
             // {
-            //     _logger.LogInformation("Coles JSON: returning cached health & beauty products.");
+            //     _logger.LogInformation("Coles JSON: returning cached health & dietary products.");
             //     var cachedItems = JsonSerializer.Deserialize<List<ColesDownProduct>>(cached, JsonOptions) ?? new();
             //     return cachedItems.Take(limit).ToList();
             // }
@@ -109,7 +109,7 @@ namespace PriceCompareCore.Services
             ColesDomFetchGuard.EnsureProducts(all.Count, BuildDataUrl(1));
 
             await _cache.SetStringAsync(
-                CacheKey.COLES_HEALTH_BEAUTY_DOM_PRODUCTS,
+                CacheKey.COLES_HEALTH_DIETARY_DOM_PRODUCTS,
                 JsonSerializer.Serialize(all, JsonOptions),
                 new DistributedCacheEntryOptions
                 {
@@ -134,10 +134,10 @@ namespace PriceCompareCore.Services
             HashSet<string> seenNames)
         {
             var results = new List<ColesDownProduct>();
-            ColesHealthBeautyApiResponse? dto;
+            ColesHealthDietaryApiResponse? dto;
             try
             {
-                dto = JsonSerializer.Deserialize<ColesHealthBeautyApiResponse>(json, JsonOptions);
+                dto = JsonSerializer.Deserialize<ColesHealthDietaryApiResponse>(json, JsonOptions);
             }
             catch (JsonException ex)
             {
@@ -228,7 +228,7 @@ namespace PriceCompareCore.Services
 
             var existingNames = new HashSet<string>(
                 await _dbContext.PriceHistory
-                    .Where(ph => ph.ShopType == ShopType.COLES && ph.OfferType == OfferType.HEALTH_BEAUTY && ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
+                    .Where(ph => ph.ShopType == ShopType.COLES && ph.OfferType == OfferType.HEALTH_DIETARY && ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
                     .Select(ph => ph.Name!)
                     .ToListAsync(ct),
                 StringComparer.OrdinalIgnoreCase);
@@ -243,7 +243,7 @@ namespace PriceCompareCore.Services
                     ImageUrl = product.ImageUrl ?? string.Empty,
                     CurrentPrice = product.CurrentPrice,
                     ScrapedAt = scrapedAt,
-                    OfferType = OfferType.HEALTH_BEAUTY,
+                    OfferType = OfferType.HEALTH_DIETARY,
                     ShopType = ShopType.COLES
                 };
 
@@ -260,7 +260,7 @@ namespace PriceCompareCore.Services
             var productRows = _ingestion.MapColesDownProducts(products);
             await _export.ExportAsync(
                 new ScrapeExportRequest(
-                    "coles_health_beauty_json",
+                    "coles_health_dietary_json",
                     scrapedAt,
                     priceHistoryRows,
                     productRows),
@@ -295,7 +295,7 @@ namespace PriceCompareCore.Services
             return Regex.IsMatch(url, pattern, RegexOptions.IgnoreCase);
         }
 
-        private static string BuildDisplayName(ColesHealthBeautyApiProduct item)
+        private static string BuildDisplayName(ColesHealthDietaryApiProduct item)
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(item.Brand))
@@ -320,7 +320,7 @@ namespace PriceCompareCore.Services
             return NormalizeWhitespace(name);
         }
 
-        private static string BuildProductUrl(ColesHealthBeautyApiProduct item, string displayName, int id)
+        private static string BuildProductUrl(ColesHealthDietaryApiProduct item, string displayName, int id)
         {
             if (id <= 0)
             {
@@ -376,31 +376,31 @@ namespace PriceCompareCore.Services
 
         private static int GetMaxPages()
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_BEAUTY_MAX_PAGES");
+            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_DIETARY_MAX_PAGES");
             if (int.TryParse(raw, out var v) && v > 0)
             {
                 return v;
             }
 
             raw = Environment.GetEnvironmentVariable("COLES_DOM_MAX_PAGES");
-            return int.TryParse(raw, out v) && v > 0 ? v : 150;
+            return int.TryParse(raw, out v) && v > 0 ? v : 50;
         }
 
         private static int GetMaxItems()
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_BEAUTY_MAX_ITEMS");
+            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_DIETARY_MAX_ITEMS");
             if (int.TryParse(raw, out var v) && v > 0)
             {
                 return v;
             }
 
             raw = Environment.GetEnvironmentVariable("COLES_DOM_MAX_ITEMS");
-            return int.TryParse(raw, out v) && v > 0 ? v : 7000;
+            return int.TryParse(raw, out v) && v > 0 ? v : 3000;
         }
 
         private static string GetDataUrl()
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_BEAUTY_DATA_URL");
+            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_DIETARY_DATA_URL");
             return string.IsNullOrWhiteSpace(raw) ? DefaultDataUrl : raw.Trim();
         }
 
@@ -410,22 +410,22 @@ namespace PriceCompareCore.Services
             return string.IsNullOrWhiteSpace(raw) ? DefaultUa : raw.Trim();
         }
 
-        private class ColesHealthBeautyApiResponse
+        private class ColesHealthDietaryApiResponse
         {
-            public ColesHealthBeautyPageProps? PageProps { get; set; }
+            public ColesHealthDietaryPageProps? PageProps { get; set; }
         }
 
-        private class ColesHealthBeautyPageProps
+        private class ColesHealthDietaryPageProps
         {
-            public ColesHealthBeautySearchResults? SearchResults { get; set; }
+            public ColesHealthDietarySearchResults? SearchResults { get; set; }
         }
 
-        private class ColesHealthBeautySearchResults
+        private class ColesHealthDietarySearchResults
         {
-            public List<ColesHealthBeautyApiProduct> Results { get; set; } = new();
+            public List<ColesHealthDietaryApiProduct> Results { get; set; } = new();
         }
 
-        private class ColesHealthBeautyApiProduct
+        private class ColesHealthDietaryApiProduct
         {
             public string? _type { get; set; }
             public int Id { get; set; }
@@ -438,23 +438,23 @@ namespace PriceCompareCore.Services
             public string? Size { get; set; }
             public bool Availability { get; set; }
             public string? AvailabilityType { get; set; }
-            public List<ColesHealthBeautyImageUri>? ImageUris { get; set; }
-            public ColesHealthBeautyPricing? Pricing { get; set; }
+            public List<ColesHealthDietaryImageUri>? ImageUris { get; set; }
+            public ColesHealthDietaryPricing? Pricing { get; set; }
         }
 
-        private class ColesHealthBeautyPricing
+        private class ColesHealthDietaryPricing
         {
             public decimal? Now { get; set; }
             public decimal? Was { get; set; }
             public decimal? SaveAmount { get; set; }
             public string? PriceDescription { get; set; }
-            public ColesHealthBeautyUnit? Unit { get; set; }
+            public ColesHealthDietaryUnit? Unit { get; set; }
             public string? Comparable { get; set; }
             public string? PromotionType { get; set; }
             public bool? OnlineSpecial { get; set; }
         }
 
-        private class ColesHealthBeautyUnit
+        private class ColesHealthDietaryUnit
         {
             public decimal? Quantity { get; set; }
             public decimal? OfMeasureQuantity { get; set; }
@@ -465,7 +465,7 @@ namespace PriceCompareCore.Services
             public bool? IsIncremental { get; set; }
         }
 
-        private class ColesHealthBeautyImageUri
+        private class ColesHealthDietaryImageUri
         {
             public string? AltText { get; set; }
             public string? Type { get; set; }

@@ -23,6 +23,8 @@ namespace PriceCompareWeb.Controllers
         private readonly IColesDeliDomScraperService _colesDeliDomService;
         private readonly IColesPantryDomScraperService _colesPantryDomService;
         private readonly IColesDietaryWorldFoodsDomScraperService _colesDietaryWorldFoodsDomService;
+        private readonly IColesInternationalFoodsDomScraperService _colesInternationalFoodsDomService;
+        private readonly IColesHealthDietaryDomScraperService _colesHealthDietaryDomService;
         private readonly IColesChipsChocolatesSnacksDomScraperService _colesChipsChocolatesSnacksDomService;
         private readonly IColesDrinksDomScraperService _colesDrinksDomService;
         private readonly IColesLiquorlandDomScraperService _colesLiquorlandDomService;
@@ -55,6 +57,8 @@ namespace PriceCompareWeb.Controllers
         IColesDeliDomScraperService colesDeliDomService,
         IColesPantryDomScraperService colesPantryDomService,
         IColesDietaryWorldFoodsDomScraperService colesDietaryWorldFoodsDomService,
+        IColesInternationalFoodsDomScraperService colesInternationalFoodsDomService,
+        IColesHealthDietaryDomScraperService colesHealthDietaryDomService,
         IColesChipsChocolatesSnacksDomScraperService colesChipsChocolatesSnacksDomService,
         IColesDrinksDomScraperService colesDrinksDomService,
         IColesLiquorlandDomScraperService colesLiquorlandDomService,
@@ -86,6 +90,8 @@ namespace PriceCompareWeb.Controllers
             _colesDeliDomService = colesDeliDomService;
             _colesPantryDomService = colesPantryDomService;
             _colesDietaryWorldFoodsDomService = colesDietaryWorldFoodsDomService;
+            _colesInternationalFoodsDomService = colesInternationalFoodsDomService;
+            _colesHealthDietaryDomService = colesHealthDietaryDomService;
             _colesChipsChocolatesSnacksDomService = colesChipsChocolatesSnacksDomService;
             _colesDrinksDomService = colesDrinksDomService;
             _colesLiquorlandDomService = colesLiquorlandDomService;
@@ -279,6 +285,44 @@ namespace PriceCompareWeb.Controllers
             {
                 _logger.LogError(ex, "Failed to get Coles dietary & world foods DOM products");
                 return StatusCode(500, "Failed to get Coles dietary & world foods DOM products");
+            }
+        }
+
+        [HttpGet("coles/international-foods/dom")]
+        public async Task<IActionResult> GetInternationalFoodsDom([FromQuery] int limit = 0)
+        {
+            try
+            {
+                var products = await _colesInternationalFoodsDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
+                return Ok(new
+                {
+                    Count = products.Count,
+                    Products = products
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Coles international foods DOM products");
+                return StatusCode(500, "Failed to get Coles international foods DOM products");
+            }
+        }
+
+        [HttpGet("coles/health-dietary/dom")]
+        public async Task<IActionResult> GetHealthDietaryDom([FromQuery] int limit = 0)
+        {
+            try
+            {
+                var products = await _colesHealthDietaryDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
+                return Ok(new
+                {
+                    Count = products.Count,
+                    Products = products
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Coles health & dietary DOM products");
+                return StatusCode(500, "Failed to get Coles health & dietary DOM products");
             }
         }
 

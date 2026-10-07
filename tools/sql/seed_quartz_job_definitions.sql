@@ -12,14 +12,16 @@
 
 INSERT INTO job_definitions (job_name, source, schedule_expression, timezone, enabled, description, created_at, updated_at)
 VALUES
-    ('ColesRefreshJob',                  'quartz', '0 5 0 ? * WED',       'Australia/Sydney', true,  'Coles Down Down deals',                        now(), now()),
+    ('ColesRefreshJob',                  'quartz', '',                    'Australia/Sydney', false, 'Coles Down Down deals (trigger removed in BTS-156: /browse/down-down no longer exists)', now(), now()),
+    ('ColesHealthDietaryDomJob',         'quartz', '0 5 0 ? * WED',       'Australia/Sydney', true,  'Coles - Health & Dietary',                     now(), now()),
     ('ColesMeatSeafoodDomJob',           'quartz', '0 15 0 ? * WED',      'Australia/Sydney', true,  'Coles - Meat & Seafood',                       now(), now()),
     ('ColesFruitVegetablesDomJob',       'quartz', '0 25 0 ? * WED',      'Australia/Sydney', true,  'Coles - Fruit & Vegetables',                   now(), now()),
     ('ColesDairyEggsFridgeDomJob',       'quartz', '0 35 0 ? * WED',      'Australia/Sydney', true,  'Coles - Dairy, Eggs & Fridge',                 now(), now()),
     ('ColesBakeryDomJob',                'quartz', '0 45 0 ? * WED',      'Australia/Sydney', true,  'Coles - Bakery',                               now(), now()),
     ('ColesDeliDomJob',                  'quartz', '0 55 0 ? * WED',      'Australia/Sydney', true,  'Coles - Deli',                                 now(), now()),
     ('ColesPantryDomJob',                'quartz', '0 5 1 ? * WED',       'Australia/Sydney', true,  'Coles - Pantry',                               now(), now()),
-    ('ColesDietaryWorldFoodsDomJob',     'quartz', '0 15 1 ? * WED',      'Australia/Sydney', true,  'Coles - Dietary & World Foods',                now(), now()),
+    ('ColesDietaryWorldFoodsDomJob',     'quartz', '',                    'Australia/Sydney', false, 'Coles - Dietary & World Foods (trigger removed in BTS-156: category split by Coles)', now(), now()),
+    ('ColesInternationalFoodsDomJob',    'quartz', '0 15 1 ? * WED',      'Australia/Sydney', true,  'Coles - International Foods',                  now(), now()),
     ('ColesChipsChocolatesSnacksDomJob', 'quartz', '0 25 1 ? * WED',      'Australia/Sydney', true,  'Coles - Chips, Chocolates & Snacks',           now(), now()),
     ('ColesDrinksDomJob',                'quartz', '0 35 1 ? * WED',      'Australia/Sydney', true,  'Coles - Drinks',                               now(), now()),
     ('ColesLiquorlandDomJob',            'quartz', '0 45 1 ? * WED',      'Australia/Sydney', true,  'Coles - Liquorland',                           now(), now()),
