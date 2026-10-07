@@ -170,16 +170,6 @@ if (enableQuartzJobs)
         q.AddJobListener<LoggingJobListener>();
         var localTz = TimeZoneInfo.Local;
 
-        // scrape data - coles down down: not scheduled since BTS-156 (Coles removed /browse/down-down)
-
-        // scrape data - coles health & dietary (DOM) - takes the old Down Down slot
-        var jobKeyColesHealthDietary = new JobKey("ColesHealthDietaryDomJob");
-        q.AddJob<ColesHealthDietaryDomJob>(opts => opts.WithIdentity(jobKeyColesHealthDietary));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesHealthDietary)
-            .WithIdentity("ColesHealthDietaryDomJob-trigger")
-            .WithCronSchedule("0 5 0 ? * WED", x => x.InTimeZone(localTz)));
-
         // scrape data - coles on special (no scheduled trigger)
 
         // scrape data - woolworths lower shelf price (DOM)
@@ -226,140 +216,19 @@ if (enableQuartzJobs)
             .WithIdentity("WwsAutumnPriceDomJob-trigger")
             .WithCronSchedule("0 15 6 ? * WED", x => x.InTimeZone(localTz)));
 
-        // weekly sequential scrape - coles DOM categories (Wed 00:05 local, every 10 mins)
-        var jobKeyColesMeatSeafood = new JobKey("ColesMeatSeafoodDomJob");
-        q.AddJob<ColesMeatSeafoodDomJob>(opts => opts.WithIdentity(jobKeyColesMeatSeafood));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesMeatSeafood)
-            .WithIdentity("ColesMeatSeafoodDomJob-trigger")
-            .WithCronSchedule("0 15 0 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesFruitVegetables = new JobKey("ColesFruitVegetablesDomJob");
-        q.AddJob<ColesFruitVegetablesDomJob>(opts => opts.WithIdentity(jobKeyColesFruitVegetables));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesFruitVegetables)
-            .WithIdentity("ColesFruitVegetablesDomJob-trigger")
-            .WithCronSchedule("0 25 0 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesDairyEggsFridge = new JobKey("ColesDairyEggsFridgeDomJob");
-        q.AddJob<ColesDairyEggsFridgeDomJob>(opts => opts.WithIdentity(jobKeyColesDairyEggsFridge));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesDairyEggsFridge)
-            .WithIdentity("ColesDairyEggsFridgeDomJob-trigger")
-            .WithCronSchedule("0 35 0 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesBakery = new JobKey("ColesBakeryDomJob");
-        q.AddJob<ColesBakeryDomJob>(opts => opts.WithIdentity(jobKeyColesBakery));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesBakery)
-            .WithIdentity("ColesBakeryDomJob-trigger")
-            .WithCronSchedule("0 45 0 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesDeli = new JobKey("ColesDeliDomJob");
-        q.AddJob<ColesDeliDomJob>(opts => opts.WithIdentity(jobKeyColesDeli));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesDeli)
-            .WithIdentity("ColesDeliDomJob-trigger")
-            .WithCronSchedule("0 55 0 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesPantry = new JobKey("ColesPantryDomJob");
-        q.AddJob<ColesPantryDomJob>(opts => opts.WithIdentity(jobKeyColesPantry));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesPantry)
-            .WithIdentity("ColesPantryDomJob-trigger")
-            .WithCronSchedule("0 5 1 ? * WED", x => x.InTimeZone(localTz)));
-
-        // dietary-world-foods: not scheduled since BTS-156 (Coles split it into international-foods and health-dietary)
-        var jobKeyColesInternationalFoods = new JobKey("ColesInternationalFoodsDomJob");
-        q.AddJob<ColesInternationalFoodsDomJob>(opts => opts.WithIdentity(jobKeyColesInternationalFoods));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesInternationalFoods)
-            .WithIdentity("ColesInternationalFoodsDomJob-trigger")
-            .WithCronSchedule("0 15 1 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesChipsChocolatesSnacks = new JobKey("ColesChipsChocolatesSnacksDomJob");
-        q.AddJob<ColesChipsChocolatesSnacksDomJob>(opts => opts.WithIdentity(jobKeyColesChipsChocolatesSnacks));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesChipsChocolatesSnacks)
-            .WithIdentity("ColesChipsChocolatesSnacksDomJob-trigger")
-            .WithCronSchedule("0 25 1 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesDrinks = new JobKey("ColesDrinksDomJob");
-        q.AddJob<ColesDrinksDomJob>(opts => opts.WithIdentity(jobKeyColesDrinks));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesDrinks)
-            .WithIdentity("ColesDrinksDomJob-trigger")
-            .WithCronSchedule("0 35 1 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesLiquorland = new JobKey("ColesLiquorlandDomJob");
-        q.AddJob<ColesLiquorlandDomJob>(opts => opts.WithIdentity(jobKeyColesLiquorland));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesLiquorland)
-            .WithIdentity("ColesLiquorlandDomJob-trigger")
-            .WithCronSchedule("0 45 1 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesFrozen = new JobKey("ColesFrozenDomJob");
-        q.AddJob<ColesFrozenDomJob>(opts => opts.WithIdentity(jobKeyColesFrozen));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesFrozen)
-            .WithIdentity("ColesFrozenDomJob-trigger")
-            .WithCronSchedule("0 55 1 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesCleaningLaundry = new JobKey("ColesCleaningLaundryDomJob");
-        q.AddJob<ColesCleaningLaundryDomJob>(opts => opts.WithIdentity(jobKeyColesCleaningLaundry));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesCleaningLaundry)
-            .WithIdentity("ColesCleaningLaundryDomJob-trigger")
-            .WithCronSchedule("0 5 2 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesHealthBeauty = new JobKey("ColesHealthBeautyDomJob");
-        q.AddJob<ColesHealthBeautyDomJob>(opts => opts.WithIdentity(jobKeyColesHealthBeauty));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesHealthBeauty)
-            .WithIdentity("ColesHealthBeautyDomJob-trigger")
-            .WithCronSchedule("0 15 2 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesBaby = new JobKey("ColesBabyDomJob");
-        q.AddJob<ColesBabyDomJob>(opts => opts.WithIdentity(jobKeyColesBaby));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesBaby)
-            .WithIdentity("ColesBabyDomJob-trigger")
-            .WithCronSchedule("0 25 2 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesPet = new JobKey("ColesPetDomJob");
-        q.AddJob<ColesPetDomJob>(opts => opts.WithIdentity(jobKeyColesPet));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesPet)
-            .WithIdentity("ColesPetDomJob-trigger")
-            .WithCronSchedule("0 35 2 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesHomeGarden = new JobKey("ColesHomeGardenDomJob");
-        q.AddJob<ColesHomeGardenDomJob>(opts => opts.WithIdentity(jobKeyColesHomeGarden));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesHomeGarden)
-            .WithIdentity("ColesHomeGardenDomJob-trigger")
-            .WithCronSchedule("0 45 2 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesBigPackValue = new JobKey("ColesBigPackValueDomJob");
-        q.AddJob<ColesBigPackValueDomJob>(opts => opts.WithIdentity(jobKeyColesBigPackValue));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesBigPackValue)
-            .WithIdentity("ColesBigPackValueDomJob-trigger")
-            .WithCronSchedule("0 55 2 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesBonusCreditProducts = new JobKey("ColesBonusCreditProductsDomJob");
-        q.AddJob<ColesBonusCreditProductsDomJob>(opts => opts.WithIdentity(jobKeyColesBonusCreditProducts));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesBonusCreditProducts)
-            .WithIdentity("ColesBonusCreditProductsDomJob-trigger")
-            .WithCronSchedule("0 5 3 ? * WED", x => x.InTimeZone(localTz)));
-
-        var jobKeyColesDeliverMoreRange = new JobKey("ColesDeliverMoreRangeDomJob");
-        q.AddJob<ColesDeliverMoreRangeDomJob>(opts => opts.WithIdentity(jobKeyColesDeliverMoreRange));
-        q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesDeliverMoreRange)
-            .WithIdentity("ColesDeliverMoreRangeDomJob-trigger")
-            .WithCronSchedule("0 15 3 ? * WED", x => x.InTimeZone(localTz)));
+        // weekly sequential scrape - coles categories (Wed from 00:05 local, every 10 mins).
+        // One job class for every category; names and crons live in ColesCategories (BTS-156 P3).
+        foreach (var category in ColesCategories.All)
+        {
+            var jobKeyColesCategory = new JobKey(category.JobName);
+            q.AddJob<ColesCategoryDomJob>(opts => opts
+                .WithIdentity(jobKeyColesCategory)
+                .UsingJobData(ColesCategoryDomJob.SlugKey, category.Slug));
+            q.AddTrigger(opts => opts
+                .ForJob(jobKeyColesCategory)
+                .WithIdentity($"{category.JobName}-trigger")
+                .WithCronSchedule(category.Cron, x => x.InTimeZone(localTz)));
+        }
 
         // delete data (quarterly, first Tuesday 06:00)
         var cleanJobKey = new JobKey("CleanPriceHistoryJob");
@@ -393,44 +262,11 @@ builder.Services.AddHttpClient<IColesDownScraperService, ColesDownScraperService
             TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
 builder.Services.AddScoped<IColesSpecialScraperService, ColesSpecialScraperService>();
-// BTS-156: Coles category scrapers retry 5xx/408/network errors with a long backoff.
-// Imperva block pages come back as HTTP 200 and are deliberately not retried.
-AddColesDomHttpClient<IColesDownDomScraperService, ColesDownDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesMeatSeafoodDomScraperService, ColesMeatSeafoodDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesFruitVegetablesDomScraperService, ColesFruitVegetablesDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesDairyEggsFridgeDomScraperService, ColesDairyEggsFridgeDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesBakeryDomScraperService, ColesBakeryDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesDeliDomScraperService, ColesDeliDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesPantryDomScraperService, ColesPantryDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesDietaryWorldFoodsDomScraperService, ColesDietaryWorldFoodsDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesInternationalFoodsDomScraperService, ColesInternationalFoodsDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesHealthDietaryDomScraperService, ColesHealthDietaryDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesChipsChocolatesSnacksDomScraperService, ColesChipsChocolatesSnacksDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesDrinksDomScraperService, ColesDrinksDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesLiquorlandDomScraperService, ColesLiquorlandDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesFrozenDomScraperService, ColesFrozenDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesCleaningLaundryDomScraperService, ColesCleaningLaundryDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesHealthBeautyDomScraperService, ColesHealthBeautyDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesBabyDomScraperService, ColesBabyDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesPetDomScraperService, ColesPetDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesHomeGardenDomScraperService, ColesHomeGardenDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesBigPackValueDomScraperService, ColesBigPackValueDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesBonusCreditProductsDomScraperService, ColesBonusCreditProductsDomScraperService>(builder.Services);
-AddColesDomHttpClient<IColesDeliverMoreRangeDomScraperService, ColesDeliverMoreRangeDomScraperService>(builder.Services);
-
-static void AddColesDomHttpClient<TClient, TImplementation>(IServiceCollection services)
-    where TClient : class
-    where TImplementation : class, TClient
-{
-    // HttpClient.Timeout covers every retry attempt, so it must outlast the 5s + 15s + 45s backoff.
-    services.AddHttpClient<TClient, TImplementation>(client => client.Timeout = TimeSpan.FromMinutes(3))
-        .AddTransientHttpErrorPolicy(policy => policy.WaitAndRetryAsync(new[]
-        {
-            TimeSpan.FromSeconds(5),
-            TimeSpan.FromSeconds(15),
-            TimeSpan.FromSeconds(45)
-        }));
-}
+// Coles categories: one real-browser session shared by every category scrape (BTS-156 P4).
+// The browser only starts on the first scrape, so the API Lambda never launches it.
+builder.Services.AddSingleton<ColesBrowserSession>();
+builder.Services.AddSingleton<IColesCategoryPageSource>(sp => sp.GetRequiredService<ColesBrowserSession>());
+builder.Services.AddScoped<IColesCategoryScraperService, ColesCategoryScraperService>();
 
 builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialScraperService>();
 builder.Services.AddScoped<IWoolworthsLowerShelfDomScraperService, WoolworthsLowerShelfDomScraperService>();

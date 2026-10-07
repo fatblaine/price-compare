@@ -1,21 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using PriceCompareCore.Exceptions;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Services;
+using PriceCompareData.Common;
 using PriceCompareData.Data;
+using Quartz;
 
 namespace PriceCompareTests
 {
@@ -27,62 +24,47 @@ namespace PriceCompareTests
             "<!DOCTYPE html><html><head><title>Pardon Our Interruption</title></head>" +
             "<body><script src=\"/_Incapsula_Resource?x=1\"></script></body></html>";
 
-        private static string ProductJson(params (int Id, string Name, decimal Price)[] products)
-        {
-            var results = string.Join(",", products.Select(p =>
-                $"{{\"_type\":\"PRODUCT\",\"id\":{p.Id},\"name\":\"{p.Name}\",\"brand\":\"Coles\",\"size\":\"1 each\",\"pricing\":{{\"now\":{p.Price}}}}}"));
-            return $"{{\"pageProps\":{{\"searchResults\":{{\"results\":[{results}]}}}}}}";
-        }
-
         private static ColesBlockBreaker NewBreaker() => new(TimeSpan.FromMinutes(180));
 
-        private static Task<string> Fetch(SequenceHandler handler, ColesBlockBreaker breaker) =>
-            ColesDomFetchGuard.FetchJsonAsync(new HttpClient(handler), Url, NullLogger.Instance, CancellationToken.None, breaker);
-
         [Fact]
-        public async Task FetchJsonAsync_ReturnsBody_WhenResponseIsJson()
+        public void Validate_ReturnsBody_WhenResponseIsJson()
         {
-            var json = ProductJson((1, "Bread", 3.5m));
-            var body = await Fetch(SequenceHandler.Json(json), NewBreaker());
-            body.Should().Be(json);
+            ColesDomFetchGuard.Validate(200, "application/json", "{\"pageProps\":{}}", Url, NewBreaker())
+                .Should().Be("{\"pageProps\":{}}");
         }
 
         [Fact]
-        public async Task FetchJsonAsync_ThrowsBlockedAndTripsBreaker_WhenImpervaPageReturnedWith200()
+        public void Validate_ThrowsBlockedAndTripsBreaker_WhenImpervaPageReturnedWith200()
         {
             var breaker = NewBreaker();
-            var handler = new SequenceHandler((HttpStatusCode.OK, ImpervaPage, "text/html"));
 
-            var act = () => Fetch(handler, breaker);
+            var act = () => ColesDomFetchGuard.Validate(200, "text/html", ImpervaPage, Url, breaker);
 
-            (await act.Should().ThrowAsync<ColesBlockedException>()).Which.Message.Should().Contain("Imperva");
+            act.Should().Throw<ColesBlockedException>().Which.Message.Should().Contain("Imperva");
             breaker.BlockedUntilUtc.Should().NotBeNull();
         }
 
         [Fact]
-        public async Task FetchJsonAsync_SkipsRequest_WhileBreakerIsOpen()
+        public void Breaker_Throws_WhileOpen()
         {
             var breaker = NewBreaker();
             breaker.Trip();
-            var handler = SequenceHandler.Json(ProductJson((1, "Bread", 3.5m)));
 
-            var act = () => Fetch(handler, breaker);
+            var act = () => breaker.ThrowIfOpen(Url);
 
-            (await act.Should().ThrowAsync<ColesBlockedException>()).Which.Message.Should().Contain("cooling down");
-            handler.Calls.Should().Be(0);
+            act.Should().Throw<ColesBlockedException>().Which.Message.Should().Contain("cooling down");
         }
 
         [Fact]
-        public async Task Breaker_Closes_AfterCooldown()
+        public void Breaker_Closes_AfterCooldown()
         {
             var now = new DateTime(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
             var breaker = new ColesBlockBreaker(TimeSpan.FromMinutes(180), () => now);
             breaker.Trip();
 
             now = now.AddMinutes(181);
-            var body = await Fetch(SequenceHandler.Json("{}"), breaker);
 
-            body.Should().Be("{}");
+            breaker.Invoking(b => b.ThrowIfOpen(Url)).Should().NotThrow();
             breaker.BlockedUntilUtc.Should().BeNull();
         }
 
@@ -92,34 +74,32 @@ namespace PriceCompareTests
             var breaker = new ColesBlockBreaker(TimeSpan.Zero);
             breaker.Trip();
 
-            var act = () => breaker.ThrowIfOpen(Url);
-
-            act.Should().NotThrow();
+            breaker.Invoking(b => b.ThrowIfOpen(Url)).Should().NotThrow();
         }
 
         [Theory]
-        [InlineData(HttpStatusCode.InternalServerError)]
-        [InlineData(HttpStatusCode.GatewayTimeout)]
-        [InlineData(HttpStatusCode.NotFound)]
-        public async Task FetchJsonAsync_Throws_WhenStatusIsNotSuccess(HttpStatusCode status)
+        [InlineData(500, true)]
+        [InlineData(504, true)]
+        [InlineData(408, true)]
+        [InlineData(404, false)]
+        public void Validate_Throws_WhenStatusIsNotSuccess(int status, bool transient)
         {
             var breaker = NewBreaker();
-            var handler = new SequenceHandler((status, "<html>error</html>", "text/html"));
 
-            var act = () => Fetch(handler, breaker);
+            var act = () => ColesDomFetchGuard.Validate(status, "text/html", "<html>error</html>", Url, breaker);
 
-            (await act.Should().ThrowAsync<ColesScrapeException>()).Which.Message.Should().Contain($"HTTP {(int)status}");
+            var ex = act.Should().Throw<ColesScrapeException>().Which;
+            ex.Message.Should().Contain($"HTTP {status}");
+            ex.IsTransient.Should().Be(transient);
             breaker.BlockedUntilUtc.Should().BeNull("only the Imperva page opens the breaker");
         }
 
         [Fact]
-        public async Task FetchJsonAsync_Throws_WhenBodyIsNotJson()
+        public void Validate_Throws_WhenBodyIsNotJson()
         {
-            var handler = new SequenceHandler((HttpStatusCode.OK, "<html>maintenance</html>", "text/html"));
+            var act = () => ColesDomFetchGuard.Validate(200, "text/html", "<html>maintenance</html>", Url, NewBreaker());
 
-            var act = () => Fetch(handler, NewBreaker());
-
-            (await act.Should().ThrowAsync<ColesScrapeException>()).Which.Message.Should().Contain("non-JSON");
+            act.Should().Throw<ColesScrapeException>().Which.Message.Should().Contain("non-JSON");
         }
 
         [Fact]
@@ -128,19 +108,29 @@ namespace PriceCompareTests
             var act = () => ColesDomFetchGuard.EnsureProducts(0, Url);
             act.Should().Throw<ColesScrapeException>().WithMessage("*0 products*");
         }
+    }
 
-        // ---- scraper-level behaviour (Bakery stands in for all Coles category scrapers) ----
+    // BTS-156 P3: one scraper for every Coles category, fed by a page source (a browser in production).
+    public class ColesCategoryScraperServiceTests
+    {
+        private static readonly ColesCategory Bakery = ColesCategories.FindBySlug("bakery")!;
 
-        private static (ColesBakeryDomScraperService Scraper, AppDbContext Db, Mock<IScrapeExportService> Export) NewBakeryScraper(SequenceHandler handler)
+        private static string PageJson(int noOfResults, int pageSize, params (int Id, string Name, decimal Price)[] products)
+        {
+            var results = string.Join(",", products.Select(p =>
+                $"{{\"_type\":\"PRODUCT\",\"id\":{p.Id},\"name\":\"{p.Name}\",\"brand\":\"Coles\",\"size\":\"1 each\",\"pricing\":{{\"now\":{p.Price}}}}}"));
+            return $"{{\"pageProps\":{{\"searchResults\":{{\"noOfResults\":{noOfResults},\"pageSize\":{pageSize},\"results\":[{results}]}}}}}}";
+        }
+
+        private static (ColesCategoryScraperService Scraper, AppDbContext Db, Mock<IScrapeExportService> Export) NewScraper(FakePageSource source)
         {
             var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options);
             var export = new Mock<IScrapeExportService>();
-            var scraper = new ColesBakeryDomScraperService(
-                new HttpClient(handler),
-                new Mock<ILogger<ColesBakeryDomScraperService>>().Object,
-                new Mock<IDistributedCache>().Object,
+            var scraper = new ColesCategoryScraperService(
+                source,
+                new Mock<ILogger<ColesCategoryScraperService>>().Object,
                 db,
                 new Mock<IIngestionService>().Object,
                 export.Object);
@@ -148,82 +138,127 @@ namespace PriceCompareTests
         }
 
         [Fact]
-        public async Task ScrapeAsync_ReturnsProducts_WhenAllPagesAreValid()
+        public async Task ScrapeAsync_SavesEveryPage_AndStopsAtTheLastPage()
         {
-            var handler = new SequenceHandler(
-                (HttpStatusCode.OK, ProductJson((1, "Bread", 3.5m), (2, "Rolls", 4m)), "application/json"),
-                (HttpStatusCode.OK, ProductJson(), "application/json"));
-            var (scraper, db, _) = NewBakeryScraper(handler);
+            var source = new FakePageSource(
+                PageJson(3, 2, (1, "Bread", 3.5m), (2, "Rolls", 4m)),
+                PageJson(3, 2, (3, "Bagels", 5m)));
+            var (scraper, db, export) = NewScraper(source);
 
-            var products = await scraper.ScrapeAsync();
+            var products = await scraper.ScrapeAsync(Bakery);
 
-            products.Should().HaveCount(2);
-            db.PriceHistory.Count().Should().Be(2);
+            products.Should().HaveCount(3);
+            source.RequestedPages.Should().Equal(1, 2);
+            db.PriceHistory.Should().HaveCount(3).And.OnlyContain(ph => ph.OfferType == OfferType.BAKERY && ph.ShopType == ShopType.COLES);
+            export.Verify(e => e.ExportAsync(It.Is<ScrapeExportRequest>(r => r.Source == "coles_bakery_json"), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]
         public async Task ScrapeAsync_Throws_WhenFirstPageHasNoProducts()
         {
-            var (scraper, db, export) = NewBakeryScraper(SequenceHandler.Json(ProductJson()));
+            var (scraper, db, export) = NewScraper(new FakePageSource(PageJson(0, 48)));
 
-            var act = () => scraper.ScrapeAsync();
+            var act = () => scraper.ScrapeAsync(Bakery);
 
             await act.Should().ThrowAsync<ColesScrapeException>().WithMessage("*0 products*");
-            db.PriceHistory.Count().Should().Be(0);
+            db.PriceHistory.Should().BeEmpty();
             export.Verify(e => e.ExportAsync(It.IsAny<ScrapeExportRequest>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Fact]
         public async Task ScrapeAsync_Throws_WhenFirstPageJsonIsMalformed()
         {
-            var (scraper, _, _) = NewBakeryScraper(SequenceHandler.Json("{\"pageProps\": [not json"));
+            var (scraper, _, _) = NewScraper(new FakePageSource("{\"pageProps\": [not json"));
 
-            var act = () => scraper.ScrapeAsync();
+            var act = () => scraper.ScrapeAsync(Bakery);
 
             await act.Should().ThrowAsync<ColesScrapeException>().WithMessage("*could not be parsed*");
         }
 
         [Fact]
+        public async Task ScrapeAsync_Throws_WhenFirstPageIsBlocked()
+        {
+            var source = new FakePageSource(new ColesBlockedException("Coles returned an Imperva bot-block page"));
+            var (scraper, db, _) = NewScraper(source);
+
+            var act = () => scraper.ScrapeAsync(Bakery);
+
+            await act.Should().ThrowAsync<ColesBlockedException>();
+            db.PriceHistory.Should().BeEmpty();
+        }
+
+        [Fact]
         public async Task ScrapeAsync_SavesEarlierPagesThenThrows_WhenALaterPageFails()
         {
-            var handler = new SequenceHandler(
-                (HttpStatusCode.OK, ProductJson((1, "Bread", 3.5m), (2, "Rolls", 4m)), "application/json"),
-                (HttpStatusCode.OK, "<html>maintenance</html>", "text/html"));
-            var (scraper, db, export) = NewBakeryScraper(handler);
+            var source = new FakePageSource(
+                PageJson(4, 2, (1, "Bread", 3.5m), (2, "Rolls", 4m)),
+                new ColesBlockedException("Coles returned an Imperva bot-block page"));
+            var (scraper, db, export) = NewScraper(source);
 
-            var act = () => scraper.ScrapeAsync();
+            var act = () => scraper.ScrapeAsync(Bakery);
 
             await act.Should().ThrowAsync<ColesScrapeException>().WithMessage("*saved 2 products*");
-            db.PriceHistory.Count().Should().Be(2);
+            db.PriceHistory.Should().HaveCount(2);
             export.Verify(e => e.ExportAsync(It.IsAny<ScrapeExportRequest>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
-        /// <summary>Returns the queued responses in order; repeats the last one when the queue runs out.</summary>
-        private class SequenceHandler : HttpMessageHandler
+        /// <summary>Returns the queued pages in order (a string is JSON, an exception is thrown).</summary>
+        private class FakePageSource : IColesCategoryPageSource
         {
-            private readonly Queue<(HttpStatusCode Status, string Body, string ContentType)> _responses;
-            private (HttpStatusCode Status, string Body, string ContentType) _last;
+            private readonly Queue<object> _pages;
 
-            public SequenceHandler(params (HttpStatusCode Status, string Body, string ContentType)[] responses)
+            public FakePageSource(params object[] pages) => _pages = new Queue<object>(pages);
+
+            public List<int> RequestedPages { get; } = new();
+
+            public Task<string> GetPageJsonAsync(ColesCategory category, int page, CancellationToken ct)
             {
-                _responses = new Queue<(HttpStatusCode, string, string)>(responses);
-                _last = responses[^1];
+                RequestedPages.Add(page);
+                var next = _pages.Count > 0 ? _pages.Dequeue() : PageJson(0, 48);
+                return next is Exception ex ? Task.FromException<string>(ex) : Task.FromResult((string)next);
             }
+        }
+    }
 
-            public static SequenceHandler Json(string body) => new((HttpStatusCode.OK, body, "application/json"));
+    public class ColesCategoriesTests
+    {
+        [Fact]
+        public void Categories_HaveUniqueSlugsJobNamesAndOfferTypes()
+        {
+            var all = ColesCategories.All;
+            all.Select(c => c.Slug).Should().OnlyHaveUniqueItems();
+            all.Select(c => c.JobName).Should().OnlyHaveUniqueItems();
+            all.Select(c => c.OfferType).Should().OnlyHaveUniqueItems();
+            all.Select(c => c.Cron).Should().OnlyHaveUniqueItems();
+        }
 
-            public int Calls { get; private set; }
+        [Fact]
+        public void Categories_HaveValidQuartzCron()
+        {
+            ColesCategories.All.Should().OnlyContain(c => CronExpression.IsValidExpression(c.Cron));
+        }
 
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            {
-                Calls++;
-                var next = _responses.Count > 0 ? _responses.Dequeue() : _last;
-                _last = next;
-                return Task.FromResult(new HttpResponseMessage(next.Status)
-                {
-                    Content = new StringContent(next.Body, Encoding.UTF8, next.ContentType)
-                });
-            }
+        [Fact]
+        public void Categories_DoNotIncludeRetiredOrSkippedSlugs()
+        {
+            var slugs = ColesCategories.All.Select(c => c.Slug).ToList();
+            slugs.Should().NotContain(new[] { "down-down", "dietary-world-foods", "back-to-school", "tobacco" });
+            slugs.Should().HaveCount(20);
+        }
+
+        [Fact]
+        public void FindBySlug_IsCaseInsensitive_AndReturnsNullForUnknown()
+        {
+            ColesCategories.FindBySlug("Health-Dietary")!.JobName.Should().Be("ColesHealthDietaryDomJob");
+            ColesCategories.FindBySlug("down-down").Should().BeNull();
+        }
+
+        [Fact]
+        public void ExportSourceAndEnvPrefix_FollowTheOldNaming()
+        {
+            var category = ColesCategories.FindBySlug("chips-chocolates-snacks")!;
+            category.ExportSource.Should().Be("coles_chips_chocolates_snacks_json");
+            category.EnvPrefix.Should().Be("COLES_CHIPS_CHOCOLATES_SNACKS");
         }
     }
 }

@@ -1,83 +1,47 @@
 using System;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using PriceCompareCore.Exceptions;
 
 namespace PriceCompareCore.Services
 {
     /// <summary>
-    /// Shared fetch and validation for the Coles _next/data category scrapers (BTS-156).
-    /// Anything that is not usable product JSON throws <see cref="ColesScrapeException"/>, so a
-    /// blocked or broken scrape shows up as a failed job instead of "succeeded with 0 products".
+    /// Validation shared by the Coles category scrape (BTS-156). Anything that is not usable product JSON
+    /// throws <see cref="ColesScrapeException"/>, so a blocked or broken scrape shows up as a failed job
+    /// instead of "succeeded with 0 products".
     /// </summary>
     public static class ColesDomFetchGuard
     {
         private static readonly string[] ImpervaMarkers = { "Pardon Our Interruption", "_Incapsula_Resource" };
 
-        /// <summary>Process-wide breaker shared by every Coles category scraper.</summary>
+        /// <summary>Process-wide breaker shared by every Coles category scrape.</summary>
         public static ColesBlockBreaker Breaker { get; } = new(ColesBlockBreaker.CooldownFromEnvironment());
 
-        public static async Task<string> FetchJsonAsync(
-            HttpClient httpClient,
-            string url,
-            ILogger logger,
-            CancellationToken ct,
-            ColesBlockBreaker? breaker = null)
+        /// <summary>
+        /// Returns <paramref name="body"/> when it is a successful JSON response; otherwise throws.
+        /// An Imperva block page also trips <paramref name="breaker"/>.
+        /// </summary>
+        public static string Validate(int status, string? contentType, string body, string url, ColesBlockBreaker? breaker = null)
         {
             breaker ??= Breaker;
-            breaker.ThrowIfOpen(url);
 
-            HttpResponseMessage resp;
-            try
+            // Imperva answers with HTTP 200 and an HTML challenge page, so check the body before the status.
+            if (IsImpervaBlock(body))
             {
-                resp = await httpClient.GetAsync(url, ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (TaskCanceledException ex)
-            {
-                throw new ColesScrapeException($"Coles request timed out for {url}", ex);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new ColesScrapeException($"Coles request failed for {url}: {ex.Message}", ex);
+                breaker.Trip();
+                throw new ColesBlockedException($"Coles returned an Imperva bot-block page (HTTP {status}) for {url}");
             }
 
-            using (resp)
+            if (status is < 200 or > 299)
             {
-                var body = await resp.Content.ReadAsStringAsync(ct);
-
-                // Imperva answers with HTTP 200 and an HTML challenge page, so check the body before the status.
-                if (IsImpervaBlock(body))
-                {
-                    breaker.Trip();
-                    logger.LogError("Coles JSON: Imperva bot-block page returned for {Url}; pausing Coles scrapes until {Until:u}",
-                        url, breaker.BlockedUntilUtc);
-                    throw new ColesBlockedException(
-                        $"Coles returned an Imperva bot-block page (HTTP {(int)resp.StatusCode}) for {url}");
-                }
-
-                if (!resp.IsSuccessStatusCode)
-                {
-                    logger.LogWarning("Coles JSON: non-OK status {Status} for {Url}", (int)resp.StatusCode, url);
-                    throw new ColesScrapeException($"Coles returned HTTP {(int)resp.StatusCode} for {url}");
-                }
-
-                if (!LooksLikeJson(body))
-                {
-                    var contentType = resp.Content.Headers.ContentType?.MediaType ?? "unknown";
-                    logger.LogWarning("Coles JSON: non-JSON response ({ContentType}, {Length} bytes) for {Url}",
-                        contentType, body.Length, url);
-                    throw new ColesScrapeException(
-                        $"Coles returned a non-JSON response ({contentType}, {body.Length} bytes) for {url}");
-                }
-
-                return body;
+                throw new ColesScrapeException($"Coles returned HTTP {status} for {url}", status);
             }
+
+            if (!LooksLikeJson(body))
+            {
+                throw new ColesScrapeException(
+                    $"Coles returned a non-JSON response ({(string.IsNullOrWhiteSpace(contentType) ? "unknown" : contentType)}, {body.Length} bytes) for {url}");
+            }
+
+            return body;
         }
 
         public static ColesScrapeException ParseFailure(Exception ex) =>
@@ -96,8 +60,13 @@ namespace PriceCompareCore.Services
         public static ColesScrapeException PartialFailure(int savedCount, Exception cause) =>
             new($"Coles JSON: saved {savedCount} products, then stopped early: {cause.Message}", cause);
 
-        internal static bool IsImpervaBlock(string body)
+        public static bool IsImpervaBlock(string? body)
         {
+            if (string.IsNullOrEmpty(body))
+            {
+                return false;
+            }
+
             foreach (var marker in ImpervaMarkers)
             {
                 if (body.Contains(marker, StringComparison.OrdinalIgnoreCase))

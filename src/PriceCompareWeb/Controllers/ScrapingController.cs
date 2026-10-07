@@ -4,7 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Azure;
 using Microsoft.AspNetCore.Mvc;
+using PriceCompareCore.Exceptions;
 using PriceCompareCore.Interfaces;
+using PriceCompareCore.Services;
 using PriceCompareData.DTOs;
 
 namespace PriceCompareWeb.Controllers
@@ -15,28 +17,7 @@ namespace PriceCompareWeb.Controllers
     {
         private readonly IColesDownScraperService _scraperService;
         private readonly IColesSpecialScraperService _specialScraperService;
-        private readonly IColesDownDomScraperService _colesDownDomService;
-        private readonly IColesMeatSeafoodDomScraperService _colesMeatSeafoodDomService;
-        private readonly IColesFruitVegetablesDomScraperService _colesFruitVegetablesDomService;
-        private readonly IColesDairyEggsFridgeDomScraperService _colesDairyEggsFridgeDomService;
-        private readonly IColesBakeryDomScraperService _colesBakeryDomService;
-        private readonly IColesDeliDomScraperService _colesDeliDomService;
-        private readonly IColesPantryDomScraperService _colesPantryDomService;
-        private readonly IColesDietaryWorldFoodsDomScraperService _colesDietaryWorldFoodsDomService;
-        private readonly IColesInternationalFoodsDomScraperService _colesInternationalFoodsDomService;
-        private readonly IColesHealthDietaryDomScraperService _colesHealthDietaryDomService;
-        private readonly IColesChipsChocolatesSnacksDomScraperService _colesChipsChocolatesSnacksDomService;
-        private readonly IColesDrinksDomScraperService _colesDrinksDomService;
-        private readonly IColesLiquorlandDomScraperService _colesLiquorlandDomService;
-        private readonly IColesFrozenDomScraperService _colesFrozenDomService;
-        private readonly IColesCleaningLaundryDomScraperService _colesCleaningLaundryDomService;
-        private readonly IColesHealthBeautyDomScraperService _colesHealthBeautyDomService;
-        private readonly IColesBabyDomScraperService _colesBabyDomService;
-        private readonly IColesPetDomScraperService _colesPetDomService;
-        private readonly IColesHomeGardenDomScraperService _colesHomeGardenDomService;
-        private readonly IColesBigPackValueDomScraperService _colesBigPackValueDomService;
-        private readonly IColesBonusCreditProductsDomScraperService _colesBonusCreditProductsDomService;
-        private readonly IColesDeliverMoreRangeDomScraperService _colesDeliverMoreRangeDomService;
+        private readonly IColesCategoryScraperService _colesCategoryScraper;
         private readonly ILogger<ScrapingController> _logger;
         private readonly IWoolworthsSpecialScraperService _wscraperService;
         private readonly IWoolworthsLowerShelfDomScraperService _wwsLowerShelfDomService;
@@ -49,28 +30,7 @@ namespace PriceCompareWeb.Controllers
         public ScrapingController(IColesDownScraperService scraperService,
         ILogger<ScrapingController> logger,
         IColesSpecialScraperService specialScraperService,
-        IColesDownDomScraperService colesDownDomService,
-        IColesMeatSeafoodDomScraperService colesMeatSeafoodDomService,
-        IColesFruitVegetablesDomScraperService colesFruitVegetablesDomService,
-        IColesDairyEggsFridgeDomScraperService colesDairyEggsFridgeDomService,
-        IColesBakeryDomScraperService colesBakeryDomService,
-        IColesDeliDomScraperService colesDeliDomService,
-        IColesPantryDomScraperService colesPantryDomService,
-        IColesDietaryWorldFoodsDomScraperService colesDietaryWorldFoodsDomService,
-        IColesInternationalFoodsDomScraperService colesInternationalFoodsDomService,
-        IColesHealthDietaryDomScraperService colesHealthDietaryDomService,
-        IColesChipsChocolatesSnacksDomScraperService colesChipsChocolatesSnacksDomService,
-        IColesDrinksDomScraperService colesDrinksDomService,
-        IColesLiquorlandDomScraperService colesLiquorlandDomService,
-        IColesFrozenDomScraperService colesFrozenDomService,
-        IColesCleaningLaundryDomScraperService colesCleaningLaundryDomService,
-        IColesHealthBeautyDomScraperService colesHealthBeautyDomService,
-        IColesBabyDomScraperService colesBabyDomService,
-        IColesPetDomScraperService colesPetDomService,
-        IColesHomeGardenDomScraperService colesHomeGardenDomService,
-        IColesBigPackValueDomScraperService colesBigPackValueDomService,
-        IColesBonusCreditProductsDomScraperService colesBonusCreditProductsDomService,
-        IColesDeliverMoreRangeDomScraperService colesDeliverMoreRangeDomService,
+        IColesCategoryScraperService colesCategoryScraper,
         IWoolworthsSpecialScraperService wscraperService,
         IWoolworthsLowerShelfDomScraperService wwsLowerShelfDomService,
         IWoolworthsEverydayLowPriceDomScraperService wwsEverydayLowPriceDomService,
@@ -82,28 +42,7 @@ namespace PriceCompareWeb.Controllers
             _scraperService = scraperService;
             _logger = logger;
             _specialScraperService = specialScraperService;
-            _colesDownDomService = colesDownDomService;
-            _colesMeatSeafoodDomService = colesMeatSeafoodDomService;
-            _colesFruitVegetablesDomService = colesFruitVegetablesDomService;
-            _colesDairyEggsFridgeDomService = colesDairyEggsFridgeDomService;
-            _colesBakeryDomService = colesBakeryDomService;
-            _colesDeliDomService = colesDeliDomService;
-            _colesPantryDomService = colesPantryDomService;
-            _colesDietaryWorldFoodsDomService = colesDietaryWorldFoodsDomService;
-            _colesInternationalFoodsDomService = colesInternationalFoodsDomService;
-            _colesHealthDietaryDomService = colesHealthDietaryDomService;
-            _colesChipsChocolatesSnacksDomService = colesChipsChocolatesSnacksDomService;
-            _colesDrinksDomService = colesDrinksDomService;
-            _colesLiquorlandDomService = colesLiquorlandDomService;
-            _colesFrozenDomService = colesFrozenDomService;
-            _colesCleaningLaundryDomService = colesCleaningLaundryDomService;
-            _colesHealthBeautyDomService = colesHealthBeautyDomService;
-            _colesBabyDomService = colesBabyDomService;
-            _colesPetDomService = colesPetDomService;
-            _colesHomeGardenDomService = colesHomeGardenDomService;
-            _colesBigPackValueDomService = colesBigPackValueDomService;
-            _colesBonusCreditProductsDomService = colesBonusCreditProductsDomService;
-            _colesDeliverMoreRangeDomService = colesDeliverMoreRangeDomService;
+            _colesCategoryScraper = colesCategoryScraper;
             _wscraperService = wscraperService;
             _wwsLowerShelfDomService = wwsLowerShelfDomService;
             _wwsEverydayLowPriceDomService = wwsEverydayLowPriceDomService;
@@ -136,421 +75,37 @@ namespace PriceCompareWeb.Controllers
             }
         }
 
-        [HttpGet("coles/down-down/dom")]
-        public async Task<IActionResult> GetDownDownDom([FromQuery] int limit = 0)
+        /// <summary>
+        /// Scrapes one Coles category (any slug in <see cref="ColesCategories"/>) through the shared browser session.
+        /// Same routes as the old per-category endpoints, e.g. coles/bakery/dom.
+        /// </summary>
+        [HttpGet("coles/{slug}/dom")]
+        public async Task<IActionResult> GetColesCategoryDom(string slug, [FromQuery] int limit = 0)
         {
-            try
+            var category = ColesCategories.FindBySlug(slug);
+            if (category == null)
             {
-                var products = await _colesDownDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
+                return NotFound($"Unknown Coles category '{slug}'.");
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles down-down DOM products");
-                return StatusCode(500, "Failed to get Coles down-down DOM products");
-            }
-        }
 
-        [HttpGet("coles/meat-seafood/dom")]
-        public async Task<IActionResult> GetMeatSeafoodDom([FromQuery] int limit = 0)
-        {
             try
             {
-                var products = await _colesMeatSeafoodDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
+                var products = await _colesCategoryScraper.ScrapeAsync(category, limit, HttpContext.RequestAborted);
                 return Ok(new
                 {
                     Count = products.Count,
                     Products = products
                 });
             }
-            catch (Exception ex)
+            catch (ColesScrapeException ex)
             {
-                _logger.LogError(ex, "Failed to get Coles meat & seafood DOM products");
-                return StatusCode(500, "Failed to get Coles meat & seafood DOM products");
-            }
-        }
-
-        [HttpGet("coles/fruit-vegetables/dom")]
-        public async Task<IActionResult> GetFruitVegetablesDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesFruitVegetablesDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
+                _logger.LogError(ex, "Failed to scrape Coles {Slug}", slug);
+                return StatusCode(500, $"Failed to scrape Coles {slug}: {ex.Message}");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to get Coles fruit & vegetables DOM products");
-                return StatusCode(500, "Failed to get Coles fruit & vegetables DOM products");
-            }
-        }
-
-        [HttpGet("coles/dairy-eggs-fridge/dom")]
-        public async Task<IActionResult> GetDairyEggsFridgeDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesDairyEggsFridgeDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles dairy, eggs & fridge DOM products");
-                return StatusCode(500, "Failed to get Coles dairy, eggs & fridge DOM products");
-            }
-        }
-
-        [HttpGet("coles/bakery/dom")]
-        public async Task<IActionResult> GetBakeryDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesBakeryDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles bakery DOM products");
-                return StatusCode(500, "Failed to get Coles bakery DOM products");
-            }
-        }
-
-        [HttpGet("coles/deli/dom")]
-        public async Task<IActionResult> GetDeliDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesDeliDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles deli DOM products");
-                return StatusCode(500, "Failed to get Coles deli DOM products");
-            }
-        }
-
-        [HttpGet("coles/pantry/dom")]
-        public async Task<IActionResult> GetPantryDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesPantryDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles pantry DOM products");
-                return StatusCode(500, "Failed to get Coles pantry DOM products");
-            }
-        }
-
-        [HttpGet("coles/dietary-world-foods/dom")]
-        public async Task<IActionResult> GetDietaryWorldFoodsDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesDietaryWorldFoodsDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles dietary & world foods DOM products");
-                return StatusCode(500, "Failed to get Coles dietary & world foods DOM products");
-            }
-        }
-
-        [HttpGet("coles/international-foods/dom")]
-        public async Task<IActionResult> GetInternationalFoodsDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesInternationalFoodsDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles international foods DOM products");
-                return StatusCode(500, "Failed to get Coles international foods DOM products");
-            }
-        }
-
-        [HttpGet("coles/health-dietary/dom")]
-        public async Task<IActionResult> GetHealthDietaryDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesHealthDietaryDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles health & dietary DOM products");
-                return StatusCode(500, "Failed to get Coles health & dietary DOM products");
-            }
-        }
-
-        [HttpGet("coles/chips-chocolates-snacks/dom")]
-        public async Task<IActionResult> GetChipsChocolatesSnacksDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesChipsChocolatesSnacksDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles chips, chocolates & snacks DOM products");
-                return StatusCode(500, "Failed to get Coles chips, chocolates & snacks DOM products");
-            }
-        }
-
-        [HttpGet("coles/drinks/dom")]
-        public async Task<IActionResult> GetDrinksDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesDrinksDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles drinks DOM products");
-                return StatusCode(500, "Failed to get Coles drinks DOM products");
-            }
-        }
-
-        [HttpGet("coles/liquorland/dom")]
-        public async Task<IActionResult> GetLiquorlandDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesLiquorlandDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles liquorland DOM products");
-                return StatusCode(500, "Failed to get Coles liquorland DOM products");
-            }
-        }
-
-        [HttpGet("coles/frozen/dom")]
-        public async Task<IActionResult> GetFrozenDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesFrozenDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles frozen DOM products");
-                return StatusCode(500, "Failed to get Coles frozen DOM products");
-            }
-        }
-
-        [HttpGet("coles/cleaning-laundry/dom")]
-        public async Task<IActionResult> GetCleaningLaundryDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesCleaningLaundryDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles cleaning & laundry DOM products");
-                return StatusCode(500, "Failed to get Coles cleaning & laundry DOM products");
-            }
-        }
-
-        [HttpGet("coles/health-beauty/dom")]
-        public async Task<IActionResult> GetHealthBeautyDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesHealthBeautyDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles health & beauty DOM products");
-                return StatusCode(500, "Failed to get Coles health & beauty DOM products");
-            }
-        }
-
-        [HttpGet("coles/baby/dom")]
-        public async Task<IActionResult> GetBabyDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesBabyDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles baby DOM products");
-                return StatusCode(500, "Failed to get Coles baby DOM products");
-            }
-        }
-
-        [HttpGet("coles/pet/dom")]
-        public async Task<IActionResult> GetPetDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesPetDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles pet DOM products");
-                return StatusCode(500, "Failed to get Coles pet DOM products");
-            }
-        }
-
-        [HttpGet("coles/home-garden/dom")]
-        public async Task<IActionResult> GetHomeGardenDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesHomeGardenDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles home & garden DOM products");
-                return StatusCode(500, "Failed to get Coles home & garden DOM products");
-            }
-        }
-
-        [HttpGet("coles/big-pack-value/dom")]
-        public async Task<IActionResult> GetBigPackValueDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesBigPackValueDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles big pack value DOM products");
-                return StatusCode(500, "Failed to get Coles big pack value DOM products");
-            }
-        }
-
-        [HttpGet("coles/bonus-credit-products/dom")]
-        public async Task<IActionResult> GetBonusCreditProductsDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesBonusCreditProductsDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles bonus credit products DOM products");
-                return StatusCode(500, "Failed to get Coles bonus credit products DOM products");
-            }
-        }
-
-        [HttpGet("coles/deliver-more-range/dom")]
-        public async Task<IActionResult> GetDeliverMoreRangeDom([FromQuery] int limit = 0)
-        {
-            try
-            {
-                var products = await _colesDeliverMoreRangeDomService.ScrapeAsync(limit, HttpContext.RequestAborted);
-                return Ok(new
-                {
-                    Count = products.Count,
-                    Products = products
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Coles deliver more range DOM products");
-                return StatusCode(500, "Failed to get Coles deliver more range DOM products");
+                _logger.LogError(ex, "Failed to scrape Coles {Slug}", slug);
+                return StatusCode(500, $"Failed to scrape Coles {slug}");
             }
         }
 
