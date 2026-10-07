@@ -34,5 +34,8 @@ namespace PriceCompareData.Common
         public const int BUY_MORE_SAVE_MORE = 24;
         public const int SUMMER_PRICE = 25;
         public const int AUTUMN_PRICE = 26;
+        // BTS-156: Coles split dietary-world-foods (11, kept for history) into these two categories.
+        public const int INTERNATIONAL_FOODS = 27;
+        public const int HEALTH_DIETARY = 28;
     }
 }

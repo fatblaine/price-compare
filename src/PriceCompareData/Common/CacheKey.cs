@@ -16,6 +16,8 @@ namespace PriceCompareData.Entities.Common
         public const string COLES_DELI_DOM_PRODUCTS = "ColesDeliDomProducts";
         public const string COLES_PANTRY_DOM_PRODUCTS = "ColesPantryDomProducts";
         public const string COLES_DIETARY_WORLD_FOODS_DOM_PRODUCTS = "ColesDietaryWorldFoodsDomProducts";
+        public const string COLES_INTERNATIONAL_FOODS_DOM_PRODUCTS = "ColesInternationalFoodsDomProducts";
+        public const string COLES_HEALTH_DIETARY_DOM_PRODUCTS = "ColesHealthDietaryDomProducts";
         public const string COLES_CHIPS_CHOCOLATES_SNACKS_DOM_PRODUCTS = "ColesChipsChocolatesSnacksDomProducts";
         public const string COLES_DRINKS_DOM_PRODUCTS = "ColesDrinksDomProducts";
         public const string COLES_LIQUORLAND_DOM_PRODUCTS = "ColesLiquorlandDomProducts";

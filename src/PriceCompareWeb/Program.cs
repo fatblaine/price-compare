@@ -170,12 +170,14 @@ if (enableQuartzJobs)
         q.AddJobListener<LoggingJobListener>();
         var localTz = TimeZoneInfo.Local;
 
-        // scrape data - coles down down
-        var jobKey = new JobKey("ColesRefreshJob");
-        q.AddJob<ColesRefreshJob>(opts => opts.WithIdentity(jobKey));
+        // scrape data - coles down down: not scheduled since BTS-156 (Coles removed /browse/down-down)
+
+        // scrape data - coles health & dietary (DOM) - takes the old Down Down slot
+        var jobKeyColesHealthDietary = new JobKey("ColesHealthDietaryDomJob");
+        q.AddJob<ColesHealthDietaryDomJob>(opts => opts.WithIdentity(jobKeyColesHealthDietary));
         q.AddTrigger(opts => opts
-            .ForJob(jobKey)
-            .WithIdentity("ColesRefreshJob-trigger")
+            .ForJob(jobKeyColesHealthDietary)
+            .WithIdentity("ColesHealthDietaryDomJob-trigger")
             .WithCronSchedule("0 5 0 ? * WED", x => x.InTimeZone(localTz)));
 
         // scrape data - coles on special (no scheduled trigger)
@@ -267,11 +269,12 @@ if (enableQuartzJobs)
             .WithIdentity("ColesPantryDomJob-trigger")
             .WithCronSchedule("0 5 1 ? * WED", x => x.InTimeZone(localTz)));
 
-        var jobKeyColesDietaryWorldFoods = new JobKey("ColesDietaryWorldFoodsDomJob");
-        q.AddJob<ColesDietaryWorldFoodsDomJob>(opts => opts.WithIdentity(jobKeyColesDietaryWorldFoods));
+        // dietary-world-foods: not scheduled since BTS-156 (Coles split it into international-foods and health-dietary)
+        var jobKeyColesInternationalFoods = new JobKey("ColesInternationalFoodsDomJob");
+        q.AddJob<ColesInternationalFoodsDomJob>(opts => opts.WithIdentity(jobKeyColesInternationalFoods));
         q.AddTrigger(opts => opts
-            .ForJob(jobKeyColesDietaryWorldFoods)
-            .WithIdentity("ColesDietaryWorldFoodsDomJob-trigger")
+            .ForJob(jobKeyColesInternationalFoods)
+            .WithIdentity("ColesInternationalFoodsDomJob-trigger")
             .WithCronSchedule("0 15 1 ? * WED", x => x.InTimeZone(localTz)));
 
         var jobKeyColesChipsChocolatesSnacks = new JobKey("ColesChipsChocolatesSnacksDomJob");
@@ -390,26 +393,44 @@ builder.Services.AddHttpClient<IColesDownScraperService, ColesDownScraperService
             TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
 builder.Services.AddScoped<IColesSpecialScraperService, ColesSpecialScraperService>();
-builder.Services.AddHttpClient<IColesDownDomScraperService, ColesDownDomScraperService>();
-builder.Services.AddHttpClient<IColesMeatSeafoodDomScraperService, ColesMeatSeafoodDomScraperService>();
-builder.Services.AddHttpClient<IColesFruitVegetablesDomScraperService, ColesFruitVegetablesDomScraperService>();
-builder.Services.AddHttpClient<IColesDairyEggsFridgeDomScraperService, ColesDairyEggsFridgeDomScraperService>();
-builder.Services.AddHttpClient<IColesBakeryDomScraperService, ColesBakeryDomScraperService>();
-builder.Services.AddHttpClient<IColesDeliDomScraperService, ColesDeliDomScraperService>();
-builder.Services.AddHttpClient<IColesPantryDomScraperService, ColesPantryDomScraperService>();
-builder.Services.AddHttpClient<IColesDietaryWorldFoodsDomScraperService, ColesDietaryWorldFoodsDomScraperService>();
-builder.Services.AddHttpClient<IColesChipsChocolatesSnacksDomScraperService, ColesChipsChocolatesSnacksDomScraperService>();
-builder.Services.AddHttpClient<IColesDrinksDomScraperService, ColesDrinksDomScraperService>();
-builder.Services.AddHttpClient<IColesLiquorlandDomScraperService, ColesLiquorlandDomScraperService>();
-builder.Services.AddHttpClient<IColesFrozenDomScraperService, ColesFrozenDomScraperService>();
-builder.Services.AddHttpClient<IColesCleaningLaundryDomScraperService, ColesCleaningLaundryDomScraperService>();
-builder.Services.AddHttpClient<IColesHealthBeautyDomScraperService, ColesHealthBeautyDomScraperService>();
-builder.Services.AddHttpClient<IColesBabyDomScraperService, ColesBabyDomScraperService>();
-builder.Services.AddHttpClient<IColesPetDomScraperService, ColesPetDomScraperService>();
-builder.Services.AddHttpClient<IColesHomeGardenDomScraperService, ColesHomeGardenDomScraperService>();
-builder.Services.AddHttpClient<IColesBigPackValueDomScraperService, ColesBigPackValueDomScraperService>();
-builder.Services.AddHttpClient<IColesBonusCreditProductsDomScraperService, ColesBonusCreditProductsDomScraperService>();
-builder.Services.AddHttpClient<IColesDeliverMoreRangeDomScraperService, ColesDeliverMoreRangeDomScraperService>();
+// BTS-156: Coles category scrapers retry 5xx/408/network errors with a long backoff.
+// Imperva block pages come back as HTTP 200 and are deliberately not retried.
+AddColesDomHttpClient<IColesDownDomScraperService, ColesDownDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesMeatSeafoodDomScraperService, ColesMeatSeafoodDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesFruitVegetablesDomScraperService, ColesFruitVegetablesDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesDairyEggsFridgeDomScraperService, ColesDairyEggsFridgeDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesBakeryDomScraperService, ColesBakeryDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesDeliDomScraperService, ColesDeliDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesPantryDomScraperService, ColesPantryDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesDietaryWorldFoodsDomScraperService, ColesDietaryWorldFoodsDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesInternationalFoodsDomScraperService, ColesInternationalFoodsDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesHealthDietaryDomScraperService, ColesHealthDietaryDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesChipsChocolatesSnacksDomScraperService, ColesChipsChocolatesSnacksDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesDrinksDomScraperService, ColesDrinksDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesLiquorlandDomScraperService, ColesLiquorlandDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesFrozenDomScraperService, ColesFrozenDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesCleaningLaundryDomScraperService, ColesCleaningLaundryDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesHealthBeautyDomScraperService, ColesHealthBeautyDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesBabyDomScraperService, ColesBabyDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesPetDomScraperService, ColesPetDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesHomeGardenDomScraperService, ColesHomeGardenDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesBigPackValueDomScraperService, ColesBigPackValueDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesBonusCreditProductsDomScraperService, ColesBonusCreditProductsDomScraperService>(builder.Services);
+AddColesDomHttpClient<IColesDeliverMoreRangeDomScraperService, ColesDeliverMoreRangeDomScraperService>(builder.Services);
+
+static void AddColesDomHttpClient<TClient, TImplementation>(IServiceCollection services)
+    where TClient : class
+    where TImplementation : class, TClient
+{
+    // HttpClient.Timeout covers every retry attempt, so it must outlast the 5s + 15s + 45s backoff.
+    services.AddHttpClient<TClient, TImplementation>(client => client.Timeout = TimeSpan.FromMinutes(3))
+        .AddTransientHttpErrorPolicy(policy => policy.WaitAndRetryAsync(new[]
+        {
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(15),
+            TimeSpan.FromSeconds(45)
+        }));
+}
 
 builder.Services.AddScoped<IWoolworthsSpecialScraperService, WoolworthsSpecialScraperService>();
 builder.Services.AddScoped<IWoolworthsLowerShelfDomScraperService, WoolworthsLowerShelfDomScraperService>();
