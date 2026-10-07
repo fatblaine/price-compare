@@ -2,93 +2,73 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PriceCompareCore.Exceptions;
 using PriceCompareCore.Interfaces;
 using PriceCompareData.Common;
 using PriceCompareData.Data;
 using PriceCompareData.Entities;
-using PriceCompareData.Entities.Common;
 using PriceCompareData.Entities.History;
 
 namespace PriceCompareCore.Services
 {
-    public class ColesHealthDietaryDomScraperService : IColesHealthDietaryDomScraperService
+    /// <summary>
+    /// Scrapes one Coles browse category (see <see cref="ColesCategories"/>). Replaces the 22 per-category
+    /// copies; pages come from <see cref="IColesCategoryPageSource"/> (a real browser session in production).
+    /// </summary>
+    public class ColesCategoryScraperService : IColesCategoryScraperService
     {
-        private const string DefaultDataUrl = WebInfo.COLES_NEXT_DATA_BASE + "/en/browse/health-dietary.json?slug=health-dietary";
         private const string BaseUrl = "https://www.coles.com.au";
         private const string ImageBase = "https://cdn.productimages.coles.com.au/productimages";
-        private const string DefaultUa =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-        private readonly HttpClient _httpClient;
-        private readonly ILogger<ColesHealthDietaryDomScraperService> _logger;
-        private readonly IDistributedCache _cache;
+        private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+        private readonly IColesCategoryPageSource _pageSource;
+        private readonly ILogger<ColesCategoryScraperService> _logger;
         private readonly AppDbContext _dbContext;
         private readonly IIngestionService _ingestion;
         private readonly IScrapeExportService _export;
 
-        private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
-        public ColesHealthDietaryDomScraperService(
-            HttpClient httpClient,
-            ILogger<ColesHealthDietaryDomScraperService> logger,
-            IDistributedCache cache,
+        public ColesCategoryScraperService(
+            IColesCategoryPageSource pageSource,
+            ILogger<ColesCategoryScraperService> logger,
             AppDbContext dbContext,
             IIngestionService ingestion,
             IScrapeExportService export)
         {
-            _httpClient = httpClient;
+            _pageSource = pageSource;
             _logger = logger;
-            _cache = cache;
             _dbContext = dbContext;
             _ingestion = ingestion;
             _export = export;
-
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(GetUserAgent());
-            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "en-AU,en;q=0.9");
         }
 
-        public async Task<List<ColesDownProduct>> ScrapeAsync(int limit = 0, CancellationToken ct = default)
+        public async Task<List<ColesDownProduct>> ScrapeAsync(ColesCategory category, int limit = 0, CancellationToken ct = default)
         {
-            var hardCap = GetMaxItems();
-            if (limit <= 0) limit = hardCap;
-            if (limit > hardCap) limit = hardCap;
-
-            // var cached = await _cache.GetStringAsync(CacheKey.COLES_HEALTH_DIETARY_DOM_PRODUCTS, ct);
-            // if (!string.IsNullOrWhiteSpace(cached))
-            // {
-            //     _logger.LogInformation("Coles JSON: returning cached health & dietary products.");
-            //     var cachedItems = JsonSerializer.Deserialize<List<ColesDownProduct>>(cached, JsonOptions) ?? new();
-            //     return cachedItems.Take(limit).ToList();
-            // }
+            var hardCap = category.MaxItems;
+            if (limit <= 0 || limit > hardCap) limit = hardCap;
 
             var all = new List<ColesDownProduct>();
             var seenIds = new HashSet<int>();
             var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var maxPages = GetMaxPages();
+            var maxPages = category.MaxPages;
             var scrapedAt = DateTime.UtcNow;
-
             Exception? stoppedEarly = null;
 
             for (var page = 1; page <= maxPages && all.Count < hardCap; page++)
             {
-                var url = BuildDataUrl(page);
-                _logger.LogInformation("Coles JSON: fetching page {Page}: {Url}", page, url);
+                _logger.LogInformation("Coles {Slug}: fetching page {Page}", category.Slug, page);
 
-                List<ColesDownProduct> pageItems;
+                ParsedPage parsed;
                 try
                 {
-                    var json = await ColesDomFetchGuard.FetchJsonAsync(_httpClient, url, _logger, ct);
-                    pageItems = ParseProducts(json, scrapedAt, seenIds, seenNames);
+                    var json = await _pageSource.GetPageJsonAsync(category, page, ct);
+                    parsed = ParseProducts(json, scrapedAt, seenIds, seenNames);
                 }
                 catch (ColesScrapeException ex) when (all.Count > 0)
                 {
@@ -97,27 +77,24 @@ namespace PriceCompareCore.Services
                     break;
                 }
 
-                if (pageItems.Count == 0)
+                if (parsed.Items.Count == 0)
                 {
                     break;
                 }
 
-                all.AddRange(pageItems);
+                all.AddRange(parsed.Items);
+
+                // Stop on the last page instead of requesting an extra empty one.
+                if (parsed.TotalPages is int totalPages && page >= totalPages)
+                {
+                    break;
+                }
             }
 
-            _logger.LogInformation("Coles JSON: extracted {Count} products.", all.Count);
-            ColesDomFetchGuard.EnsureProducts(all.Count, BuildDataUrl(1));
+            _logger.LogInformation("Coles {Slug}: extracted {Count} products.", category.Slug, all.Count);
+            ColesDomFetchGuard.EnsureProducts(all.Count, $"{BaseUrl}/browse/{category.Slug}");
 
-            await _cache.SetStringAsync(
-                CacheKey.COLES_HEALTH_DIETARY_DOM_PRODUCTS,
-                JsonSerializer.Serialize(all, JsonOptions),
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
-                },
-                ct);
-
-            await PersistAndExportAsync(all, scrapedAt, ct);
+            await PersistAndExportAsync(category, all, scrapedAt, ct);
 
             if (stoppedEarly != null)
             {
@@ -127,27 +104,34 @@ namespace PriceCompareCore.Services
             return all.Take(limit).ToList();
         }
 
-        private static List<ColesDownProduct> ParseProducts(
+        private sealed record ParsedPage(List<ColesDownProduct> Items, int? TotalPages);
+
+        private static ParsedPage ParseProducts(
             string json,
             DateTime scrapedAt,
             HashSet<int> seenIds,
             HashSet<string> seenNames)
         {
             var results = new List<ColesDownProduct>();
-            ColesHealthDietaryApiResponse? dto;
+            ColesApiResponse? dto;
             try
             {
-                dto = JsonSerializer.Deserialize<ColesHealthDietaryApiResponse>(json, JsonOptions);
+                dto = JsonSerializer.Deserialize<ColesApiResponse>(json, JsonOptions);
             }
             catch (JsonException ex)
             {
                 throw ColesDomFetchGuard.ParseFailure(ex);
             }
 
-            var items = dto?.PageProps?.SearchResults?.Results;
+            var searchResults = dto?.PageProps?.SearchResults;
+            int? totalPages = searchResults is { NoOfResults: > 0, PageSize: > 0 }
+                ? (int)Math.Ceiling(searchResults.NoOfResults.Value / (double)searchResults.PageSize.Value)
+                : null;
+
+            var items = searchResults?.Results;
             if (items == null || items.Count == 0)
             {
-                return results;
+                return new ParsedPage(results, totalPages);
             }
 
             foreach (var item in items)
@@ -202,17 +186,18 @@ namespace PriceCompareCore.Services
                     OriginalPrice = was,
                     PricePerUnit = item.Pricing?.Comparable ?? string.Empty,
                     ImageUrl = BuildImageUrl(imageUri),
-                    ProductUrl = BuildProductUrl(item, displayName, id),
+                    ProductUrl = BuildProductUrl(displayName, id),
                     WasPriceText = wasText ?? string.Empty,
                     IsSponsored = !string.IsNullOrWhiteSpace(item.AdId) || !string.IsNullOrWhiteSpace(item.AdSource),
                     ScrapedAt = scrapedAt
                 });
             }
 
-            return results;
+            return new ParsedPage(results, totalPages);
         }
 
         private async Task PersistAndExportAsync(
+            ColesCategory category,
             IReadOnlyList<ColesDownProduct> products,
             DateTime scrapedAt,
             CancellationToken ct)
@@ -222,13 +207,14 @@ namespace PriceCompareCore.Services
                 return;
             }
 
+            var offerType = category.OfferType;
             var today = scrapedAt.Date;
             var tomorrow = today.AddDays(1);
             var priceHistoryRows = new List<PriceHistory>(products.Count);
 
             var existingNames = new HashSet<string>(
                 await _dbContext.PriceHistory
-                    .Where(ph => ph.ShopType == ShopType.COLES && ph.OfferType == OfferType.HEALTH_DIETARY && ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
+                    .Where(ph => ph.ShopType == ShopType.COLES && ph.OfferType == offerType && ph.ScrapedAt >= today && ph.ScrapedAt < tomorrow)
                     .Select(ph => ph.Name!)
                     .ToListAsync(ct),
                 StringComparer.OrdinalIgnoreCase);
@@ -243,7 +229,7 @@ namespace PriceCompareCore.Services
                     ImageUrl = product.ImageUrl ?? string.Empty,
                     CurrentPrice = product.CurrentPrice,
                     ScrapedAt = scrapedAt,
-                    OfferType = OfferType.HEALTH_DIETARY,
+                    OfferType = offerType,
                     ShopType = ShopType.COLES
                 };
 
@@ -260,42 +246,14 @@ namespace PriceCompareCore.Services
             var productRows = _ingestion.MapColesDownProducts(products);
             await _export.ExportAsync(
                 new ScrapeExportRequest(
-                    "coles_health_dietary_json",
+                    category.ExportSource,
                     scrapedAt,
                     priceHistoryRows,
                     productRows),
                 ct);
         }
 
-        private static string BuildDataUrl(int page)
-        {
-            var baseUrl = GetDataUrl();
-            if (baseUrl.Contains("{page}", StringComparison.OrdinalIgnoreCase))
-            {
-                return baseUrl.Replace("{page}", page.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
-            }
-
-            if (page <= 1)
-            {
-                return baseUrl;
-            }
-
-            var separator = baseUrl.Contains("?", StringComparison.Ordinal) ? "&" : "?";
-            if (HasQueryParam(baseUrl, "page"))
-            {
-                return baseUrl;
-            }
-
-            return $"{baseUrl}{separator}page={page}";
-        }
-
-        private static bool HasQueryParam(string url, string name)
-        {
-            var pattern = $"[?&]{Regex.Escape(name)}=";
-            return Regex.IsMatch(url, pattern, RegexOptions.IgnoreCase);
-        }
-
-        private static string BuildDisplayName(ColesHealthDietaryApiProduct item)
+        private static string BuildDisplayName(ColesApiProduct item)
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(item.Brand))
@@ -320,15 +278,14 @@ namespace PriceCompareCore.Services
             return NormalizeWhitespace(name);
         }
 
-        private static string BuildProductUrl(ColesHealthDietaryApiProduct item, string displayName, int id)
+        private static string BuildProductUrl(string displayName, int id)
         {
             if (id <= 0)
             {
                 return string.Empty;
             }
 
-            var slugSource = displayName;
-            var slug = Slugify(slugSource);
+            var slug = Slugify(displayName);
             if (string.IsNullOrWhiteSpace(slug))
             {
                 return $"{BaseUrl}/product/{id}";
@@ -374,101 +331,46 @@ namespace PriceCompareCore.Services
             return cleaned.Trim('-');
         }
 
-        private static int GetMaxPages()
+        private class ColesApiResponse
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_DIETARY_MAX_PAGES");
-            if (int.TryParse(raw, out var v) && v > 0)
-            {
-                return v;
-            }
-
-            raw = Environment.GetEnvironmentVariable("COLES_DOM_MAX_PAGES");
-            return int.TryParse(raw, out v) && v > 0 ? v : 50;
+            public ColesPageProps? PageProps { get; set; }
         }
 
-        private static int GetMaxItems()
+        private class ColesPageProps
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_DIETARY_MAX_ITEMS");
-            if (int.TryParse(raw, out var v) && v > 0)
-            {
-                return v;
-            }
-
-            raw = Environment.GetEnvironmentVariable("COLES_DOM_MAX_ITEMS");
-            return int.TryParse(raw, out v) && v > 0 ? v : 3000;
+            public ColesSearchResults? SearchResults { get; set; }
         }
 
-        private static string GetDataUrl()
+        private class ColesSearchResults
         {
-            var raw = Environment.GetEnvironmentVariable("COLES_HEALTH_DIETARY_DATA_URL");
-            return string.IsNullOrWhiteSpace(raw) ? DefaultDataUrl : raw.Trim();
+            public int? NoOfResults { get; set; }
+            public int? PageSize { get; set; }
+            public List<ColesApiProduct> Results { get; set; } = new();
         }
 
-        private static string GetUserAgent()
-        {
-            var raw = Environment.GetEnvironmentVariable("COLES_USER_AGENT");
-            return string.IsNullOrWhiteSpace(raw) ? DefaultUa : raw.Trim();
-        }
-
-        private class ColesHealthDietaryApiResponse
-        {
-            public ColesHealthDietaryPageProps? PageProps { get; set; }
-        }
-
-        private class ColesHealthDietaryPageProps
-        {
-            public ColesHealthDietarySearchResults? SearchResults { get; set; }
-        }
-
-        private class ColesHealthDietarySearchResults
-        {
-            public List<ColesHealthDietaryApiProduct> Results { get; set; } = new();
-        }
-
-        private class ColesHealthDietaryApiProduct
+        private class ColesApiProduct
         {
             public string? _type { get; set; }
             public int Id { get; set; }
             public string? AdId { get; set; }
             public string? AdSource { get; set; }
-            public bool Featured { get; set; }
             public string? Name { get; set; }
             public string? Brand { get; set; }
-            public string? Description { get; set; }
             public string? Size { get; set; }
-            public bool Availability { get; set; }
-            public string? AvailabilityType { get; set; }
-            public List<ColesHealthDietaryImageUri>? ImageUris { get; set; }
-            public ColesHealthDietaryPricing? Pricing { get; set; }
+            public List<ColesImageUri>? ImageUris { get; set; }
+            public ColesPricing? Pricing { get; set; }
         }
 
-        private class ColesHealthDietaryPricing
+        private class ColesPricing
         {
             public decimal? Now { get; set; }
             public decimal? Was { get; set; }
-            public decimal? SaveAmount { get; set; }
             public string? PriceDescription { get; set; }
-            public ColesHealthDietaryUnit? Unit { get; set; }
             public string? Comparable { get; set; }
-            public string? PromotionType { get; set; }
-            public bool? OnlineSpecial { get; set; }
         }
 
-        private class ColesHealthDietaryUnit
+        private class ColesImageUri
         {
-            public decimal? Quantity { get; set; }
-            public decimal? OfMeasureQuantity { get; set; }
-            public string? OfMeasureUnits { get; set; }
-            public decimal? Price { get; set; }
-            public string? OfMeasureType { get; set; }
-            public bool? IsWeighted { get; set; }
-            public bool? IsIncremental { get; set; }
-        }
-
-        private class ColesHealthDietaryImageUri
-        {
-            public string? AltText { get; set; }
-            public string? Type { get; set; }
             public string? Uri { get; set; }
         }
     }
