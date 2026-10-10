@@ -218,12 +218,21 @@ if (enableQuartzJobs)
 
         // weekly sequential scrape - coles categories (Wed from 00:05 local, every 10 mins).
         // One job class for every category; names and crons live in ColesCategories (BTS-156 P3).
+        // Scraping:EnableColesSchedule=false keeps the jobs (durable, so run-all still triggers them)
+        // but drops the Wednesday crons — Coles runs only when the operator starts a semi-manual session.
+        var enableColesSchedule = builder.Configuration.GetValue<bool?>("Scraping:EnableColesSchedule") ?? true;
         foreach (var category in ColesCategories.All)
         {
             var jobKeyColesCategory = new JobKey(category.JobName);
             q.AddJob<ColesCategoryDomJob>(opts => opts
                 .WithIdentity(jobKeyColesCategory)
+                .StoreDurably()
                 .UsingJobData(ColesCategoryDomJob.SlugKey, category.Slug));
+            if (!enableColesSchedule)
+            {
+                continue;
+            }
+
             q.AddTrigger(opts => opts
                 .ForJob(jobKeyColesCategory)
                 .WithIdentity($"{category.JobName}-trigger")

@@ -14,11 +14,23 @@ namespace PriceCompareCore.Services
     /// <summary>Settings for <see cref="ColesBrowserSession"/>; every value can be overridden by an environment variable.</summary>
     public sealed record ColesBrowserOptions
     {
+        /// <summary>
+        /// When set (e.g. "http://127.0.0.1:9222"), attach to a Chrome the user launched themselves with
+        /// <c>--remote-debugging-port</c> instead of launching one. A user-started Chrome keeps
+        /// <c>navigator.webdriver=false</c>, the one thing that got past Imperva in testing. When set,
+        /// <see cref="Channel"/>, <see cref="Headless"/> and <see cref="StorageStatePath"/> are ignored
+        /// and we reuse the browser's own session; we never close it.
+        /// </summary>
+        public string? CdpUrl { get; init; }
+
         /// <summary>Playwright channel: "chrome" (installed Google Chrome), "msedge", or empty for the bundled Chromium.</summary>
         public string? Channel { get; init; } = "chrome";
 
         /// <summary>A visible window looks like a real visitor; headless Chrome is much more likely to be blocked.</summary>
         public bool Headless { get; init; }
+
+        /// <summary>True when attaching to a user-launched Chrome over CDP rather than launching our own.</summary>
+        public bool UseCdp => !string.IsNullOrWhiteSpace(CdpUrl);
 
         public int PageDelayMinMs { get; init; } = 2000;
         public int PageDelayMaxMs { get; init; } = 5000;
@@ -42,8 +54,10 @@ namespace PriceCompareCore.Services
             var o = new ColesBrowserOptions();
             var channel = Environment.GetEnvironmentVariable("COLES_BROWSER_CHANNEL");
             var statePath = Environment.GetEnvironmentVariable("COLES_BROWSER_STATE_PATH");
+            var cdpUrl = Environment.GetEnvironmentVariable("COLES_BROWSER_CDP_URL");
             return o with
             {
+                CdpUrl = string.IsNullOrWhiteSpace(cdpUrl) ? o.CdpUrl : cdpUrl.Trim(),
                 Channel = channel == null ? o.Channel : (string.IsNullOrWhiteSpace(channel) || channel == "bundled" ? null : channel.Trim()),
                 Headless = bool.TryParse(Environment.GetEnvironmentVariable("COLES_BROWSER_HEADLESS"), out var h) ? h : o.Headless,
                 PageDelayMinMs = Int("COLES_PAGE_DELAY_MIN_MS", o.PageDelayMinMs),
@@ -63,9 +77,12 @@ namespace PriceCompareCore.Services
     /// <summary>
     /// Loads Coles category pages through one long-lived, real browser session, the way a visitor would:
     /// page 1 by opening <c>/browse/{slug}</c> (which also passes Imperva's JavaScript check and yields the
-    /// current Next.js buildId), later pages by the same <c>_next/data</c> fetch the site makes when you
-    /// click "next page". Requests are paced with random pauses. Nothing here hides automation, solves
-    /// CAPTCHAs or rotates IPs: when Coles blocks us we stop (see <see cref="ColesBlockBreaker"/>).
+    /// current Next.js buildId). Later pages come either from an in-page <c>_next/data</c> fetch (when we
+    /// launched the browser) or, in CDP mode, from a top-level navigation to the same <c>_next/data</c> URL —
+    /// the one request a user confirmed gets through by hand. Requests are paced with random pauses.
+    /// Nothing here hides automation, solves CAPTCHAs or rotates IPs; when Coles blocks us we stop
+    /// (see <see cref="ColesBlockBreaker"/>). With <see cref="ColesBrowserOptions.CdpUrl"/> set we attach to
+    /// a Chrome the user started themselves and never close it.
     /// </summary>
     public sealed class ColesBrowserSession : IColesCategoryPageSource, IAsyncDisposable
     {
@@ -197,7 +214,7 @@ namespace PriceCompareCore.Services
             return new JsonObject { ["pageProps"] = pageProps.DeepClone() }.ToJsonString();
         }
 
-        /// <summary>Fetches a later page through the site's own Next.js data endpoint, from inside the page.</summary>
+        /// <summary>Fetches a later page through the site's own Next.js data endpoint.</summary>
         private async Task<string> FetchDataPageAsync(ColesCategory category, int page, CancellationToken ct, bool buildIdRefreshed = false)
         {
             if (_buildId == null || !_page!.Url.StartsWith(BaseUrl, StringComparison.OrdinalIgnoreCase))
@@ -209,11 +226,9 @@ namespace PriceCompareCore.Services
             var path = $"/_next/data/{_buildId}/en/browse/{category.Slug}.json?slug={category.Slug}&page={page}";
             await PauseAsync(_options.PageDelayMinMs, _options.PageDelayMaxMs, ct);
 
-            var raw = await _page!.EvaluateAsync<string>(FetchScript, path);
-            using var result = JsonDocument.Parse(raw);
-            var status = result.RootElement.GetProperty("status").GetInt32();
-            var contentType = result.RootElement.GetProperty("contentType").GetString();
-            var body = result.RootElement.GetProperty("body").GetString() ?? string.Empty;
+            var (status, contentType, body) = _options.UseCdp
+                ? await NavigateDataPageAsync(path, ct)
+                : await FetchDataInPageAsync(path);
 
             if (status == 404 && page > 1 && !buildIdRefreshed && !ColesDomFetchGuard.IsImpervaBlock(body))
             {
@@ -229,6 +244,49 @@ namespace PriceCompareCore.Services
             }
 
             return ColesDomFetchGuard.Validate(status, contentType, body, BaseUrl + path, _breaker);
+        }
+
+        /// <summary>Launch mode: the same in-page fetch the site makes when you click "next page".</summary>
+        private async Task<(int Status, string? ContentType, string Body)> FetchDataInPageAsync(string path)
+        {
+            var raw = await _page!.EvaluateAsync<string>(FetchScript, path);
+            using var result = JsonDocument.Parse(raw);
+            return (
+                result.RootElement.GetProperty("status").GetInt32(),
+                result.RootElement.GetProperty("contentType").GetString(),
+                result.RootElement.GetProperty("body").GetString() ?? string.Empty);
+        }
+
+        /// <summary>
+        /// CDP mode: open the <c>_next/data</c> URL as a top-level navigation, exactly like typing it in the
+        /// address bar — the one request a user confirmed gets past Imperva by hand.
+        /// </summary>
+        private async Task<(int Status, string? ContentType, string Body)> NavigateDataPageAsync(string path, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var response = await _page!.GotoAsync(BaseUrl + path, new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.DOMContentLoaded,
+                Timeout = 60_000
+            });
+
+            if (response == null)
+            {
+                return (0, null, string.Empty);
+            }
+
+            response.Headers.TryGetValue("content-type", out var contentType);
+            string body;
+            try
+            {
+                body = await response.TextAsync();
+            }
+            catch (PlaywrightException)
+            {
+                body = await _page!.ContentAsync();
+            }
+
+            return (response.Status, contentType, body);
         }
 
         /// <summary>
@@ -292,6 +350,21 @@ namespace PriceCompareCore.Services
             }
 
             _playwright = await Playwright.CreateAsync();
+
+            if (_options.UseCdp)
+            {
+                // Attach to the Chrome the user started with --remote-debugging-port. We reuse its existing
+                // context so we inherit the real session that already passed Imperva, and open our own tab in it.
+                _browser = await _playwright.Chromium.ConnectOverCDPAsync(_options.CdpUrl!);
+                _context = _browser.Contexts.Count > 0
+                    ? _browser.Contexts[0]
+                    : await _browser.NewContextAsync();
+                _page = await _context.NewPageAsync();
+                _logger.LogInformation("Coles browser: attached over CDP to {CdpUrl} (existing contexts={Count})",
+                    _options.CdpUrl, _browser.Contexts.Count);
+                return;
+            }
+
             _browser = await LaunchBrowserAsync(_playwright);
 
             var hasState = File.Exists(_options.StorageStatePath);
@@ -325,6 +398,12 @@ namespace PriceCompareCore.Services
 
         private async Task SaveStorageStateAsync()
         {
+            if (_options.UseCdp)
+            {
+                // The user's own Chrome owns the session; we never touch its storage.
+                return;
+            }
+
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_options.StorageStatePath)!);
@@ -374,8 +453,18 @@ namespace PriceCompareCore.Services
         {
             try
             {
-                if (_context != null) await _context.CloseAsync();
-                if (_browser != null) await _browser.CloseAsync();
+                if (_options.UseCdp)
+                {
+                    // Attached to the user's Chrome: close only our own tab and drop the CDP connection.
+                    // Never close the context or browser — that is the user's live session.
+                    if (_page != null) await _page.CloseAsync();
+                    if (_browser != null) await _browser.CloseAsync(); // disposes the CDP connection, not the user's Chrome
+                }
+                else
+                {
+                    if (_context != null) await _context.CloseAsync();
+                    if (_browser != null) await _browser.CloseAsync();
+                }
             }
             catch (PlaywrightException ex)
             {
@@ -391,7 +480,7 @@ namespace PriceCompareCore.Services
                 _buildId = null;
             }
 
-            if (deleteStorageState && File.Exists(_options.StorageStatePath))
+            if (!_options.UseCdp && deleteStorageState && File.Exists(_options.StorageStatePath))
             {
                 try
                 {
