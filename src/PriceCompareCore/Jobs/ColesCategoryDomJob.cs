@@ -10,15 +10,17 @@ namespace PriceCompareCore.Jobs
     /// <summary>
     /// Scrapes one Coles category; the slug comes from the job's data map, so every category in
     /// <see cref="ColesCategories"/> shares this class under its own (unchanged) job name.
-    /// A failed run schedules one retry a few hours later, after any Imperva block has cooled down.
+    /// A failed run retries within the same semi-manual session a few minutes later (while the user and
+    /// their attached browser are still present). With the long default block cooldown the retry is pushed
+    /// past the cooldown instead; set <c>COLES_BLOCK_COOLDOWN_MINUTES</c> short to keep retries in-session.
     /// </summary>
     public class ColesCategoryDomJob : IJob
     {
         public const string SlugKey = "slug";
         public const string AttemptKey = "attempt";
 
-        private const int DefaultMaxAttempts = 2;
-        private const int DefaultRetryDelayMinutes = 200;
+        private const int DefaultMaxAttempts = 3;
+        private const int DefaultRetryDelayMinutes = 5;
 
         private readonly IColesCategoryScraperService _scraperService;
         private readonly ILogger<ColesCategoryDomJob> _logger;

@@ -1,12 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using PriceCompareCore.Services;
 using PriceCompareData.Data;
 using PriceCompareWeb.Controllers.Models;
 using PriceCompareWeb.Services;
+using Quartz;
 
 [ApiController]
 [Route("api/admin")]
@@ -183,6 +187,35 @@ public class AdminController : ControllerBase
             (int)Math.Round(avgDuration));
 
         return Ok(stats);
+    }
+
+    /// <summary>
+    /// Semi-manual Coles run: triggers every Coles category job now, so the operator controls when a run
+    /// starts (after launching and warming the attached Chrome) instead of waiting for the weekly cron.
+    /// Quartz only runs where scraping is enabled, so this returns 503 on the API Lambda.
+    /// </summary>
+    [HttpPost("scrape/coles/run-all")]
+    public async Task<IActionResult> RunAllColes(CancellationToken ct = default)
+    {
+        var schedulerFactory = HttpContext.RequestServices.GetService<ISchedulerFactory>();
+        if (schedulerFactory == null)
+        {
+            return StatusCode(503, new { error = "Quartz scheduling is not enabled on this instance." });
+        }
+
+        var scheduler = await schedulerFactory.GetScheduler(ct);
+        var triggered = new List<string>();
+        foreach (var category in ColesCategories.All)
+        {
+            var jobKey = new JobKey(category.JobName);
+            if (await scheduler.CheckExists(jobKey, ct))
+            {
+                await scheduler.TriggerJob(jobKey, ct);
+                triggered.Add(category.JobName);
+            }
+        }
+
+        return Ok(new { triggered = triggered.Count, jobs = triggered });
     }
 }
 
