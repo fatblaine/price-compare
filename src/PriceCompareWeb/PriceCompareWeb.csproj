@@ -51,6 +51,10 @@
 
   <Target Name="RemovePlaywrightWindowsDriver" AfterTargets="Publish">
     <RemoveDir Directories="$(PublishDir).playwright\node\win32_x64" Condition="Exists('$(PublishDir).playwright\node\win32_x64')" />
+    <!-- BTS-157: Microsoft.Data.SqlClient 6.1.7 (via EFCore.SqlServer 10.0.13) pulls in the MSAL broker's 37 MB native
+         runtime, which pushed the Lambda package past the 250 MB unzipped limit. It is only loaded for Entra broker
+         auth against SQL Server; we connect to PostgreSQL. -->
+    <Delete Files="$(PublishDir)libmsalruntime.so" Condition="Exists('$(PublishDir)libmsalruntime.so')" />
   </Target>
 
 </Project>
