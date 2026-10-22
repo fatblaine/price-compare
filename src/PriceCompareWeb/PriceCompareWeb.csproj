@@ -15,21 +15,21 @@
     <PackageReference Include="AWSSDK.Rekognition" Version="3.7.*" />
     <PackageReference Include="AWSSDK.S3" Version="3.7.*" />
     <PackageReference Include="AWSSDK.Scheduler" Version="3.7.*" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.9" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.9" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.9">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.13">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Playwright" Version="1.55.0" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.64.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
     <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="6.5.0" />
   </ItemGroup>
@@ -43,6 +43,11 @@
          Publish-only, so local `dotnet run` and debugging are unaffected. -->
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+
+  <!-- Supabase CA for `SSL Mode=VerifyFull;Root Certificate=certs/supabase-ca.crt` (see DbConnectionStringNormalizer). -->
+  <ItemGroup>
+    <None Include="certs\*.crt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <Target Name="RemovePlaywrightWindowsDriver" AfterTargets="Publish">
     <RemoveDir Directories="$(PublishDir).playwright\node\win32_x64" Condition="Exists('$(PublishDir).playwright\node\win32_x64')" />

@@ -2,13 +2,13 @@
 
 # ===============================
 
-# Wws Special Job Lambda (.NET 8 + Playwright)
+# Wws Special Job Lambda (.NET 10 + Playwright)
 
 # Base: Amazon Linux 2023
 
 # ===============================
 
-FROM public.ecr.aws/lambda/dotnet:8 AS base
+FROM public.ecr.aws/lambda/dotnet:10 AS base
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/var/cache/dnf set -eux; \
 
 # ===============================
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 ENV DOTNET_CLI_HOME=/tmp \

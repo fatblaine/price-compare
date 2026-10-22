@@ -10,21 +10,23 @@
     <PackageReference Include="HtmlAgilityPack" Version="1.12.2" />
 
     <!-- EF Core -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
 
     <!-- Other Microsoft Extensions -->
     <!-- Patch known vulnerability GHSA-qj66-m88j-hmgj by upgrading -->
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.13" />
+    <!-- Patch known vulnerability GHSA-846f-f764-76mx (CVE-2026-84008), pulled in transitively by Microsoft.Data.SqlClient and MimeKit -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
 
     <!-- Npgsql for EF Core -->
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 
     <!-- Other Third-Party Libraries -->
     <PackageReference Include="Polly" Version="8.6.2" />
