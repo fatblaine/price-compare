@@ -30,7 +30,8 @@ namespace PriceCompareWeb.JobsLambda
             var emailOptions = config.GetSection("Email").Get<EmailOptions>() ?? new EmailOptions();
             var favoriteSettings = config.GetSection("FavoriteAlerts").Get<FavoriteAlertSettings>() ?? new FavoriteAlertSettings();
 
-            var csb = new Npgsql.NpgsqlConnectionStringBuilder(conn) { Pooling = false };
+            var csb = new Npgsql.NpgsqlConnectionStringBuilder(
+                PriceCompareWeb.Infrastructure.DbConnectionStringNormalizer.ResolveRootCertificate(conn)) { Pooling = false };
             _db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
                 .UseNpgsql(csb.ConnectionString, o => o.CommandTimeout(120))
                 .Options);

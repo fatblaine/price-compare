@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Npgsql;
 
 namespace PriceCompareWeb.Infrastructure
@@ -38,10 +39,12 @@ namespace PriceCompareWeb.Infrastructure
                 return connectionString;
             }
 
+            var rootCertificateResolved = ResolveRootCertificate(builder);
+
             // Client-side pooling disabled (transaction mode): nothing to cap.
             if (!builder.Pooling)
             {
-                return connectionString;
+                return rootCertificateResolved ? builder.ConnectionString : connectionString;
             }
 
             // NpgsqlConnectionStringBuilder.ContainsKey answers "is this a known keyword", not
@@ -80,6 +83,39 @@ namespace PriceCompareWeb.Infrastructure
             {
                 return "(unparseable connection string)";
             }
+        }
+
+        /// <summary>
+        /// Connection string with a relative <c>Root Certificate</c> path made absolute against the
+        /// app directory, for callers that build their own Npgsql options (the job Lambdas).
+        /// </summary>
+        public static string ResolveRootCertificate(string connectionString)
+        {
+            var builder = new NpgsqlConnectionStringBuilder(connectionString);
+            return ResolveRootCertificate(builder) ? builder.ConnectionString : connectionString;
+        }
+
+        /// <summary>
+        /// The Supabase CA ships in the publish output (certs/), but the process working directory is
+        /// not always the app directory (tests, IDE runs), so a relative Root Certificate path is
+        /// resolved against AppContext.BaseDirectory. Missing files are left for Npgsql to report.
+        /// </summary>
+        private static bool ResolveRootCertificate(NpgsqlConnectionStringBuilder builder)
+        {
+            var rootCertificate = builder.RootCertificate;
+            if (string.IsNullOrWhiteSpace(rootCertificate) || Path.IsPathRooted(rootCertificate))
+            {
+                return false;
+            }
+
+            var candidate = Path.Combine(AppContext.BaseDirectory, rootCertificate);
+            if (!File.Exists(candidate))
+            {
+                return false;
+            }
+
+            builder.RootCertificate = candidate;
+            return true;
         }
 
         private static HashSet<string> SpecifiedKeys(string connectionString)

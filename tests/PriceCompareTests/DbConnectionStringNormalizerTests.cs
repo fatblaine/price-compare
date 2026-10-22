@@ -73,6 +73,41 @@ namespace PriceCompareTests
             Assert.Contains($"MaxPoolSize={DbConnectionStringNormalizer.DefaultMaxPoolSize}", description);
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void ResolvesRelativeRootCertificateAgainstAppDirectory(bool pooling)
+        {
+            var relative = Path.Combine("certs", $"test-ca-{Guid.NewGuid():N}.crt");
+            var absolute = Path.Combine(AppContext.BaseDirectory, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
+            File.WriteAllText(absolute, "placeholder");
+            try
+            {
+                var connectionString = SessionMode + $";Pooling={pooling};SSL Mode=VerifyFull;Root Certificate={relative}";
+
+                var result = new NpgsqlConnectionStringBuilder(DbConnectionStringNormalizer.Normalize(connectionString));
+
+                Assert.Equal(absolute, result.RootCertificate);
+                Assert.Equal(SslMode.VerifyFull, result.SslMode);
+                Assert.Equal(absolute, new NpgsqlConnectionStringBuilder(
+                    DbConnectionStringNormalizer.ResolveRootCertificate(connectionString)).RootCertificate);
+            }
+            finally
+            {
+                File.Delete(absolute);
+            }
+        }
+
+        [Fact]
+        public void LeavesRootCertificateAlone_WhenFileIsMissing()
+        {
+            var transactionMode = "Host=db.example.com;Port=6543;Database=postgres;Username=postgres;" +
+                                  "Password=secret;Pooling=false;SSL Mode=VerifyFull;Root Certificate=certs/missing.crt";
+
+            Assert.Equal(transactionMode, DbConnectionStringNormalizer.Normalize(transactionMode));
+        }
+
         [Fact]
         public void DescribeHandlesMissingAndUnparseableStrings()
         {
