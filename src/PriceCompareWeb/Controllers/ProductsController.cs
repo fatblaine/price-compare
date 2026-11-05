@@ -10,8 +10,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using PriceCompareCore.Exceptions;
+using PriceCompareData.Common;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
+using PriceCompareWeb.Controllers.Models;
 
 namespace PriceCompareWeb.Controllers
 {
@@ -35,6 +37,18 @@ namespace PriceCompareWeb.Controllers
             new() { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) };
 
         private const string DataVersionCacheKey = "products:data-version";
+
+        // Last-updated times change once per scrape import; 5 minutes matches the data-version lookup.
+        private static readonly DistributedCacheEntryOptions _lastUpdatedCacheOptions =
+            new() { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) };
+
+        private const string LastUpdatedCacheKey = "products:last-updated";
+
+        private static readonly (int ShopType, string Name)[] KnownShops =
+        {
+            (ShopType.COLES, "Coles"),
+            (ShopType.WOOLWORTHS, "Woolworths"),
+        };
 
         public ProductsController(
             PriceCompareCore.Interfaces.IProductService productService,
@@ -244,6 +258,82 @@ namespace PriceCompareWeb.Controllers
 
             return version;
         }
+
+        /// <summary>
+        /// When product prices were last refreshed, overall and per shop (UTC). Public, so guests
+        /// can see how fresh the data is. Reads MAX(lastseenat) per shop — the same value the
+        /// product list uses to pick each shop's latest scrape — via IX_Products_ShopType_LastSeenAt,
+        /// and caches the answer for 5 minutes.
+        /// </summary>
+        [HttpGet("last-updated")]
+        public async Task<IActionResult> GetLastUpdated(CancellationToken cancellationToken)
+        {
+            try
+            {
+                var cached = await _cache.GetStringAsync(LastUpdatedCacheKey, cancellationToken);
+                if (!string.IsNullOrEmpty(cached))
+                {
+                    var hit = JsonSerializer.Deserialize<LastUpdatedDto>(cached);
+                    if (hit != null)
+                    {
+                        return Ok(hit);
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Last-updated cache read failed; querying the database.");
+            }
+
+            LastUpdatedDto result;
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(10));
+                var perShop = await _db.Products
+                    .AsNoTracking()
+                    .Where(p => p.ShopType.HasValue)
+                    .GroupBy(p => p.ShopType!.Value)
+                    .Select(g => new { ShopType = g.Key, MaxAt = g.Max(p => p.LastSeenAt) })
+                    .ToListAsync(cts.Token);
+
+                var shops = KnownShops
+                    .Select(k => new ShopLastUpdatedDto(
+                        k.ShopType,
+                        k.Name,
+                        AsUtc(perShop.FirstOrDefault(x => x.ShopType == k.ShopType)?.MaxAt)))
+                    .ToList();
+
+                var overall = perShop.Count == 0 ? (DateTime?)null : AsUtc(perShop.Max(x => x.MaxAt));
+                result = new LastUpdatedDto(overall, shops);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get last-updated times");
+                return StatusCode(500, "Failed to get last-updated times");
+            }
+
+            try
+            {
+                await _cache.SetStringAsync(LastUpdatedCacheKey, JsonSerializer.Serialize(result), _lastUpdatedCacheOptions, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Last-updated cache write failed.");
+            }
+
+            return Ok(result);
+        }
+
+        // lastseenat is written with DateTime.UtcNow; mark it UTC so JSON carries the "Z".
+        private static DateTime? AsUtc(DateTime? value) =>
+            value.HasValue && value.Value.Kind != DateTimeKind.Utc
+                ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+                : value;
 
         /// <summary>
         /// Returns price history for a given product name and shop.
