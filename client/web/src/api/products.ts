@@ -63,6 +63,54 @@ export async function fetchProducts(
 	return { total, items };
 }
 
+// ── Data freshness (BTS-160 / BTS-161) ──────────────────────────────────────
+
+export interface LastUpdated {
+	/** Latest refresh across all shops (ISO, UTC), or null when there is no data. */
+	lastUpdatedAt: string | null;
+	/** Latest refresh per shop type ("0" = Coles, "1" = Woolworths). */
+	shops: Record<string, string | null>;
+}
+
+export async function fetchLastUpdated(): Promise<LastUpdated> {
+	const res = await axios.get(`${API_BASE}/api/Products/last-updated`);
+	const data = res.data ?? {};
+	const shops: Record<string, string | null> = {};
+	for (const s of data.shops ?? data.Shops ?? []) {
+		const type = s.shopType ?? s.ShopType;
+		if (type != null) shops[String(type)] = s.lastUpdatedAt ?? s.LastUpdatedAt ?? null;
+	}
+	return { lastUpdatedAt: data.lastUpdatedAt ?? data.LastUpdatedAt ?? null, shops };
+}
+
+/** Days after which the data counts as stale (the freshness chip turns amber). */
+export const STALE_AFTER_DAYS = 7;
+
+/**
+ * "today", "yesterday" or "21 Oct" in the viewer's time zone, so a stale import
+ * never reads as fresh. Returns null for a missing or unparsable date.
+ */
+export function formatUpdatedDate(iso?: string | null, now: Date = new Date()): string | null {
+	if (!iso) return null;
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return null;
+	const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+	const days = Math.round((startOf(now) - startOf(d)) / 86_400_000);
+	if (days === 0) return "today";
+	if (days === 1) return "yesterday";
+	return d.toLocaleDateString("en-AU", {
+		day: "numeric",
+		month: "short",
+		...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
+	});
+}
+
+export function isStale(iso?: string | null, now: Date = new Date()): boolean {
+	if (!iso) return true;
+	const t = new Date(iso).getTime();
+	return Number.isNaN(t) || now.getTime() - t > STALE_AFTER_DAYS * 86_400_000;
+}
+
 // ── AI search types ──────────────────────────────────────────────────────────
 
 export interface ProductSearchItem {

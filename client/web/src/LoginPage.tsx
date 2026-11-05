@@ -34,9 +34,7 @@ export default function LoginPage({ onGuestLogin }: LoginPageProps) {
 				sx={{
 					width: "100%",
 					maxWidth: 420,
-					borderRadius: 3,
-					boxShadow: "0 18px 45px rgba(15, 23, 42, 0.18)",
-					borderColor: "divider",
+					borderRadius: "18px",
 				}}
 			>
 				<CardContent sx={{ p: { xs: 3, sm: 4 } }}>
@@ -62,8 +60,6 @@ export default function LoginPage({ onGuestLogin }: LoginPageProps) {
 								py: 1.2,
 								fontWeight: 600,
 								textTransform: "none",
-								background:
-									"linear-gradient(90deg, #0ea5e9 0%, #6366f1 50%, #a855f7 100%)",
 							}}
 							fullWidth
 						>
@@ -79,7 +75,7 @@ export default function LoginPage({ onGuestLogin }: LoginPageProps) {
 								<Button
 									variant="outlined"
 									onClick={onGuestLogin}
-									sx={{ textTransform: "none", fontWeight: 600 }}
+									sx={{ textTransform: "none", fontWeight: 600, minHeight: 44 }}
 								>
 									Continue as guest
 								</Button>

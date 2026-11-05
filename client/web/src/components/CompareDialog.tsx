@@ -8,13 +8,8 @@ import {
 	Typography,
 	Stack,
 	Box,
-	Chip,
 	CircularProgress,
 	Button,
-	Divider,
-	Card,
-	CardContent,
-	Avatar,
 	FormControl,
 	InputLabel,
 	Select,
@@ -31,7 +26,10 @@ import {
 	type CompareProduct,
 	type PairedSeriesPoint,
 } from "../api/compare";
-import { ShopTypes } from "../constants/shopTypes";
+import { formatUpdatedDate, type LastUpdated } from "../api/products";
+import { ShopTypes, shopColors, shopTypeName } from "../constants/shopTypes";
+import { DISPLAY_FONT, tokens } from "../theme";
+import StoreChip from "./StoreChip";
 import {
 	ResponsiveContainer,
 	LineChart,
@@ -49,6 +47,8 @@ export interface CompareDialogProps {
 	sourceShop?: number;
 	sourceProductId?: string;
 	sourceProduct?: CompareProduct;
+	/** Per-shop refresh times from GET /api/Products/last-updated (BTS-161). */
+	lastUpdated?: LastUpdated | null;
 	onClose: () => void;
 }
 
@@ -108,48 +108,124 @@ function useCompare(
 	return { loading, data, error };
 }
 
-function PriceCard({
-	title,
-	item,
-	accent,
-}: {
-	title: string;
-	item?: CompareProduct;
-	accent: string;
-}) {
-	const priceText = item?.price != null ? `$${item.price.toFixed(2)}` : "-";
-	const subtitle = item?.size ?? "";
+const money = (v?: number | null) => (v != null && Number.isFinite(v) ? `$${v.toFixed(2)}` : "-");
+
+function PromoChip({ text }: { text?: string | null }) {
+	if (!text) return null;
 	return (
-		<Card
-			variant="outlined"
-			sx={{ flex: 1, borderColor: accent, borderWidth: 1.5, borderRadius: 2 }}
+		<Box
+			component="span"
+			title={text}
+			sx={{
+				alignSelf: "flex-start",
+				maxWidth: "100%",
+				px: 1,
+				py: 0.375,
+				borderRadius: 999,
+				bgcolor: tokens.promoTint,
+				color: tokens.promo,
+				fontSize: 12,
+				fontWeight: 600,
+				overflow: "hidden",
+				textOverflow: "ellipsis",
+				whiteSpace: "nowrap",
+			}}
 		>
-			<CardContent>
-				<Stack direction="row" spacing={2} alignItems="center">
-					<Avatar sx={{ bgcolor: accent, width: 40, height: 40 }}>
-						{title[0]}
-					</Avatar>
-					<Box>
-						<Typography variant="subtitle2" color="text.secondary">
-							{title}
+			{text}
+		</Box>
+	);
+}
+
+/** One store's price: the cheapest is outlined in savings green (design: Compare artboard). */
+function StorePriceCard({
+	shopType,
+	item,
+	cheapest,
+	muted,
+	note,
+	promo,
+	updated,
+}: {
+	shopType?: number;
+	item?: CompareProduct;
+	cheapest: boolean;
+	/** The dearer of two priced stores: its price is shown in secondary ink. */
+	muted: boolean;
+	note?: string | null;
+	promo?: string | null;
+	updated?: string | null;
+}) {
+	return (
+		<Box
+			sx={{
+				flex: 1,
+				minWidth: 0,
+				p: { xs: 2, sm: 2.5 },
+				borderRadius: "16px",
+				bgcolor: tokens.surface,
+				border: cheapest ? `2px solid ${tokens.save}` : `1px solid ${tokens.line}`,
+				display: "flex",
+				flexDirection: "column",
+				gap: 1,
+			}}
+		>
+			<Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+				<StoreChip shopType={shopType} />
+				{updated && (
+					<Typography component="span" sx={{ fontSize: 12, color: tokens.ink3, whiteSpace: "nowrap" }}>
+						Updated {updated}
+					</Typography>
+				)}
+			</Stack>
+			{item ? (
+				<>
+					<Typography
+						sx={{
+							fontSize: 13,
+							color: tokens.ink2,
+							lineHeight: 1.35,
+							display: "-webkit-box",
+							WebkitLineClamp: 2,
+							WebkitBoxOrient: "vertical",
+							overflow: "hidden",
+						}}
+					>
+						{item.name}
+						{item.size ? ` · ${item.size}` : ""}
+					</Typography>
+					<Typography
+						component="p"
+						sx={{
+							m: 0,
+							fontFamily: DISPLAY_FONT,
+							fontWeight: 800,
+							letterSpacing: "-0.02em",
+							fontSize: { xs: 30, sm: 36 },
+							lineHeight: 1.1,
+							fontVariantNumeric: "tabular-nums",
+							color: muted ? tokens.ink2 : tokens.ink,
+						}}
+					>
+						{money(item.price)}
+					</Typography>
+					<PromoChip text={promo} />
+					{note && (
+						<Typography sx={{ fontSize: 13, color: tokens.ink2, fontVariantNumeric: "tabular-nums" }}>
+							{note}
 						</Typography>
-						<Typography variant="h5" component="p" fontWeight={700}>
-							{priceText}
-						</Typography>
-						{subtitle && (
-							<Typography variant="body2" color="text.secondary">
-								{subtitle}
-							</Typography>
-						)}
-					</Box>
-				</Stack>
-			</CardContent>
-		</Card>
+					)}
+				</>
+			) : (
+				<Typography sx={{ fontSize: 14, color: tokens.ink2, py: 1 }}>
+					No matched product found in this store yet.
+				</Typography>
+			)}
+		</Box>
 	);
 }
 
 export default function CompareDialog(props: CompareDialogProps) {
-	const { open, keyword, sourceShop, sourceProductId, sourceProduct, onClose } =
+	const { open, keyword, sourceShop, sourceProductId, sourceProduct, lastUpdated, onClose } =
 		props;
 	const theme = useTheme();
 	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
@@ -183,7 +259,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 				? ShopTypes.COLES
 				: undefined;
 	}, [source]);
-	const targetShopForTitle = selectedTarget?.shopType ?? fallbackTargetShop;
+	const targetShop = selectedTarget?.shopType ?? fallbackTargetShop;
 
 	React.useEffect(() => {
 		let cancelled = false;
@@ -234,19 +310,40 @@ export default function CompareDialog(props: CompareDialogProps) {
 		selectedTarget?.shopType,
 	]);
 
+	// Which store is cheaper, from the two prices already on screen.
+	const sourcePrice = source?.price ?? null;
+	const targetPrice = selectedTarget?.price ?? null;
+	const bothPriced = sourcePrice != null && targetPrice != null;
+	const diff = bothPriced ? (targetPrice as number) - (sourcePrice as number) : 0;
+	const same = bothPriced && Math.abs(diff) < 0.001;
+	const sourceCheapest = bothPriced && !same && diff > 0;
+	const targetCheapest = bothPriced && !same && diff < 0;
+	const cheapestShop = sourceCheapest ? source?.shopType : targetCheapest ? targetShop : undefined;
+	const cheapestPrice = sourceCheapest ? sourcePrice : targetCheapest ? targetPrice : null;
+	const otherShop = sourceCheapest ? targetShop : source?.shopType;
+	const otherPrice = sourceCheapest ? targetPrice : sourcePrice;
+	const saving = Math.abs(diff);
+	const savingPct = bothPriced && otherPrice ? Math.round((saving / (otherPrice as number)) * 100) : 0;
+	const updatedFor = (shop?: number) =>
+		shop == null ? null : formatUpdatedDate(lastUpdated?.shops?.[String(shop)]);
+
+	const sourceColor = shopColors(source?.shopType).main;
+	const targetColor = shopColors(targetShop).main;
+	const matchedSame = selectedTarget?.matchType === "same_product";
+
 	return (
 		<Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isXs}>
-			<DialogTitle sx={{ pr: 6 }}>
-				Compare: {source?.name ?? keyword}
+			<DialogTitle sx={{ pr: 7, fontSize: { xs: 20, sm: 24 }, lineHeight: 1.2 }}>
+				{source?.name ?? keyword}
 				<IconButton
 					aria-label="close"
 					onClick={onClose}
-					sx={{ position: "absolute", right: 8, top: 8 }}
+					sx={{ position: "absolute", right: 8, top: 8, width: 44, height: 44 }}
 				>
 					<CloseIcon />
 				</IconButton>
 			</DialogTitle>
-			<DialogContent dividers>
+			<DialogContent dividers sx={{ bgcolor: tokens.ground, borderColor: tokens.line }}>
 				{loading && (
 					<Stack alignItems="center" justifyContent="center" sx={{ py: 6 }}>
 						<CircularProgress />
@@ -258,126 +355,133 @@ export default function CompareDialog(props: CompareDialogProps) {
 					</Typography>
 				)}
 				{!loading && !error && source && (
-					<Stack spacing={3}>
-						<Stack spacing={2}>
-							<Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-								<PriceCard
-									title={
-										source.shopType === ShopTypes.COLES
-											? "Source · Coles"
-											: "Source · Woolworths"
-									}
-									item={source}
-									accent="#0ea5e9"
-								/>
-								<PriceCard
-									title={
-										targetShopForTitle === ShopTypes.COLES
-											? "Target · Coles"
-											: targetShopForTitle === ShopTypes.WOOLWORTHS
-												? "Target · Woolworths"
-												: "Target"
-									}
-									item={selectedTarget}
-									accent="#22c55e"
-								/>
+					<Stack spacing={2.5}>
+						{(source.size || matchedSame) && (
+							<Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+								{source.size && (
+									<Box component="span" sx={{ px: 1.25, py: 0.5, borderRadius: 999, bgcolor: "#F1F2F5", color: tokens.ink2, fontSize: 12, fontWeight: 600 }}>
+										{source.size}
+									</Box>
+								)}
+								{matchedSame && (
+									<Box component="span" sx={{ px: 1.25, py: 0.5, borderRadius: 999, bgcolor: tokens.brandTint, color: tokens.brandDark, fontSize: 12, fontWeight: 600 }}>
+										Matched · same product
+									</Box>
+								)}
 							</Stack>
+						)}
 
-							{targets.length === 0 && (
-								<Typography variant="body2" color="text.secondary">
-									No matched product found in the other shop yet.
-								</Typography>
-							)}
+						{bothPriced && (
+							<Box
+								sx={{
+									p: { xs: 2, sm: 2.5 },
+									borderRadius: "16px",
+									bgcolor: tokens.saveTint,
+									border: "1px solid #BFE3CD",
+								}}
+							>
+								{same ? (
+									<Typography sx={{ fontSize: 15, fontWeight: 700, color: tokens.save }}>
+										Same price at both stores: {money(sourcePrice)}
+									</Typography>
+								) : (
+									<>
+										<Typography sx={{ fontSize: 12, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: tokens.save }}>
+											Cheapest right now
+										</Typography>
+										<Stack direction="row" alignItems="center" spacing={1.25} sx={{ mt: 1 }}>
+											<StoreChip shopType={cheapestShop} />
+											<Typography
+												component="span"
+												sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: "-0.02em", fontSize: { xs: 28, sm: 34 }, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}
+											>
+												{money(cheapestPrice)}
+											</Typography>
+										</Stack>
+										<Typography sx={{ mt: 1, fontSize: 15, fontWeight: 700, color: tokens.save, fontVariantNumeric: "tabular-nums" }}>
+											Save {money(saving)} ({savingPct}%) vs {shopTypeName(otherShop)}
+										</Typography>
+									</>
+								)}
+							</Box>
+						)}
 
-							{targets.length > 1 && (
-								<Stack
-									direction={{ xs: "column", sm: "row" }}
-									spacing={2}
-									alignItems="center"
+						{targets.length > 1 && (
+							<FormControl size="small" fullWidth={isXs} sx={{ minWidth: { xs: "100%", sm: 320 }, alignSelf: "flex-start" }}>
+								<InputLabel id="target-label">Matched product</InputLabel>
+								<Select
+									labelId="target-label"
+									label="Matched product"
+									value={selectedTargetId || (targets[0]?.productId ?? "")}
+									onChange={(e) =>
+										setSelectedTargetId(String(e.target.value))
+									}
 								>
-									<FormControl size="small" fullWidth={isXs} sx={{ minWidth: { xs: "100%", sm: 260 } }}>
-										<InputLabel id="target-label">Target</InputLabel>
-										<Select
-											labelId="target-label"
-											label="Target"
-											value={selectedTargetId || (targets[0]?.productId ?? "")}
-											onChange={(e) =>
-												setSelectedTargetId(String(e.target.value))
-											}
+									{targets.map((t) => (
+										<MenuItem
+											key={String(t.productId)}
+											value={String(t.productId)}
 										>
-											{targets.map((t) => (
-												<MenuItem
-													key={String(t.productId)}
-													value={String(t.productId)}
-												>
-													<Stack
-														direction="row"
-														spacing={1}
-														alignItems="center"
-														sx={{ width: "100%" }}
-													>
-														<Typography sx={{ flex: 1 }} noWrap>
-															{t.name}
-														</Typography>
-														<Typography variant="body2" color="text.secondary">
-															{t.size}
-														</Typography>
-														<Chip
-															size="small"
-															label={
-																t.price != null ? `$${t.price.toFixed(2)}` : "-"
-															}
-														/>
-													</Stack>
-												</MenuItem>
-											))}
-										</Select>
-									</FormControl>
-
-									{source?.price != null && selectedTarget?.price != null && (
-										<Chip
-											color={
-												selectedTarget.price - source.price < 0
-													? "success"
-													: "default"
-											}
-											label={`Diff: ${(selectedTarget.price - source.price) >= 0 ? "+" : ""}${(selectedTarget.price - source.price).toFixed(2)}`}
-										/>
-									)}
-								</Stack>
-							)}
-
-						</Stack>
-
-						<Divider />
+											<Stack
+												direction="row"
+												spacing={1}
+												alignItems="center"
+												sx={{ width: "100%" }}
+											>
+												<Typography sx={{ flex: 1 }} noWrap>
+													{t.name}
+												</Typography>
+												<Typography variant="body2" color="text.secondary">
+													{t.size}
+												</Typography>
+												<Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+													{money(t.price)}
+												</Typography>
+											</Stack>
+										</MenuItem>
+									))}
+								</Select>
+							</FormControl>
+						)}
 
 						<Box>
-							<Stack
-								direction="row"
-								alignItems="center"
-								spacing={1}
-								sx={{ mb: 1 }}
-							>
-								<Typography variant="subtitle1" fontWeight={600}>
-									Weekly Trend
-								</Typography>
-								<Chip label="AUD" size="small" />
+							<Typography component="h3" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 18, mb: 1.5 }}>
+								Price at each store
+							</Typography>
+							<Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+								<StorePriceCard
+									shopType={source.shopType}
+									item={source}
+									cheapest={sourceCheapest}
+									muted={targetCheapest}
+									promo={promoText.source}
+									updated={updatedFor(source.shopType)}
+									note={targetCheapest ? `${money(saving)} more than ${shopTypeName(targetShop)}` : null}
+								/>
+								<StorePriceCard
+									shopType={targetShop}
+									item={selectedTarget}
+									cheapest={targetCheapest}
+									muted={sourceCheapest}
+									promo={promoText.target}
+									updated={updatedFor(targetShop)}
+									note={sourceCheapest ? `${money(saving)} more than ${shopTypeName(source.shopType)}` : null}
+								/>
 							</Stack>
-							{(promoText.source || promoText.target) && (
-								<Stack spacing={0.5} sx={{ mb: 1 }}>
-									{promoText.source && (
-										<Typography variant="caption" color="text.secondary">
-											Source promo: {promoText.source}
-										</Typography>
-									)}
-									{promoText.target && (
-										<Typography variant="caption" color="text.secondary">
-											Target promo: {promoText.target}
-										</Typography>
-									)}
-								</Stack>
-							)}
-							<Box sx={{ width: "100%", height: 280 }}>
+						</Box>
+
+						<Box
+							sx={{
+								p: { xs: 2, sm: 2.5 },
+								borderRadius: "16px",
+								bgcolor: tokens.surface,
+								border: `1px solid ${tokens.line}`,
+							}}
+						>
+							<Typography component="h3" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: 18, mb: 1 }}>
+								Price history
+							</Typography>
+							<Box sx={{ width: "100%", height: { xs: 230, sm: 270 } }}>
 								{seriesLoading ? (
 									<Stack
 										alignItems="center"
@@ -396,30 +500,41 @@ export default function CompareDialog(props: CompareDialogProps) {
 											data={series}
 											margin={{ left: isXs ? 0 : 8, right: 8, top: 8, bottom: 8 }}
 										>
-											<CartesianGrid strokeDasharray="3 3" />
-											<XAxis dataKey="date" />
-											<YAxis tickFormatter={(v) => `$${v}`} width={isXs ? 44 : 60} />
+											<CartesianGrid vertical={false} stroke={tokens.line} />
+											<XAxis
+												dataKey="date"
+												tick={{ fontSize: 11, fill: tokens.ink3 }}
+												tickLine={false}
+												axisLine={{ stroke: tokens.line }}
+											/>
+											<YAxis
+												tickFormatter={(v) => `$${v}`}
+												width={isXs ? 44 : 56}
+												tick={{ fontSize: 11, fill: tokens.ink3 }}
+												tickLine={false}
+												axisLine={false}
+											/>
 											<Tooltip
 												formatter={(v: any) =>
 													v != null ? `$${Number(v).toFixed(2)}` : "-"
 												}
 											/>
-											<Legend />
+											<Legend iconType="plainline" wrapperStyle={{ fontSize: 13 }} />
 											<Line
 												type="monotone"
 												dataKey="source"
-												name="Source"
-												stroke="#0ea5e9"
+												name={shopTypeName(source.shopType)}
+												stroke={sourceColor}
 												dot={series.length <= 1}
-												strokeWidth={2}
+												strokeWidth={2.5}
 											/>
 											<Line
 												type="monotone"
 												dataKey="target"
-												name="Target"
-												stroke="#22c55e"
+												name={shopTypeName(targetShop)}
+												stroke={targetColor}
 												dot={series.length <= 1}
-												strokeWidth={2}
+												strokeWidth={2.5}
 											/>
 										</LineChart>
 									</ResponsiveContainer>
@@ -429,8 +544,8 @@ export default function CompareDialog(props: CompareDialogProps) {
 					</Stack>
 				)}
 			</DialogContent>
-			<DialogActions>
-				<Button onClick={onClose} variant="contained">
+			<DialogActions sx={{ px: 3, py: 1.5 }}>
+				<Button onClick={onClose} variant="outlined" sx={{ minHeight: 44 }}>
 					Close
 				</Button>
 			</DialogActions>

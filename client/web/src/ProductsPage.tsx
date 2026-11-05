@@ -2,29 +2,34 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import Box from "@mui/material/Box";
 import {
-	TextField,
 	Button,
 	Stack,
-	FormControl,
-	InputLabel,
 	Select,
 	MenuItem,
 	Typography,
 	Card,
-	CardContent,
-	Chip,
 	Pagination,
 	LinearProgress,
 	IconButton,
+	InputBase,
 } from "@mui/material";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
+import SearchIcon from "@mui/icons-material/Search";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import { useMediaQuery, useTheme } from "@mui/material";
-import type { SelectChangeEvent } from "@mui/material/Select";
-import { SHOP_OPTIONS, shopTypeName } from "./constants/shopTypes";
-import { fetchProducts, type ProductRow } from "./api/products";
+import { SHOP_OPTIONS, shopColors, shopTypeName } from "./constants/shopTypes";
+import {
+	fetchLastUpdated,
+	fetchProducts,
+	formatUpdatedDate,
+	isStale,
+	type LastUpdated,
+	type ProductRow,
+} from "./api/products";
 import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
+import StoreChip from "./components/StoreChip";
 import { fetchBestMatchesByProducts, type CompareProduct } from "./api/compare";
 import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
 import { useAuth } from "react-oidc-context";
@@ -33,6 +38,7 @@ import TourButton from "./components/TourButton";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { Tooltip } from "@mui/material";
 import SearchByDescriptionDialog from "./components/SearchByDescriptionDialog";
+import { DISPLAY_FONT, tokens } from "./theme";
 
 function formatSize(row: ProductRow) {
 	if (row.size && row.size.trim() !== "") return row.size;
@@ -44,17 +50,47 @@ function formatSize(row: ProductRow) {
 	return "";
 }
 
-function formatPrice(price?: number, sizeText?: string) {
+function formatPrice(price?: number) {
 	if (price == null || !Number.isFinite(price)) return "-";
-	const base = `$${price.toFixed(2)}`;
-	if (sizeText) return `${base} / ${sizeText}`;
-	return `${base} AUD`;
+	return `$${price.toFixed(2)}`;
 }
 
-function shopAccent(shopType?: number | string | null) {
-	if (shopType === 0 || shopType === "0") return "#c93925";
-	if (shopType === 1 || shopType === "1") return "#3f8149";
-	return "#4b5563";
+/** "Updated 21 Oct · 2 stores": green while fresh, amber once older than a week. */
+function FreshnessChip({ data }: { data: LastUpdated | null }) {
+	const label = formatUpdatedDate(data?.lastUpdatedAt);
+	if (!data || !label) return null;
+	const stale = isStale(data.lastUpdatedAt);
+	const shops = Object.entries(data.shops);
+	const storeCount = shops.filter(([, iso]) => iso).length;
+	const perShop = shops
+		.map(([type, iso]) => `${shopTypeName(Number(type))}: ${formatUpdatedDate(iso) ?? "no data"}`)
+		.join(" · ");
+	return (
+		<Box
+			component="span"
+			title={perShop}
+			sx={{
+				display: "inline-flex",
+				alignItems: "center",
+				gap: 0.75,
+				height: 26,
+				px: 1.25,
+				borderRadius: 999,
+				bgcolor: stale ? tokens.promoTint : tokens.saveTint,
+				color: stale ? tokens.promo : tokens.save,
+				fontSize: 12,
+				fontWeight: 600,
+				whiteSpace: "nowrap",
+			}}
+		>
+			<Box
+				component="span"
+				aria-hidden="true"
+				sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: "currentColor" }}
+			/>
+			Updated {label} · {storeCount} {storeCount === 1 ? "store" : "stores"}
+		</Box>
+	);
 }
 
 function ProductImage({
@@ -70,24 +106,10 @@ function ProductImage({
 			alt && alt.trim() !== "" ? alt.trim().charAt(0).toUpperCase() : "?";
 		return (
 			<Box
-				sx={{
-					height: { xs: 110, sm: 170 },
-					borderRadius: { xs: "12px", sm: 4 },
-					bgcolor: "rgba(255,255,255,0.55)",
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-				}}
+				aria-hidden="true"
+				sx={{ color: tokens.ink3, fontSize: { xs: 32, sm: 44 }, fontWeight: 700, fontFamily: DISPLAY_FONT }}
 			>
-				<Box
-					sx={{
-						color: "#111111",
-						fontSize: 48,
-						fontWeight: 600,
-					}}
-				>
-					{initial}
-				</Box>
+				{initial}
 			</Box>
 		);
 	}
@@ -97,13 +119,14 @@ function ProductImage({
 			component="img"
 			src={src}
 			alt={alt}
+			loading="lazy"
 			onError={() => setFailed(true)}
 			sx={{
-				height: { xs: 110, sm: 170 },
+				height: "100%",
 				width: "100%",
 				objectFit: "contain",
-				borderRadius: { xs: "12px", sm: 4 },
-				backgroundColor: "rgba(255,255,255,0.7)",
+				// Product shots sit on white; multiply lets them blend into the image ground.
+				mixBlendMode: "multiply",
 			}}
 		/>
 	);
@@ -144,6 +167,23 @@ export default function ProductsPage() {
 	// AI search dialog state
 	const [aiSearchOpen, setAiSearchOpen] = useState(false);
 	const [aiSearchExhausted, setAiSearchExhausted] = useState(false);
+
+	// Data freshness for the header chip and the compare dialog (BTS-161).
+	const [lastUpdated, setLastUpdated] = useState<LastUpdated | null>(null);
+	useEffect(() => {
+		let active = true;
+		fetchLastUpdated()
+			.then((data) => {
+				if (active) setLastUpdated(data);
+			})
+			.catch((e) => {
+				// eslint-disable-next-line no-console
+				console.error("Failed to load last-updated", e);
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	const debouncedName = useDebounce(search, 350);
 	const { startTour, autoStart } = useTour();
@@ -347,134 +387,213 @@ export default function ProductsPage() {
 		Math.ceil(rowCount / Math.max(1, paginationModel.pageSize)),
 	);
 
+	const resetToFirstPage = () =>
+		setPaginationModel((prev) => (prev.page === 0 ? prev : { ...prev, page: 0 }));
+
 	return (
 		<Box sx={{ width: "100%" }}>
-			<Stack
-				direction={{ xs: "column", sm: "row" }}
-				spacing={2}
-				alignItems="center"
-				justifyContent="center"
+			{/* Page header: freshness, headline, search and store filter. */}
+			<Box
+				component="section"
 				sx={{
+					bgcolor: tokens.surface,
+					// Phones: a full-width white band under the app bar; larger screens: a card.
+					border: { xs: "none", sm: `1px solid ${tokens.line}` },
+					borderBottom: `1px solid ${tokens.line}`,
+					borderRadius: { xs: 0, sm: "18px" },
+					boxShadow: { xs: "none", sm: "0 1px 2px rgba(20,22,30,.04)" },
+					mx: { xs: -2, sm: 0 },
+					mt: { xs: -2, md: 0 },
+					px: { xs: 2, sm: 3, md: 4 },
+					pt: { xs: 1.75, sm: 3.5, md: 4.5 },
+					pb: { xs: 1.75, sm: 3 },
 					mb: { xs: 2, sm: 3 },
-					p: 1.5,
-					// Theme radius unit is 14px, so 5 = 70px: far too round for a full-width phone panel.
-					borderRadius: { xs: "20px", sm: 5 },
-					width: { xs: "100%", sm: "fit-content" },
-					maxWidth: "100%",
-					mx: "auto",
-					background: "rgba(255,255,255,0.55)",
-					backdropFilter: "blur(24px) saturate(180%)",
-					WebkitBackdropFilter: "blur(24px) saturate(180%)",
-					border: "0.5px solid rgba(255,255,255,0.7)",
-					boxShadow: "0 8px 30px rgba(60,60,90,0.08)",
 				}}
 			>
-				<TextField
-					id="search-input"
-					label="Search by name"
-					variant="outlined"
-					size="small"
-					fullWidth={isXs}
-					sx={{ width: { xs: "100%", sm: 240 } }}
-					value={search}
-					onChange={(e) => {
-						setSearch(e.target.value);
-						setPaginationModel((prev) =>
-							prev.page === 0 ? prev : { ...prev, page: 0 },
-						);
-					}}
-				/>
-				<FormControl
-					id="shop-filter"
-					size="small"
-					sx={{ minWidth: { xs: "100%", sm: 160 } }}
-					fullWidth={isXs}
-				>
-					<InputLabel id="shop-type-label">Shop</InputLabel>
-					<Select
-						labelId="shop-type-label"
-						label="Shop"
-						value={shopType}
-						onChange={(e: SelectChangeEvent) => {
-							const value = e.target.value;
-							setShopType(value);
-							setPaginationModel((prev) =>
-								prev.page === 0 ? prev : { ...prev, page: 0 },
-							);
-							// Force refresh immediately after changing shop type
-							setRefreshTick((v) => v + 1);
+				<FreshnessChip data={lastUpdated} />
+				<Box sx={{ display: { xs: "none", sm: "block" }, maxWidth: 640 }}>
+					<Typography
+						component="h2"
+						sx={{
+							fontFamily: DISPLAY_FONT,
+							fontWeight: 800,
+							letterSpacing: "-0.03em",
+							fontSize: { sm: 32, md: 40 },
+							lineHeight: 1.08,
+							mt: 2,
+							mb: 1,
 						}}
 					>
-						{SHOP_OPTIONS.map((opt) => (
-							<MenuItem key={String(opt.value)} value={opt.value}>
-								{opt.label}
-							</MenuItem>
-						))}
-					</Select>
-				</FormControl>
+						Compare Coles &amp; Woolworths.
+						<br />
+						Buy the cheaper one.
+					</Typography>
+					<Typography sx={{ color: tokens.ink2, fontSize: { sm: 16, md: 17 }, lineHeight: 1.5 }}>
+						Grocery prices from both stores, matched product by product, with
+						price history so you can see where it&apos;s cheaper.
+					</Typography>
+				</Box>
+
 				<Box
 					sx={{
+						mt: { xs: 1.5, sm: 3 },
 						display: "flex",
 						alignItems: "center",
-						justifyContent: "center",
-						flexWrap: "wrap",
-						gap: 1.5,
-						width: { xs: "100%", sm: "auto" },
+						gap: { xs: 1, sm: 1.25 },
+						p: { xs: 0, sm: 1.25 },
+						bgcolor: tokens.surface,
+						border: { xs: "none", sm: `1px solid ${tokens.line}` },
+						borderRadius: "16px",
+						boxShadow: {
+							xs: "none",
+							sm: "0 1px 2px rgba(20,22,30,.04), 0 8px 22px rgba(20,22,30,.06)",
+						},
 					}}
 				>
-				<Button
-					variant="contained"
-					sx={{ flexGrow: { xs: 1, sm: 0 }, minHeight: { xs: 44, sm: "auto" } }}
-					onClick={() => setRefreshTick((v) => v + 1)}
-				>
-					Search
-				</Button>
-				<Tooltip
-				title={
-					aiSearchExhausted
-						? "Daily AI search limit reached. Try again tomorrow."
-						: "Describe what you're looking for (AI search, any language)"
-				}
-			>
-				<span>
-					<IconButton
-						id="ai-search-btn"
-						onClick={() => setAiSearchOpen(true)}
-						disabled={aiSearchExhausted}
-						color={aiSearchOpen ? "primary" : "default"}
-						size="small"
-						sx={{ width: { xs: 44, sm: "auto" }, height: { xs: 44, sm: "auto" } }}
+					<Box
+						id="search-input"
+						sx={{
+							flex: 1,
+							minWidth: 0,
+							display: "flex",
+							alignItems: "center",
+							gap: 1.25,
+							height: 46,
+							px: 1.5,
+							borderRadius: "12px",
+							bgcolor: { xs: "#F7F8FA", sm: "transparent" },
+							border: { xs: `1px solid ${tokens.line}`, sm: "none" },
+						}}
 					>
-						<AutoAwesomeIcon />
-					</IconButton>
-				</span>
-			</Tooltip>
-			<TourButton onClick={startTour} disabled={compareOpen} />
+						<SearchIcon aria-hidden="true" sx={{ color: tokens.ink3, fontSize: 20 }} />
+						<InputBase
+							placeholder={isXs ? "Search products…" : "Search products: milk, Tim Tams, olive oil…"}
+							inputProps={{ "aria-label": "Search products" }}
+							value={search}
+							onChange={(e) => {
+								setSearch(e.target.value);
+								resetToFirstPage();
+							}}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") setRefreshTick((v) => v + 1);
+							}}
+							sx={{ flex: 1, minWidth: 0, fontSize: { xs: 14, sm: 16 }, fontWeight: 500 }}
+						/>
+					</Box>
+					<Tooltip
+						title={
+							aiSearchExhausted
+								? "Daily AI search limit reached. Try again tomorrow."
+								: "Describe what you're looking for (AI search, any language)"
+						}
+					>
+						<span>
+							<Button
+								id="ai-search-btn"
+								variant="outlined"
+								onClick={() => setAiSearchOpen(true)}
+								disabled={aiSearchExhausted}
+								aria-label="Search by description with AI"
+								sx={{
+									height: { xs: 46, sm: 44 },
+									minWidth: { xs: 46, sm: 0 },
+									px: { xs: 0, sm: 2 },
+									borderColor: aiSearchOpen ? tokens.brand : undefined,
+								}}
+							>
+								<AutoAwesomeIcon aria-hidden="true" sx={{ color: tokens.brand, fontSize: 18 }} />
+								<Box component="span" sx={{ display: { xs: "none", sm: "inline" }, ml: 1 }}>
+									AI search
+								</Box>
+							</Button>
+						</span>
+					</Tooltip>
+					<Button
+						variant="contained"
+						sx={{ height: 44, display: { xs: "none", sm: "inline-flex" } }}
+						onClick={() => setRefreshTick((v) => v + 1)}
+					>
+						Search
+					</Button>
+					<TourButton onClick={startTour} disabled={compareOpen} />
 				</Box>
-			</Stack>
 
-			<Box
-				sx={{
-					position: "relative",
-					// Phones: no outer glass panel, the cards sit directly on the page.
-					borderRadius: { xs: "12px", sm: 5 },
-					border: { xs: "none", sm: "0.5px solid rgba(255,255,255,0.6)" },
-					background: { xs: "transparent", sm: "rgba(255,255,255,0.35)" },
-					backdropFilter: { xs: "none", sm: "blur(20px) saturate(180%)" },
-					WebkitBackdropFilter: { xs: "none", sm: "blur(20px) saturate(180%)" },
-					boxShadow: { xs: "none", sm: "0 8px 30px rgba(60,60,90,0.06)" },
-					p: { xs: 0, sm: 2.5 },
-					overflow: "hidden",
-				}}
-			>
+				<Box
+					sx={{
+						mt: { xs: 1.5, sm: 2.25 },
+						display: "flex",
+						alignItems: "center",
+						gap: 1,
+						// Phones: the row scrolls sideways instead of wrapping.
+						overflowX: "auto",
+						mx: { xs: -2, sm: 0 },
+						px: { xs: 2, sm: 0 },
+						scrollbarWidth: "none",
+						"&::-webkit-scrollbar": { display: "none" },
+					}}
+				>
+					<Box
+						id="shop-filter"
+						role="group"
+						aria-label="Filter by store"
+						sx={{ display: "flex", gap: 1, flexShrink: 0 }}
+					>
+						{SHOP_OPTIONS.map((opt) => {
+							const selected = shopType === opt.value;
+							const dot = opt.value === "" ? null : shopColors(opt.value).main;
+							return (
+								<Button
+									key={String(opt.value)}
+									aria-pressed={selected}
+									onClick={() => {
+										setShopType(opt.value);
+										resetToFirstPage();
+										// Force refresh immediately after changing shop type
+										setRefreshTick((v) => v + 1);
+									}}
+									sx={{
+										height: 40,
+										px: 1.75,
+										borderRadius: 999,
+										flexShrink: 0,
+										whiteSpace: "nowrap",
+										fontSize: { xs: 13, sm: 14 },
+										border: "1px solid",
+										borderColor: selected ? tokens.ink : tokens.line,
+										bgcolor: selected ? tokens.ink : tokens.surface,
+										color: selected ? "#ffffff" : tokens.ink2,
+										"&:hover": {
+											bgcolor: selected ? tokens.ink : tokens.surface,
+											borderColor: selected ? tokens.ink : tokens.lineStrong,
+										},
+									}}
+								>
+									{dot && (
+										<Box
+											component="span"
+											aria-hidden="true"
+											sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: dot, mr: 0.875 }}
+										/>
+									)}
+									{opt.value === "" ? "All stores" : opt.label}
+								</Button>
+							);
+						})}
+					</Box>
+				</Box>
+			</Box>
+
+			<Typography sx={{ fontSize: { xs: 13, sm: 14 }, color: tokens.ink2, mb: { xs: 1.5, sm: 2 } }}>
+				<Box component="strong" sx={{ color: tokens.ink, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+					{rowCount.toLocaleString("en-AU")}
+				</Box>{" "}
+				products
+			</Typography>
+
+			<Box sx={{ position: "relative" }}>
 				{loading && (
 					<LinearProgress
-						sx={{
-							position: "absolute",
-							left: 0,
-							right: 0,
-							top: 0,
-						}}
+						sx={{ position: "absolute", left: 0, right: 0, top: -10, borderRadius: 1 }}
 					/>
 				)}
 				{rows.length === 0 && !loading ? (
@@ -498,201 +617,200 @@ export default function ProductsPage() {
 							display: "grid",
 							gridTemplateColumns: {
 								xs: "repeat(2, minmax(0, 1fr))",
-								sm: "repeat(3, minmax(0, 1fr))",
-								md: "repeat(4, minmax(0, 1fr))",
-								lg: "repeat(5, minmax(0, 1fr))",
+								sm: "repeat(auto-fill, minmax(224px, 1fr))",
 							},
-							gap: { xs: 1, sm: 1.5, md: 2 },
+							gap: { xs: 1.5, sm: 2.25 },
 						}}
 					>
 						{rows.map((row) => {
 							const sizeText = formatSize(row);
-							const priceText = formatPrice(row.price, sizeText || undefined);
-							const accent = shopAccent(row.shopType);
 							const isFavorite = favoriteIds.has(row.productId);
 							const favoriteBusy = favoriteBusyIds.includes(row.productId);
 							const compareTarget = compareDataMap[row.productId];
-							let recommendationText: string | null = null;
+							// Same comparison as before; only the wording and colour changed (BTS-161).
+							let recommendation: { text: string; save: boolean } | null = null;
 							if (compareTarget && row.price != null && compareTarget.price != null) {
 								const diff = compareTarget.price - row.price;
+								const other = shopTypeName(compareTarget.shopType);
 								if (Math.abs(diff) < 0.001) {
-									recommendationText = "Both stores have the same price";
+									recommendation = { text: `Same price at ${other}`, save: false };
 								} else if (diff < 0) {
-									recommendationText = `${shopTypeName(compareTarget.shopType)} is cheaper! (save $${Math.abs(diff).toFixed(2)})`;
+									recommendation = {
+										text: `${other} is $${Math.abs(diff).toFixed(2)} cheaper`,
+										save: false,
+									};
 								} else {
-									recommendationText = `${shopTypeName(row.shopType)} is cheaper! (save $${diff.toFixed(2)})`;
+									recommendation = { text: `Save $${diff.toFixed(2)} vs ${other}`, save: true };
 								}
 							}
 							return (
 								<Card
 									key={row.productId}
 									className="product-card"
-									elevation={0}
 									sx={{
 										display: "flex",
 										flexDirection: "column",
-										// 6 × 14px = 84px turned narrow phone cards into arches.
-										borderRadius: { xs: "18px", sm: 6 },
-										border: "0.5px solid rgba(255,255,255,0.85)",
-										background: "rgba(255,255,255,0.6)",
-										backdropFilter: "blur(24px) saturate(180%)",
-										WebkitBackdropFilter: "blur(24px) saturate(180%)",
-										boxShadow: "0 10px 34px rgba(50,55,95,0.1)",
-										transition: "transform .25s ease, box-shadow .25s ease",
+										overflow: "hidden",
+										borderRadius: { xs: "14px", sm: "16px" },
+										transition: "box-shadow .2s ease, border-color .2s ease",
 										"&:hover": {
-											transform: "translateY(-5px)",
-											boxShadow: "0 20px 48px rgba(50,55,95,0.18)",
+											borderColor: tokens.lineStrong,
+											boxShadow: "0 1px 2px rgba(20,22,30,.06), 0 16px 32px rgba(20,22,30,.08)",
 										},
 									}}
 								>
 									<Box
-											sx={{
-											px: { xs: 1, sm: 2.5 },
-											pt: { xs: 1, sm: 2.5 },
-											pb: { xs: 0.5, sm: 2 },
-											background:
-												"linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.4) 100%)",
+										sx={{
+											position: "relative",
+											height: { xs: 96, sm: 150 },
+											bgcolor: tokens.imageGround,
+											borderBottom: `1px solid ${tokens.line}`,
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "center",
+											p: { xs: 1, sm: 1.5 },
 										}}
 									>
 										<ProductImage src={row.imageUrl} alt={row.name} />
-									</Box>
-									<CardContent
+										<IconButton
+											className="favorite-btn"
+											onClick={() => void handleToggleFavorite(row.productId)}
+											disabled={favoriteBusy}
+											aria-label={
+												isFavorite
+													? "Remove from My Favorites"
+													: "Add to My Favorites"
+											}
+											aria-pressed={isFavorite}
 											sx={{
-											flex: 1,
+												position: "absolute",
+												top: { xs: 6, sm: 12 },
+												right: { xs: 6, sm: 12 },
+												width: 40,
+												height: 40,
+												bgcolor: tokens.surface,
+												border: `1px solid ${tokens.line}`,
+												boxShadow: "0 2px 8px rgba(20,22,30,.1)",
+												color: isFavorite ? tokens.fav : tokens.ink3,
+												"&:hover": { bgcolor: tokens.surface, color: tokens.fav },
+											}}
+										>
+											{isFavorite ? (
+												<FavoriteIcon sx={{ fontSize: 19 }} />
+											) : (
+												<FavoriteBorderIcon sx={{ fontSize: 19 }} />
+											)}
+										</IconButton>
+									</Box>
+									<Box
+										sx={{
+											p: { xs: "10px 11px 12px", sm: "14px 15px 16px" },
 											display: "flex",
 											flexDirection: "column",
-											gap: { xs: 0.75, sm: 1.2 },
-											pt: { xs: 1, sm: 2 },
-											px: { xs: 1.25, sm: 2 },
-											"&:last-child": { pb: { xs: 1.5, sm: 3 } },
-											alignItems: "center",
-											textAlign: "center",
+											gap: { xs: 0.75, sm: 1.125 },
+											flex: 1,
+											minWidth: 0,
 										}}
 									>
+										<Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", minWidth: 0 }}>
+											<StoreChip shopType={row.shopType} size="small" />
+											{sizeText && (
+												<Typography component="span" sx={{ fontSize: { xs: 11, sm: 12 }, color: tokens.ink3 }}>
+													{sizeText}
+												</Typography>
+											)}
+										</Box>
 										<Typography
-											variant="subtitle1"
-											fontWeight={700}
+											component="h3"
 											sx={{
-												fontSize: { xs: 14, sm: "1rem" },
-												lineHeight: 1.4,
-												minHeight: { xs: 40, sm: 48 },
+												m: 0,
+												fontSize: { xs: 13, sm: 15 },
+												lineHeight: 1.35,
+												fontWeight: 600,
 												display: "-webkit-box",
 												WebkitLineClamp: 2,
 												WebkitBoxOrient: "vertical",
 												overflow: "hidden",
-												width: "100%",
+												minHeight: { xs: 35, sm: 40 },
 											}}
 										>
 											{row.name || "-"}
 										</Typography>
-										<Stack
-											direction="row"
-											spacing={1}
-											useFlexGap
-											flexWrap="wrap"
-											justifyContent="center"
+										<Typography
+											component="p"
+											sx={{
+												m: 0,
+												fontFamily: DISPLAY_FONT,
+												fontWeight: 800,
+												letterSpacing: "-0.02em",
+												fontSize: { xs: 20, sm: 26 },
+												lineHeight: 1.1,
+												fontVariantNumeric: "tabular-nums",
+											}}
 										>
-											<Chip
-												size="small"
-												label={shopTypeName(row.shopType)}
-												color="default"
-												sx={{
-													fontWeight: 600,
-													color: "#ffffff",
-													bgcolor: accent,
-												}}
-											/>
-											{sizeText && (
-												<Chip
-													size="small"
-													variant="outlined"
-													label={`Size ${sizeText}`}
-													sx={{ borderColor: accent, color: accent }}
-												/>
-											)}
-										</Stack>
-										<Box>
-											<Typography
-												variant="h6"
-												component="p"
-												fontWeight={700}
-												sx={{ color: accent, fontSize: { xs: 17, sm: "1.25rem" } }}
-											>
-												{priceText}
-											</Typography>
-										</Box>
+											{formatPrice(row.price)}
+										</Typography>
 										{row.promoText && (
-											<Typography
-												variant="caption"
-												sx={{ mt: 0.4, color: accent, fontWeight: 600 }}
+											<Box
+												component="span"
+												title={row.promoText}
+												sx={{
+													alignSelf: "flex-start",
+													maxWidth: "100%",
+													px: 1,
+													py: 0.375,
+													borderRadius: 999,
+													bgcolor: tokens.promoTint,
+													color: tokens.promo,
+													fontSize: { xs: 10.5, sm: 11.5 },
+													fontWeight: 600,
+													overflow: "hidden",
+													textOverflow: "ellipsis",
+													whiteSpace: "nowrap",
+												}}
 											>
-												Promo: {row.promoText}
-											</Typography>
+												{row.promoText}
+											</Box>
 										)}
-										<Box sx={{ minHeight: "1.5em" }}>
-											{recommendationText && (
+										<Box sx={{ minHeight: 20, display: "flex", alignItems: "center" }}>
+											{recommendation && (
 												<Typography
-													variant="caption"
-													fontWeight={600}
+													component="span"
 													className="recommendation-text"
-													sx={{ textAlign: "center" }}
+													sx={{
+														display: "inline-flex",
+														alignItems: "center",
+														gap: 0.5,
+														fontSize: { xs: 11.5, sm: 13 },
+														fontWeight: recommendation.save ? 700 : 600,
+														color: recommendation.save ? tokens.save : tokens.ink2,
+														fontVariantNumeric: "tabular-nums",
+													}}
 												>
-													{recommendationText}
+													{recommendation.save && (
+														<ArrowDownwardIcon aria-hidden="true" sx={{ fontSize: 14 }} />
+													)}
+													{recommendation.text}
 												</Typography>
 											)}
 										</Box>
-										<Stack
-											direction="row"
-											spacing={1}
-											sx={{ mt: "auto", alignSelf: "center" }}
-											alignItems="center"
+										<Button
+											className="compare-btn"
+											variant="contained"
+											fullWidth
+											sx={{ mt: "auto", height: { xs: 40, sm: 44 } }}
+											onClick={() =>
+												handleCompare(
+													row.productId,
+													row.name,
+													row.shopType,
+													row,
+												)
+											}
 										>
-											<Button
-												className="compare-btn"
-												variant="contained"
-												size="small"
-												sx={{ minHeight: { xs: 40, sm: "auto" }, px: { xs: 2, sm: 2.25 } }}
-												onClick={() =>
-													handleCompare(
-														row.productId,
-														row.name,
-														row.shopType,
-														row,
-													)
-												}
-											>
-												Compare
-											</Button>
-											<IconButton
-												className="favorite-btn"
-												size="small"
-												onClick={() => void handleToggleFavorite(row.productId)}
-												disabled={favoriteBusy}
-												aria-label={
-													isFavorite
-														? "Remove from My Favorites"
-														: "Add to My Favorites"
-												}
-												sx={{
-													width: { xs: 40, sm: "auto" },
-													height: { xs: 40, sm: "auto" },
-													color: accent,
-													border: "1px solid",
-													borderColor: `${accent}33`,
-													bgcolor: "#ffffff",
-													"&:hover": {
-														bgcolor: `${accent}12`,
-													},
-												}}
-											>
-												{isFavorite ? (
-													<FavoriteIcon fontSize="small" />
-												) : (
-													<FavoriteBorderIcon fontSize="small" />
-												)}
-											</IconButton>
-										</Stack>
-									</CardContent>
+											{isXs ? "Compare" : "Compare prices"}
+										</Button>
+									</Box>
 								</Card>
 							);
 						})}
@@ -702,51 +820,53 @@ export default function ProductsPage() {
 
 			<Stack
 				direction={{ xs: "column", sm: "row" }}
-				spacing={2}
-				sx={{ mt: 2 }}
-				alignItems={{ xs: "stretch", sm: "center" }}
-				justifyContent="space-between"
+				spacing={{ xs: 1.5, sm: 2.5 }}
+				sx={{ mt: 3 }}
+				alignItems="center"
+				justifyContent={{ xs: "center", sm: "flex-end" }}
 			>
-				<Typography variant="body2" color="text.secondary">
-					{rowCount} products
-				</Typography>
-				<Stack
-					direction={{ xs: "column", sm: "row" }}
-					spacing={2}
-					alignItems={{ xs: "stretch", sm: "center" }}
-				>
-					<Pagination
-						count={totalPages}
-						page={paginationModel.page + 1}
-						onChange={(_, page) =>
-							setPaginationModel((prev) => ({
-								...prev,
-								page: page - 1,
-							}))
-						}
-						color="primary"
-						// Phones keep the 32px "medium" size so page numbers stay tappable.
-						size={isMdDown && !isXs ? "small" : "medium"}
-					/>
-					<FormControl size="small" sx={{ minWidth: 120 }}>
-						<InputLabel id="page-size-label">Page size</InputLabel>
-						<Select
-							labelId="page-size-label"
-							label="Page size"
-							value={String(paginationModel.pageSize)}
-							onChange={(e) => {
-								const nextSize = Number(e.target.value);
-								setPaginationModel({ page: 0, pageSize: nextSize });
-							}}
-						>
-							{[10, 20, 50].map((opt) => (
-								<MenuItem key={opt} value={String(opt)}>
-									{opt}
-								</MenuItem>
-							))}
-						</Select>
-					</FormControl>
-				</Stack>
+				<Pagination
+					count={totalPages}
+					page={paginationModel.page + 1}
+					onChange={(_, page) =>
+						setPaginationModel((prev) => ({
+							...prev,
+							page: page - 1,
+						}))
+					}
+					color="primary"
+					// Phones keep the 32px "medium" size so page numbers stay tappable,
+					// and drop the sibling pages so the whole control fits on one line.
+					size={isMdDown && !isXs ? "small" : "medium"}
+					siblingCount={isXs ? 0 : 1}
+				/>
+				{/* Compact "Per page" picker instead of a full-width labelled field (BTS-161). */}
+				<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+					<Box component="span" id="page-size-label" sx={{ fontSize: 13, color: tokens.ink2 }}>
+						Per page
+					</Box>
+					<Select
+						labelId="page-size-label"
+						size="small"
+						value={String(paginationModel.pageSize)}
+						onChange={(e) => {
+							const nextSize = Number(e.target.value);
+							setPaginationModel({ page: 0, pageSize: nextSize });
+						}}
+						sx={{
+							height: 40,
+							fontSize: 14,
+							fontWeight: 600,
+							"& .MuiSelect-select": { py: 0, pl: 1.5 },
+						}}
+					>
+						{[10, 20, 50].map((opt) => (
+							<MenuItem key={opt} value={String(opt)}>
+								{opt}
+							</MenuItem>
+						))}
+					</Select>
+				</Box>
 			</Stack>
 
 			<CompareDialog
@@ -755,6 +875,7 @@ export default function ProductsPage() {
 				sourceShop={compareSourceShop}
 				sourceProductId={compareSourceProductId}
 				sourceProduct={compareSourceProduct}
+				lastUpdated={lastUpdated}
 				onClose={() => setCompareOpen(false)}
 			/>
 			<SearchByDescriptionDialog
