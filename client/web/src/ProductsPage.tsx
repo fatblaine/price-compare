@@ -5,6 +5,7 @@ import {
 	Button,
 	Stack,
 	Select,
+	Container,
 	MenuItem,
 	Typography,
 	Card,
@@ -392,482 +393,477 @@ export default function ProductsPage() {
 
 	return (
 		<Box sx={{ width: "100%" }}>
-			{/* Page header: freshness, headline, search and store filter. */}
+			{/* Page header: a full-width white band under the app bar, as in the design;
+			    its content shares the grid's container width so the edges line up. */}
 			<Box
 				component="section"
-				sx={{
-					bgcolor: tokens.surface,
-					// Phones: a full-width white band under the app bar; larger screens: a card.
-					border: { xs: "none", sm: `1px solid ${tokens.line}` },
-					borderBottom: `1px solid ${tokens.line}`,
-					borderRadius: { xs: 0, sm: "18px" },
-					boxShadow: { xs: "none", sm: "0 1px 2px rgba(20,22,30,.04)" },
-					mx: { xs: -2, sm: 0 },
-					mt: { xs: -2, md: 0 },
-					px: { xs: 2, sm: 3, md: 4 },
-					pt: { xs: 1.75, sm: 3.5, md: 4.5 },
-					pb: { xs: 1.75, sm: 3 },
-					mb: { xs: 2, sm: 3 },
-				}}
+				sx={{ bgcolor: tokens.surface, borderBottom: `1px solid ${tokens.line}` }}
 			>
-				<FreshnessChip data={lastUpdated} />
-				<Box sx={{ display: { xs: "none", sm: "block" }, maxWidth: 640 }}>
-					<Typography
-						component="h2"
-						sx={{
-							fontFamily: DISPLAY_FONT,
-							fontWeight: 800,
-							letterSpacing: "-0.03em",
-							fontSize: { sm: 32, md: 40 },
-							lineHeight: 1.08,
-							mt: 2,
-							mb: 1,
-						}}
-					>
-						Compare Coles &amp; Woolworths.
-						<br />
-						Buy the cheaper one.
-					</Typography>
-					<Typography sx={{ color: tokens.ink2, fontSize: { sm: 16, md: 17 }, lineHeight: 1.5 }}>
-						Grocery prices from both stores, matched product by product, with
-						price history so you can see where it&apos;s cheaper.
-					</Typography>
-				</Box>
-
-				<Box
-					sx={{
-						mt: { xs: 1.5, sm: 3 },
-						display: "flex",
-						alignItems: "center",
-						gap: { xs: 1, sm: 1.25 },
-						p: { xs: 0, sm: 1.25 },
-						bgcolor: tokens.surface,
-						border: { xs: "none", sm: `1px solid ${tokens.line}` },
-						borderRadius: "16px",
-						boxShadow: {
-							xs: "none",
-							sm: "0 1px 2px rgba(20,22,30,.04), 0 8px 22px rgba(20,22,30,.06)",
-						},
-					}}
+				<Container
+					maxWidth="lg"
+					sx={{ pt: { xs: 1.75, sm: 4, md: 5.5 }, pb: { xs: 1.75, sm: 3.5 } }}
 				>
+					<FreshnessChip data={lastUpdated} />
+					<Box sx={{ display: { xs: "none", sm: "block" }, maxWidth: 640 }}>
+						<Typography
+							component="h2"
+							sx={{
+								fontFamily: DISPLAY_FONT,
+								fontWeight: 800,
+								letterSpacing: "-0.03em",
+								fontSize: { sm: 32, md: 40 },
+								lineHeight: 1.08,
+								mt: 2,
+								mb: 1,
+							}}
+						>
+							Compare Coles &amp; Woolworths.
+							<br />
+							Buy the cheaper one.
+						</Typography>
+						<Typography sx={{ color: tokens.ink2, fontSize: { sm: 16, md: 17 }, lineHeight: 1.5 }}>
+							Grocery prices from both stores, matched product by product, with
+							price history so you can see where it&apos;s cheaper.
+						</Typography>
+					</Box>
+
 					<Box
-						id="search-input"
 						sx={{
-							flex: 1,
-							minWidth: 0,
+							mt: { xs: 1.5, sm: 3 },
 							display: "flex",
 							alignItems: "center",
-							gap: 1.25,
-							height: 46,
-							px: 1.5,
-							borderRadius: "12px",
-							bgcolor: { xs: "#F7F8FA", sm: "transparent" },
-							border: { xs: `1px solid ${tokens.line}`, sm: "none" },
-						}}
-					>
-						<SearchIcon aria-hidden="true" sx={{ color: tokens.ink3, fontSize: 20 }} />
-						<InputBase
-							placeholder={isXs ? "Search products…" : "Search products: milk, Tim Tams, olive oil…"}
-							inputProps={{ "aria-label": "Search products" }}
-							value={search}
-							onChange={(e) => {
-								setSearch(e.target.value);
-								resetToFirstPage();
-							}}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") setRefreshTick((v) => v + 1);
-							}}
-							sx={{ flex: 1, minWidth: 0, fontSize: { xs: 14, sm: 16 }, fontWeight: 500 }}
-						/>
-					</Box>
-					<Tooltip
-						title={
-							aiSearchExhausted
-								? "Daily AI search limit reached. Try again tomorrow."
-								: "Describe what you're looking for (AI search, any language)"
-						}
-					>
-						<span>
-							<Button
-								id="ai-search-btn"
-								variant="outlined"
-								onClick={() => setAiSearchOpen(true)}
-								disabled={aiSearchExhausted}
-								aria-label="Search by description with AI"
-								sx={{
-									height: { xs: 46, sm: 44 },
-									minWidth: { xs: 46, sm: 0 },
-									px: { xs: 0, sm: 2 },
-									borderColor: aiSearchOpen ? tokens.brand : undefined,
-								}}
-							>
-								<AutoAwesomeIcon aria-hidden="true" sx={{ color: tokens.brand, fontSize: 18 }} />
-								<Box component="span" sx={{ display: { xs: "none", sm: "inline" }, ml: 1 }}>
-									AI search
-								</Box>
-							</Button>
-						</span>
-					</Tooltip>
-					<Button
-						variant="contained"
-						sx={{ height: 44, display: { xs: "none", sm: "inline-flex" } }}
-						onClick={() => setRefreshTick((v) => v + 1)}
-					>
-						Search
-					</Button>
-					<TourButton onClick={startTour} disabled={compareOpen} />
-				</Box>
-
-				<Box
-					sx={{
-						mt: { xs: 1.5, sm: 2.25 },
-						display: "flex",
-						alignItems: "center",
-						gap: 1,
-						// Phones: the row scrolls sideways instead of wrapping.
-						overflowX: "auto",
-						mx: { xs: -2, sm: 0 },
-						px: { xs: 2, sm: 0 },
-						scrollbarWidth: "none",
-						"&::-webkit-scrollbar": { display: "none" },
-					}}
-				>
-					<Box
-						id="shop-filter"
-						role="group"
-						aria-label="Filter by store"
-						sx={{ display: "flex", gap: 1, flexShrink: 0 }}
-					>
-						{SHOP_OPTIONS.map((opt) => {
-							const selected = shopType === opt.value;
-							const dot = opt.value === "" ? null : shopColors(opt.value).main;
-							return (
-								<Button
-									key={String(opt.value)}
-									aria-pressed={selected}
-									onClick={() => {
-										setShopType(opt.value);
-										resetToFirstPage();
-										// Force refresh immediately after changing shop type
-										setRefreshTick((v) => v + 1);
-									}}
-									sx={{
-										height: 40,
-										px: 1.75,
-										borderRadius: 999,
-										flexShrink: 0,
-										whiteSpace: "nowrap",
-										fontSize: { xs: 13, sm: 14 },
-										border: "1px solid",
-										borderColor: selected ? tokens.ink : tokens.line,
-										bgcolor: selected ? tokens.ink : tokens.surface,
-										color: selected ? "#ffffff" : tokens.ink2,
-										"&:hover": {
-											bgcolor: selected ? tokens.ink : tokens.surface,
-											borderColor: selected ? tokens.ink : tokens.lineStrong,
-										},
-									}}
-								>
-									{dot && (
-										<Box
-											component="span"
-											aria-hidden="true"
-											sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: dot, mr: 0.875 }}
-										/>
-									)}
-									{opt.value === "" ? "All stores" : opt.label}
-								</Button>
-							);
-						})}
-					</Box>
-				</Box>
-			</Box>
-
-			<Typography sx={{ fontSize: { xs: 13, sm: 14 }, color: tokens.ink2, mb: { xs: 1.5, sm: 2 } }}>
-				<Box component="strong" sx={{ color: tokens.ink, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-					{rowCount.toLocaleString("en-AU")}
-				</Box>{" "}
-				products
-			</Typography>
-
-			<Box sx={{ position: "relative" }}>
-				{loading && (
-					<LinearProgress
-						sx={{ position: "absolute", left: 0, right: 0, top: -10, borderRadius: 1 }}
-					/>
-				)}
-				{rows.length === 0 && !loading ? (
-					<Box
-						sx={{
-							py: 8,
-							textAlign: "center",
-							color: "text.secondary",
-						}}
-					>
-						<Typography variant="body1" sx={{ fontWeight: 600 }}>
-							No products found
-						</Typography>
-						<Typography variant="body2">
-							Try adjusting your filters.
-						</Typography>
-					</Box>
-				) : (
-					<Box
-						sx={{
-							display: "grid",
-							gridTemplateColumns: {
-								xs: "repeat(2, minmax(0, 1fr))",
-								sm: "repeat(auto-fill, minmax(224px, 1fr))",
+							gap: { xs: 1, sm: 1.25 },
+							p: { xs: 0, sm: 1.25 },
+							bgcolor: tokens.surface,
+							border: { xs: "none", sm: `1px solid ${tokens.line}` },
+							borderRadius: "16px",
+							boxShadow: {
+								xs: "none",
+								sm: "0 1px 2px rgba(20,22,30,.04), 0 8px 22px rgba(20,22,30,.06)",
 							},
-							gap: { xs: 1.5, sm: 2.25 },
 						}}
 					>
-						{rows.map((row) => {
-							const sizeText = formatSize(row);
-							const isFavorite = favoriteIds.has(row.productId);
-							const favoriteBusy = favoriteBusyIds.includes(row.productId);
-							const compareTarget = compareDataMap[row.productId];
-							// Same comparison as before; only the wording and colour changed (BTS-161).
-							let recommendation: { text: string; save: boolean } | null = null;
-							if (compareTarget && row.price != null && compareTarget.price != null) {
-								const diff = compareTarget.price - row.price;
-								const other = shopTypeName(compareTarget.shopType);
-								if (Math.abs(diff) < 0.001) {
-									recommendation = { text: `Same price at ${other}`, save: false };
-								} else if (diff < 0) {
-									recommendation = {
-										text: `${other} is $${Math.abs(diff).toFixed(2)} cheaper`,
-										save: false,
-									};
-								} else {
-									recommendation = { text: `Save $${diff.toFixed(2)} vs ${other}`, save: true };
-								}
+						<Box
+							id="search-input"
+							sx={{
+								flex: 1,
+								minWidth: 0,
+								display: "flex",
+								alignItems: "center",
+								gap: 1.25,
+								height: 46,
+								px: 1.5,
+								borderRadius: "12px",
+								bgcolor: { xs: "#F7F8FA", sm: "transparent" },
+								border: { xs: `1px solid ${tokens.line}`, sm: "none" },
+							}}
+						>
+							<SearchIcon aria-hidden="true" sx={{ color: tokens.ink3, fontSize: 20 }} />
+							<InputBase
+								placeholder={isXs ? "Search products…" : "Search products: milk, Tim Tams, olive oil…"}
+								inputProps={{ "aria-label": "Search products" }}
+								value={search}
+								onChange={(e) => {
+									setSearch(e.target.value);
+									resetToFirstPage();
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") setRefreshTick((v) => v + 1);
+								}}
+								sx={{ flex: 1, minWidth: 0, fontSize: { xs: 14, sm: 16 }, fontWeight: 500 }}
+							/>
+						</Box>
+						<Tooltip
+							title={
+								aiSearchExhausted
+									? "Daily AI search limit reached. Try again tomorrow."
+									: "Describe what you're looking for (AI search, any language)"
 							}
-							return (
-								<Card
-									key={row.productId}
-									className="product-card"
+						>
+							<span>
+								<Button
+									id="ai-search-btn"
+									variant="outlined"
+									onClick={() => setAiSearchOpen(true)}
+									disabled={aiSearchExhausted}
+									aria-label="Search by description with AI"
 									sx={{
-										display: "flex",
-										flexDirection: "column",
-										overflow: "hidden",
-										borderRadius: { xs: "14px", sm: "16px" },
-										transition: "box-shadow .2s ease, border-color .2s ease",
-										"&:hover": {
-											borderColor: tokens.lineStrong,
-											boxShadow: "0 1px 2px rgba(20,22,30,.06), 0 16px 32px rgba(20,22,30,.08)",
-										},
+										height: { xs: 46, sm: 44 },
+										minWidth: { xs: 46, sm: 0 },
+										px: { xs: 0, sm: 2 },
+										borderColor: aiSearchOpen ? tokens.brand : undefined,
 									}}
 								>
-									<Box
-										sx={{
-											position: "relative",
-											height: { xs: 96, sm: 150 },
-											bgcolor: tokens.imageGround,
-											borderBottom: `1px solid ${tokens.line}`,
-											display: "flex",
-											alignItems: "center",
-											justifyContent: "center",
-											p: { xs: 1, sm: 1.5 },
-										}}
-									>
-										<ProductImage src={row.imageUrl} alt={row.name} />
-										<IconButton
-											className="favorite-btn"
-											onClick={() => void handleToggleFavorite(row.productId)}
-											disabled={favoriteBusy}
-											aria-label={
-												isFavorite
-													? "Remove from My Favorites"
-													: "Add to My Favorites"
-											}
-											aria-pressed={isFavorite}
-											sx={{
-												position: "absolute",
-												top: { xs: 6, sm: 12 },
-												right: { xs: 6, sm: 12 },
-												width: 40,
-												height: 40,
-												bgcolor: tokens.surface,
-												border: `1px solid ${tokens.line}`,
-												boxShadow: "0 2px 8px rgba(20,22,30,.1)",
-												color: isFavorite ? tokens.fav : tokens.ink3,
-												"&:hover": { bgcolor: tokens.surface, color: tokens.fav },
-											}}
-										>
-											{isFavorite ? (
-												<FavoriteIcon sx={{ fontSize: 19 }} />
-											) : (
-												<FavoriteBorderIcon sx={{ fontSize: 19 }} />
-											)}
-										</IconButton>
+									<AutoAwesomeIcon aria-hidden="true" sx={{ color: tokens.brand, fontSize: 18 }} />
+									<Box component="span" sx={{ display: { xs: "none", sm: "inline" }, ml: 1 }}>
+										AI search
 									</Box>
-									<Box
+								</Button>
+							</span>
+						</Tooltip>
+						<Button
+							variant="contained"
+							sx={{ height: 44, display: { xs: "none", sm: "inline-flex" } }}
+							onClick={() => setRefreshTick((v) => v + 1)}
+						>
+							Search
+						</Button>
+						<TourButton onClick={startTour} disabled={compareOpen} />
+					</Box>
+
+					<Box
+						sx={{
+							mt: { xs: 1.5, sm: 2.25 },
+							display: "flex",
+							alignItems: "center",
+							gap: 1,
+							// Phones: the row scrolls sideways instead of wrapping.
+							overflowX: "auto",
+							mx: { xs: -2, sm: 0 },
+							px: { xs: 2, sm: 0 },
+							scrollbarWidth: "none",
+							"&::-webkit-scrollbar": { display: "none" },
+						}}
+					>
+						<Box
+							id="shop-filter"
+							role="group"
+							aria-label="Filter by store"
+							sx={{ display: "flex", gap: 1, flexShrink: 0 }}
+						>
+							{SHOP_OPTIONS.map((opt) => {
+								const selected = shopType === opt.value;
+								const dot = opt.value === "" ? null : shopColors(opt.value).main;
+								return (
+									<Button
+										key={String(opt.value)}
+										aria-pressed={selected}
+										onClick={() => {
+											setShopType(opt.value);
+											resetToFirstPage();
+											// Force refresh immediately after changing shop type
+											setRefreshTick((v) => v + 1);
+										}}
 										sx={{
-											p: { xs: "10px 11px 12px", sm: "14px 15px 16px" },
-											display: "flex",
-											flexDirection: "column",
-											gap: { xs: 0.75, sm: 1.125 },
-											flex: 1,
-											minWidth: 0,
+											height: 40,
+											px: 1.75,
+											borderRadius: 999,
+											flexShrink: 0,
+											whiteSpace: "nowrap",
+											fontSize: { xs: 13, sm: 14 },
+											border: "1px solid",
+											borderColor: selected ? tokens.ink : tokens.line,
+											bgcolor: selected ? tokens.ink : tokens.surface,
+											color: selected ? "#ffffff" : tokens.ink2,
+											"&:hover": {
+												bgcolor: selected ? tokens.ink : tokens.surface,
+												borderColor: selected ? tokens.ink : tokens.lineStrong,
+											},
 										}}
 									>
-										<Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", minWidth: 0 }}>
-											<StoreChip shopType={row.shopType} size="small" />
-											{sizeText && (
-												<Typography component="span" sx={{ fontSize: { xs: 11, sm: 12 }, color: tokens.ink3 }}>
-													{sizeText}
-												</Typography>
-											)}
-										</Box>
-										<Typography
-											component="h3"
-											sx={{
-												m: 0,
-												fontSize: { xs: 13, sm: 15 },
-												lineHeight: 1.35,
-												fontWeight: 600,
-												display: "-webkit-box",
-												WebkitLineClamp: 2,
-												WebkitBoxOrient: "vertical",
-												overflow: "hidden",
-												minHeight: { xs: 35, sm: 40 },
-											}}
-										>
-											{row.name || "-"}
-										</Typography>
-										<Typography
-											component="p"
-											sx={{
-												m: 0,
-												fontFamily: DISPLAY_FONT,
-												fontWeight: 800,
-												letterSpacing: "-0.02em",
-												fontSize: { xs: 20, sm: 26 },
-												lineHeight: 1.1,
-												fontVariantNumeric: "tabular-nums",
-											}}
-										>
-											{formatPrice(row.price)}
-										</Typography>
-										{row.promoText && (
+										{dot && (
 											<Box
 												component="span"
-												title={row.promoText}
-												sx={{
-													alignSelf: "flex-start",
-													maxWidth: "100%",
-													px: 1,
-													py: 0.375,
-													borderRadius: 999,
-													bgcolor: tokens.promoTint,
-													color: tokens.promo,
-													fontSize: { xs: 10.5, sm: 11.5 },
-													fontWeight: 600,
-													overflow: "hidden",
-													textOverflow: "ellipsis",
-													whiteSpace: "nowrap",
-												}}
-											>
-												{row.promoText}
-											</Box>
+												aria-hidden="true"
+												sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: dot, mr: 0.875 }}
+											/>
 										)}
-										<Box sx={{ minHeight: 20, display: "flex", alignItems: "center" }}>
-											{recommendation && (
-												<Typography
-													component="span"
-													className="recommendation-text"
-													sx={{
-														display: "inline-flex",
-														alignItems: "center",
-														gap: 0.5,
-														fontSize: { xs: 11.5, sm: 13 },
-														fontWeight: recommendation.save ? 700 : 600,
-														color: recommendation.save ? tokens.save : tokens.ink2,
-														fontVariantNumeric: "tabular-nums",
-													}}
-												>
-													{recommendation.save && (
-														<ArrowDownwardIcon aria-hidden="true" sx={{ fontSize: 14 }} />
-													)}
-													{recommendation.text}
-												</Typography>
-											)}
-										</Box>
-										<Button
-											className="compare-btn"
-											variant="contained"
-											fullWidth
-											sx={{ mt: "auto", height: { xs: 40, sm: 44 } }}
-											onClick={() =>
-												handleCompare(
-													row.productId,
-													row.name,
-													row.shopType,
-													row,
-												)
-											}
-										>
-											{isXs ? "Compare" : "Compare prices"}
-										</Button>
-									</Box>
-								</Card>
-							);
-						})}
+										{opt.value === "" ? "All stores" : opt.label}
+									</Button>
+								);
+							})}
+						</Box>
 					</Box>
-				)}
+				</Container>
 			</Box>
 
-			<Stack
-				direction={{ xs: "column", sm: "row" }}
-				spacing={{ xs: 1.5, sm: 2.5 }}
-				sx={{ mt: 3 }}
-				alignItems="center"
-				justifyContent={{ xs: "center", sm: "flex-end" }}
-			>
-				<Pagination
-					count={totalPages}
-					page={paginationModel.page + 1}
-					onChange={(_, page) =>
-						setPaginationModel((prev) => ({
-							...prev,
-							page: page - 1,
-						}))
-					}
-					color="primary"
-					// Phones keep the 32px "medium" size so page numbers stay tappable,
-					// and drop the sibling pages so the whole control fits on one line.
-					size={isMdDown && !isXs ? "small" : "medium"}
-					siblingCount={isXs ? 0 : 1}
-				/>
-				{/* Compact "Per page" picker instead of a full-width labelled field (BTS-161). */}
-				<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-					<Box component="span" id="page-size-label" sx={{ fontSize: 13, color: tokens.ink2 }}>
-						Per page
-					</Box>
-					<Select
-						labelId="page-size-label"
-						size="small"
-						value={String(paginationModel.pageSize)}
-						onChange={(e) => {
-							const nextSize = Number(e.target.value);
-							setPaginationModel({ page: 0, pageSize: nextSize });
-						}}
-						sx={{
-							height: 40,
-							fontSize: 14,
-							fontWeight: 600,
-							"& .MuiSelect-select": { py: 0, pl: 1.5 },
-						}}
-					>
-						{[10, 20, 50].map((opt) => (
-							<MenuItem key={opt} value={String(opt)}>
-								{opt}
-							</MenuItem>
-						))}
-					</Select>
+			<Container maxWidth="lg" sx={{ pt: { xs: 2, sm: 3 } }}>
+				<Typography sx={{ fontSize: { xs: 13, sm: 14 }, color: tokens.ink2, mb: { xs: 1.5, sm: 2 } }}>
+					<Box component="strong" sx={{ color: tokens.ink, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+						{rowCount.toLocaleString("en-AU")}
+					</Box>{" "}
+					products
+				</Typography>
+
+				<Box sx={{ position: "relative" }}>
+					{loading && (
+						<LinearProgress
+							sx={{ position: "absolute", left: 0, right: 0, top: -10, borderRadius: 1 }}
+						/>
+					)}
+					{rows.length === 0 && !loading ? (
+						<Box
+							sx={{
+								py: 8,
+								textAlign: "center",
+								color: "text.secondary",
+							}}
+						>
+							<Typography variant="body1" sx={{ fontWeight: 600 }}>
+								No products found
+							</Typography>
+							<Typography variant="body2">
+								Try adjusting your filters.
+							</Typography>
+						</Box>
+					) : (
+						<Box
+							sx={{
+								display: "grid",
+								gridTemplateColumns: {
+									xs: "repeat(2, minmax(0, 1fr))",
+									sm: "repeat(auto-fill, minmax(224px, 1fr))",
+								},
+								gap: { xs: 1.5, sm: 2.25 },
+							}}
+						>
+							{rows.map((row) => {
+								const sizeText = formatSize(row);
+								const isFavorite = favoriteIds.has(row.productId);
+								const favoriteBusy = favoriteBusyIds.includes(row.productId);
+								const compareTarget = compareDataMap[row.productId];
+								// Same comparison as before; only the wording and colour changed (BTS-161).
+								let recommendation: { text: string; save: boolean } | null = null;
+								if (compareTarget && row.price != null && compareTarget.price != null) {
+									const diff = compareTarget.price - row.price;
+									const other = shopTypeName(compareTarget.shopType);
+									if (Math.abs(diff) < 0.001) {
+										recommendation = { text: `Same price at ${other}`, save: false };
+									} else if (diff < 0) {
+										recommendation = {
+											text: `${other} is $${Math.abs(diff).toFixed(2)} cheaper`,
+											save: false,
+										};
+									} else {
+										recommendation = { text: `Save $${diff.toFixed(2)} vs ${other}`, save: true };
+									}
+								}
+								return (
+									<Card
+										key={row.productId}
+										className="product-card"
+										sx={{
+											display: "flex",
+											flexDirection: "column",
+											overflow: "hidden",
+											borderRadius: { xs: "14px", sm: "16px" },
+											transition: "box-shadow .2s ease, border-color .2s ease",
+											"&:hover": {
+												borderColor: tokens.lineStrong,
+												boxShadow: "0 1px 2px rgba(20,22,30,.06), 0 16px 32px rgba(20,22,30,.08)",
+											},
+										}}
+									>
+										<Box
+											sx={{
+												position: "relative",
+												height: { xs: 96, sm: 150 },
+												bgcolor: tokens.imageGround,
+												borderBottom: `1px solid ${tokens.line}`,
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												p: { xs: 1, sm: 1.5 },
+											}}
+										>
+											<ProductImage src={row.imageUrl} alt={row.name} />
+											<IconButton
+												className="favorite-btn"
+												onClick={() => void handleToggleFavorite(row.productId)}
+												disabled={favoriteBusy}
+												aria-label={
+													isFavorite
+														? "Remove from My Favorites"
+														: "Add to My Favorites"
+												}
+												aria-pressed={isFavorite}
+												sx={{
+													position: "absolute",
+													top: { xs: 6, sm: 12 },
+													right: { xs: 6, sm: 12 },
+													width: 40,
+													height: 40,
+													bgcolor: tokens.surface,
+													border: `1px solid ${tokens.line}`,
+													boxShadow: "0 2px 8px rgba(20,22,30,.1)",
+													color: isFavorite ? tokens.fav : tokens.ink3,
+													"&:hover": { bgcolor: tokens.surface, color: tokens.fav },
+												}}
+											>
+												{isFavorite ? (
+													<FavoriteIcon sx={{ fontSize: 19 }} />
+												) : (
+													<FavoriteBorderIcon sx={{ fontSize: 19 }} />
+												)}
+											</IconButton>
+										</Box>
+										<Box
+											sx={{
+												p: { xs: "10px 11px 12px", sm: "14px 15px 16px" },
+												display: "flex",
+												flexDirection: "column",
+												gap: { xs: 0.75, sm: 1.125 },
+												flex: 1,
+												minWidth: 0,
+											}}
+										>
+											<Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", minWidth: 0 }}>
+												<StoreChip shopType={row.shopType} size="small" />
+												{sizeText && (
+													<Typography component="span" sx={{ fontSize: { xs: 11, sm: 12 }, color: tokens.ink3 }}>
+														{sizeText}
+													</Typography>
+												)}
+											</Box>
+											<Typography
+												component="h3"
+												sx={{
+													m: 0,
+													fontSize: { xs: 13, sm: 15 },
+													lineHeight: 1.35,
+													fontWeight: 600,
+													display: "-webkit-box",
+													WebkitLineClamp: 2,
+													WebkitBoxOrient: "vertical",
+													overflow: "hidden",
+													minHeight: { xs: 35, sm: 40 },
+												}}
+											>
+												{row.name || "-"}
+											</Typography>
+											<Typography
+												component="p"
+												sx={{
+													m: 0,
+													fontFamily: DISPLAY_FONT,
+													fontWeight: 800,
+													letterSpacing: "-0.02em",
+													fontSize: { xs: 20, sm: 26 },
+													lineHeight: 1.1,
+													fontVariantNumeric: "tabular-nums",
+												}}
+											>
+												{formatPrice(row.price)}
+											</Typography>
+											{row.promoText && (
+												<Box
+													component="span"
+													title={row.promoText}
+													sx={{
+														alignSelf: "flex-start",
+														maxWidth: "100%",
+														px: 1,
+														py: 0.375,
+														borderRadius: 999,
+														bgcolor: tokens.promoTint,
+														color: tokens.promo,
+														fontSize: { xs: 10.5, sm: 11.5 },
+														fontWeight: 600,
+														overflow: "hidden",
+														textOverflow: "ellipsis",
+														whiteSpace: "nowrap",
+													}}
+												>
+													{row.promoText}
+												</Box>
+											)}
+											<Box sx={{ minHeight: 20, display: "flex", alignItems: "center" }}>
+												{recommendation && (
+													<Typography
+														component="span"
+														className="recommendation-text"
+														sx={{
+															display: "inline-flex",
+															alignItems: "center",
+															gap: 0.5,
+															fontSize: { xs: 11.5, sm: 13 },
+															fontWeight: recommendation.save ? 700 : 600,
+															color: recommendation.save ? tokens.save : tokens.ink2,
+															fontVariantNumeric: "tabular-nums",
+														}}
+													>
+														{recommendation.save && (
+															<ArrowDownwardIcon aria-hidden="true" sx={{ fontSize: 14 }} />
+														)}
+														{recommendation.text}
+													</Typography>
+												)}
+											</Box>
+											<Button
+												className="compare-btn"
+												variant="contained"
+												fullWidth
+												sx={{ mt: "auto", height: { xs: 40, sm: 44 } }}
+												onClick={() =>
+													handleCompare(
+														row.productId,
+														row.name,
+														row.shopType,
+														row,
+													)
+												}
+											>
+												{isXs ? "Compare" : "Compare prices"}
+											</Button>
+										</Box>
+									</Card>
+								);
+							})}
+						</Box>
+					)}
 				</Box>
-			</Stack>
+
+				<Stack
+					direction={{ xs: "column", sm: "row" }}
+					spacing={{ xs: 1.5, sm: 2.5 }}
+					sx={{ mt: 3 }}
+					alignItems="center"
+					justifyContent={{ xs: "center", sm: "flex-end" }}
+				>
+					<Pagination
+						count={totalPages}
+						page={paginationModel.page + 1}
+						onChange={(_, page) =>
+							setPaginationModel((prev) => ({
+								...prev,
+								page: page - 1,
+							}))
+						}
+						color="primary"
+						// Phones keep the 32px "medium" size so page numbers stay tappable,
+						// and drop the sibling pages so the whole control fits on one line.
+						size={isMdDown && !isXs ? "small" : "medium"}
+						siblingCount={isXs ? 0 : 1}
+					/>
+					{/* Compact "Per page" picker instead of a full-width labelled field (BTS-161). */}
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+						<Box component="span" id="page-size-label" sx={{ fontSize: 13, color: tokens.ink2 }}>
+							Per page
+						</Box>
+						<Select
+							labelId="page-size-label"
+							size="small"
+							value={String(paginationModel.pageSize)}
+							onChange={(e) => {
+								const nextSize = Number(e.target.value);
+								setPaginationModel({ page: 0, pageSize: nextSize });
+							}}
+							sx={{
+								height: 40,
+								fontSize: 14,
+								fontWeight: 600,
+								"& .MuiSelect-select": { py: 0, pl: 1.5 },
+							}}
+						>
+							{[10, 20, 50].map((opt) => (
+								<MenuItem key={opt} value={String(opt)}>
+									{opt}
+								</MenuItem>
+							))}
+						</Select>
+					</Box>
+				</Stack>
+			</Container>
 
 			<CompareDialog
 				open={compareOpen}
