@@ -71,8 +71,8 @@ function ProductImage({
 		return (
 			<Box
 				sx={{
-					height: { xs: 130, sm: 170 },
-					borderRadius: 4,
+					height: { xs: 110, sm: 170 },
+					borderRadius: { xs: "12px", sm: 4 },
 					bgcolor: "rgba(255,255,255,0.55)",
 					display: "flex",
 					alignItems: "center",
@@ -99,10 +99,10 @@ function ProductImage({
 			alt={alt}
 			onError={() => setFailed(true)}
 			sx={{
-				height: 170,
+				height: { xs: 110, sm: 170 },
 				width: "100%",
 				objectFit: "contain",
-				borderRadius: 4,
+				borderRadius: { xs: "12px", sm: 4 },
 				backgroundColor: "rgba(255,255,255,0.7)",
 			}}
 		/>
@@ -355,9 +355,10 @@ export default function ProductsPage() {
 				alignItems="center"
 				justifyContent="center"
 				sx={{
-					mb: 3,
+					mb: { xs: 2, sm: 3 },
 					p: 1.5,
-					borderRadius: 5,
+					// Theme radius unit is 14px, so 5 = 70px: far too round for a full-width phone panel.
+					borderRadius: { xs: "20px", sm: 5 },
 					width: { xs: "100%", sm: "fit-content" },
 					maxWidth: "100%",
 					mx: "auto",
@@ -423,7 +424,7 @@ export default function ProductsPage() {
 				>
 				<Button
 					variant="contained"
-					sx={{ flexGrow: { xs: 1, sm: 0 } }}
+					sx={{ flexGrow: { xs: 1, sm: 0 }, minHeight: { xs: 44, sm: "auto" } }}
 					onClick={() => setRefreshTick((v) => v + 1)}
 				>
 					Search
@@ -442,6 +443,7 @@ export default function ProductsPage() {
 						disabled={aiSearchExhausted}
 						color={aiSearchOpen ? "primary" : "default"}
 						size="small"
+						sx={{ width: { xs: 44, sm: "auto" }, height: { xs: 44, sm: "auto" } }}
 					>
 						<AutoAwesomeIcon />
 					</IconButton>
@@ -454,13 +456,14 @@ export default function ProductsPage() {
 			<Box
 				sx={{
 					position: "relative",
-					borderRadius: 5,
-					border: "0.5px solid rgba(255,255,255,0.6)",
-					background: "rgba(255,255,255,0.35)",
-					backdropFilter: "blur(20px) saturate(180%)",
-					WebkitBackdropFilter: "blur(20px) saturate(180%)",
-					boxShadow: "0 8px 30px rgba(60,60,90,0.06)",
-					p: { xs: 1.5, sm: 2.5 },
+					// Phones: no outer glass panel, the cards sit directly on the page.
+					borderRadius: { xs: "12px", sm: 5 },
+					border: { xs: "none", sm: "0.5px solid rgba(255,255,255,0.6)" },
+					background: { xs: "transparent", sm: "rgba(255,255,255,0.35)" },
+					backdropFilter: { xs: "none", sm: "blur(20px) saturate(180%)" },
+					WebkitBackdropFilter: { xs: "none", sm: "blur(20px) saturate(180%)" },
+					boxShadow: { xs: "none", sm: "0 8px 30px rgba(60,60,90,0.06)" },
+					p: { xs: 0, sm: 2.5 },
 					overflow: "hidden",
 				}}
 			>
@@ -528,7 +531,8 @@ export default function ProductsPage() {
 									sx={{
 										display: "flex",
 										flexDirection: "column",
-										borderRadius: 6,
+										// 6 × 14px = 84px turned narrow phone cards into arches.
+										borderRadius: { xs: "18px", sm: 6 },
 										border: "0.5px solid rgba(255,255,255,0.85)",
 										background: "rgba(255,255,255,0.6)",
 										backdropFilter: "blur(24px) saturate(180%)",
@@ -543,9 +547,9 @@ export default function ProductsPage() {
 								>
 									<Box
 											sx={{
-											px: 2.5,
-											pt: 2.5,
-											pb: 2,
+											px: { xs: 1, sm: 2.5 },
+											pt: { xs: 1, sm: 2.5 },
+											pb: { xs: 0.5, sm: 2 },
 											background:
 												"linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.4) 100%)",
 										}}
@@ -557,8 +561,10 @@ export default function ProductsPage() {
 											flex: 1,
 											display: "flex",
 											flexDirection: "column",
-											gap: 1.2,
-											pt: 2,
+											gap: { xs: 0.75, sm: 1.2 },
+											pt: { xs: 1, sm: 2 },
+											px: { xs: 1.25, sm: 2 },
+											"&:last-child": { pb: { xs: 1.5, sm: 3 } },
 											alignItems: "center",
 											textAlign: "center",
 										}}
@@ -567,7 +573,9 @@ export default function ProductsPage() {
 											variant="subtitle1"
 											fontWeight={700}
 											sx={{
-												minHeight: 48,
+												fontSize: { xs: 14, sm: "1rem" },
+												lineHeight: 1.4,
+												minHeight: { xs: 40, sm: 48 },
 												display: "-webkit-box",
 												WebkitLineClamp: 2,
 												WebkitBoxOrient: "vertical",
@@ -608,7 +616,7 @@ export default function ProductsPage() {
 												variant="h6"
 												component="p"
 												fontWeight={700}
-												sx={{ color: accent }}
+												sx={{ color: accent, fontSize: { xs: 17, sm: "1.25rem" } }}
 											>
 												{priceText}
 											</Typography>
@@ -643,6 +651,7 @@ export default function ProductsPage() {
 												className="compare-btn"
 												variant="contained"
 												size="small"
+												sx={{ minHeight: { xs: 40, sm: "auto" }, px: { xs: 2, sm: 2.25 } }}
 												onClick={() =>
 													handleCompare(
 														row.productId,
@@ -665,6 +674,8 @@ export default function ProductsPage() {
 														: "Add to My Favorites"
 												}
 												sx={{
+													width: { xs: 40, sm: "auto" },
+													height: { xs: 40, sm: "auto" },
 													color: accent,
 													border: "1px solid",
 													borderColor: `${accent}33`,
@@ -714,7 +725,8 @@ export default function ProductsPage() {
 							}))
 						}
 						color="primary"
-						size={isMdDown ? "small" : "medium"}
+						// Phones keep the 32px "medium" size so page numbers stay tappable.
+						size={isMdDown && !isXs ? "small" : "medium"}
 					/>
 					<FormControl size="small" sx={{ minWidth: 120 }}>
 						<InputLabel id="page-size-label">Page size</InputLabel>

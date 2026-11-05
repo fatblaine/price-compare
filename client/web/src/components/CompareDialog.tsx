@@ -394,11 +394,11 @@ export default function CompareDialog(props: CompareDialogProps) {
 									<ResponsiveContainer>
 										<LineChart
 											data={series}
-											margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+											margin={{ left: isXs ? 0 : 8, right: 8, top: 8, bottom: 8 }}
 										>
 											<CartesianGrid strokeDasharray="3 3" />
 											<XAxis dataKey="date" />
-											<YAxis tickFormatter={(v) => `$${v}`} width={60} />
+											<YAxis tickFormatter={(v) => `$${v}`} width={isXs ? 44 : 60} />
 											<Tooltip
 												formatter={(v: any) =>
 													v != null ? `$${Number(v).toFixed(2)}` : "-"

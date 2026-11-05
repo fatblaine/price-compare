@@ -97,6 +97,13 @@ const theme = createTheme({
 					border: "0.5px solid rgba(255,255,255,0.7)",
 					boxShadow: "0 24px 70px rgba(50,55,95,0.22)",
 				},
+				// Mobile full-screen dialogs: square edges and a near-opaque surface so the
+				// page underneath does not bleed through the content or the action bar.
+				paperFullScreen: {
+					borderRadius: 0,
+					backgroundColor: "rgba(248,248,252,0.97)",
+					border: "none",
+				},
 			},
 		},
 		MuiChip: {
