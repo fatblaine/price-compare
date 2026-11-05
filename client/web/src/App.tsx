@@ -60,6 +60,9 @@ function App() {
 	const userEmail = auth.user?.profile?.email as string | undefined;
 	const isGuest = guestMode && !isAuthenticated;
 	const showTabs = isAuthenticated || isGuest;
+	// The products page lays out its own full-width header band and containers (BTS-161).
+	const fullBleedPage =
+		showTabs && location.pathname.toLowerCase().startsWith("/products");
 
 	// Keep axios Authorization header in sync with the OIDC id_token
 	React.useEffect(() => {
@@ -377,9 +380,10 @@ function App() {
 
 			<Container
 				component="main"
-				maxWidth="lg"
+				maxWidth={fullBleedPage ? false : "lg"}
+				disableGutters={fullBleedPage}
 				sx={{
-					py: { xs: 2, md: 3 },
+					pt: fullBleedPage ? 0 : { xs: 2, md: 3 },
 					// Keep the last row clear of the fixed bottom navigation on phones.
 					pb: showTabs
 						? {
