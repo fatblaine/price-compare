@@ -1,5 +1,7 @@
 import {
 	AppBar,
+	BottomNavigation,
+	BottomNavigationAction,
 	Box,
 	Button,
 	CircularProgress,
@@ -9,6 +11,7 @@ import {
 	DialogContent,
 	DialogContentText,
 	DialogTitle,
+	Paper,
 	Tab,
 	Tabs,
 	Toolbar,
@@ -33,6 +36,13 @@ import { fetchAdminWhoAmI } from "./api/admin";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
 import AdminJobsPage from "./AdminJobsPage";
+import StorefrontIcon from "@mui/icons-material/Storefront";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+
+/** Height of the phone bottom navigation bar (MUI BottomNavigation default). */
+const BOTTOM_NAV_HEIGHT = 56;
 
 function App() {
 	const auth = useAuth();
@@ -212,38 +222,42 @@ function App() {
 				position="sticky"
 				elevation={0}
 				sx={{
-					background: "rgba(255,255,255,0.55)",
+					// Phones: scroll away with the page instead of pinning the header.
+					position: { xs: "static", md: "sticky" },
+					background: { xs: "rgba(255,255,255,0.9)", md: "rgba(255,255,255,0.55)" },
 					backdropFilter: "blur(30px) saturate(180%)",
 					WebkitBackdropFilter: "blur(30px) saturate(180%)",
 					borderBottom: "0.5px solid rgba(255,255,255,0.6)",
 					boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
 				}}
 			>
-				<Toolbar sx={{ py: { xs: 1, sm: 1.5 } }}>
+				<Toolbar sx={{ py: { xs: 0.5, sm: 1.5 }, px: { xs: 0 } }}>
 					<Container
 						maxWidth="lg"
 						sx={{
 							display: "flex",
-							alignItems: { xs: "flex-start", md: "center" },
-							flexDirection: { xs: "column", md: "row" },
+							alignItems: "center",
+							// Phones: row 1 = logo + account actions, row 2 = tabs.
+							flexWrap: { xs: "wrap", md: "nowrap" },
+							columnGap: 1,
 						}}
 					>
 						<Box
 							component="h1"
 							sx={{
-								flexGrow: { xs: 0, md: 1 },
+								order: 1,
+								flexGrow: 1,
 								m: 0,
-								textAlign: { xs: "center", sm: "left" },
-								width: { xs: "100%", md: "auto" },
+								minWidth: 0,
 								display: "flex",
-								justifyContent: { xs: "center", sm: "flex-start" },
+								justifyContent: "flex-start",
 							}}
 						>
 							<Box
 								component="img"
 								src="/price-peer-logo-horizontal.svg"
 								alt="Price Peer"
-								sx={{ height: { xs: 48, sm: 58, md: 68 }, width: "auto" }}
+								sx={{ height: { xs: 40, sm: 58, md: 68 }, width: "auto", maxWidth: "100%" }}
 							/>
 						</Box>
 						{showTabs && (
@@ -255,8 +269,11 @@ function App() {
 								scrollButtons={false}
 								allowScrollButtonsMobile
 								sx={{
+									// Phones use the bottom navigation bar instead.
+									display: { xs: "none", sm: "flex" },
+									order: { xs: 3, md: 2 },
 									ml: { xs: 0, md: 2 },
-									mt: { xs: 1, md: 0 },
+									mt: { xs: 0.5, md: 0 },
 									minHeight: "auto",
 									maxWidth: "100%",
 									width: { xs: "100%", md: "auto" },
@@ -264,10 +281,10 @@ function App() {
 										justifyContent: { xs: "center", md: "flex-start" },
 									},
 									"& .MuiTab-root": {
-										minHeight: "auto",
 										minWidth: "auto",
 										px: { xs: 1.25, md: 2 },
-										fontSize: { xs: 12, sm: 13, md: 14 },
+										minHeight: { xs: 44, md: "auto" },
+										fontSize: { xs: 13, sm: 13, md: 14 },
 										color: "text.secondary",
 									},
 									"& .MuiTab-root.Mui-selected": {
@@ -288,13 +305,12 @@ function App() {
 						)}
 						<Box
 							sx={{
+								order: { xs: 2, md: 3 },
 								display: "flex",
 								alignItems: "center",
-								justifyContent: "center",
-								flexWrap: "wrap",
+								justifyContent: "flex-end",
+								flexShrink: 0,
 								gap: 1,
-								width: { xs: "100%", md: "auto" },
-								mt: { xs: 1, md: 0 },
 								ml: { md: 2 },
 							}}
 						>
@@ -302,6 +318,8 @@ function App() {
 								<Typography
 									variant="body2"
 									sx={{
+										// Too wide for the phone header row; the Log out button is enough there.
+										display: { xs: "none", sm: "block" },
 										fontWeight: 500,
 										color: "text.secondary",
 										maxWidth: { xs: 180, sm: 200 },
@@ -316,7 +334,11 @@ function App() {
 							{isGuest && (
 								<Typography
 									variant="body2"
-									sx={{ fontWeight: 500, color: "text.secondary" }}
+									sx={{
+										display: { xs: "none", sm: "block" },
+										fontWeight: 500,
+										color: "text.secondary",
+									}}
 								>
 									Guest access
 								</Typography>
@@ -335,6 +357,7 @@ function App() {
 									onClick={() => auth.signinRedirect()}
 									sx={{
 										fontWeight: 500,
+										minHeight: { xs: 40, md: "auto" },
 										background: "linear-gradient(135deg, #6e7bff, #8b6eff)",
 										"&:hover": { background: "linear-gradient(135deg, #6e7bff, #8b6eff)", filter: "brightness(1.06)" },
 									}}
@@ -347,9 +370,70 @@ function App() {
 				</Toolbar>
 			</AppBar>
 
-			<Container component="main" maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
+			<Container
+				component="main"
+				maxWidth="lg"
+				sx={{
+					py: { xs: 2, md: 3 },
+					// Keep the last row clear of the fixed bottom navigation on phones.
+					pb: showTabs
+						? {
+								xs: `calc(${BOTTOM_NAV_HEIGHT + 16}px + env(safe-area-inset-bottom))`,
+								md: 3,
+							}
+						: { xs: 2, md: 3 },
+				}}
+			>
 				{renderMainContent()}
 			</Container>
+
+			{showTabs && (
+				<Paper
+					component="nav"
+					aria-label="Main navigation"
+					elevation={0}
+					sx={{
+						display: { xs: "block", sm: "none" },
+						position: "fixed",
+						left: 0,
+						right: 0,
+						bottom: 0,
+						zIndex: (t) => t.zIndex.appBar,
+						borderRadius: 0,
+						background: "rgba(255,255,255,0.94)",
+						backdropFilter: "blur(30px) saturate(180%)",
+						WebkitBackdropFilter: "blur(30px) saturate(180%)",
+						borderTop: "0.5px solid rgba(120,120,128,0.25)",
+						pb: "env(safe-area-inset-bottom)",
+					}}
+				>
+					<BottomNavigation
+						showLabels
+						value={mainTab}
+						onChange={handleTabChange}
+						sx={{
+							height: BOTTOM_NAV_HEIGHT,
+							bgcolor: "transparent",
+							"& .MuiBottomNavigationAction-root": {
+								minWidth: 0,
+								color: "text.secondary",
+							},
+							"& .MuiBottomNavigationAction-root.Mui-selected": {
+								color: "#6e7bff",
+							},
+							"& .MuiBottomNavigationAction-label": { fontSize: 11 },
+							"& .MuiBottomNavigationAction-label.Mui-selected": { fontSize: 11 },
+						}}
+					>
+						<BottomNavigationAction label="Products" value="products" icon={<StorefrontIcon />} />
+						<BottomNavigationAction label="Receipts" value="receipts" icon={<ReceiptLongIcon />} />
+						<BottomNavigationAction label="Favorites" value="favorites" icon={<FavoriteIcon />} />
+						{isAuthenticated && isAdmin && (
+							<BottomNavigationAction label="Admin" value="admin" icon={<AdminPanelSettingsIcon />} />
+						)}
+					</BottomNavigation>
+				</Paper>
+			)}
 
 			<Dialog
 				open={restrictedDialogOpen}
