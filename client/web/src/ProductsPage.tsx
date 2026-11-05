@@ -403,28 +403,64 @@ export default function ProductsPage() {
 					maxWidth="lg"
 					sx={{ pt: { xs: 1.75, sm: 4, md: 5.5 }, pb: { xs: 1.75, sm: 3.5 } }}
 				>
-					<FreshnessChip data={lastUpdated} />
-					<Box sx={{ display: { xs: "none", sm: "block" }, maxWidth: 640 }}>
-						<Typography
-							component="h2"
+					{/* Text on the left; on wide screens a decorative illustration fills the space
+					    to the right of the headline, above the search bar. */}
+					<Box
+						sx={{
+							display: "flex",
+							alignItems: "flex-end",
+							justifyContent: "space-between",
+							gap: 4,
+						}}
+					>
+						<Box sx={{ minWidth: 0 }}>
+							<FreshnessChip data={lastUpdated} />
+							<Box sx={{ display: { xs: "none", sm: "block" }, maxWidth: 640 }}>
+								<Typography
+									component="h2"
+									sx={{
+										fontFamily: DISPLAY_FONT,
+										fontWeight: 800,
+										letterSpacing: "-0.03em",
+										fontSize: { sm: 32, md: 40 },
+										lineHeight: 1.08,
+										mt: 2,
+										mb: 1,
+									}}
+								>
+									Compare Coles &amp; Woolworths.
+									<br />
+									Buy the cheaper one.
+								</Typography>
+								<Typography sx={{ color: tokens.ink2, fontSize: { sm: 16, md: 17 }, lineHeight: 1.5 }}>
+									Grocery prices from both stores, matched product by product, with
+									price history so you can see where it&apos;s cheaper.
+								</Typography>
+							</Box>
+						</Box>
+						<Box
+							component="img"
+							src="/hero-baskets.webp"
+							alt=""
+							aria-hidden="true"
+							width={800}
+							height={503}
+							decoding="async"
+						// Hidden below lg; lazy keeps phones and tablets from downloading it at all.
+						loading="lazy"
 							sx={{
-								fontFamily: DISPLAY_FONT,
-								fontWeight: 800,
-								letterSpacing: "-0.03em",
-								fontSize: { sm: 32, md: 40 },
-								lineHeight: 1.08,
-								mt: 2,
-								mb: 1,
+								display: { xs: "none", lg: "block" },
+								height: 232,
+								width: "auto",
+								flexShrink: 0,
+								mr: -1,
+								mb: -1.5,
+								// Near-white image ground blends into the white band.
+								mixBlendMode: "multiply",
+								pointerEvents: "none",
+								userSelect: "none",
 							}}
-						>
-							Compare Coles &amp; Woolworths.
-							<br />
-							Buy the cheaper one.
-						</Typography>
-						<Typography sx={{ color: tokens.ink2, fontSize: { sm: 16, md: 17 }, lineHeight: 1.5 }}>
-							Grocery prices from both stores, matched product by product, with
-							price history so you can see where it&apos;s cheaper.
-						</Typography>
+						/>
 					</Box>
 
 					<Box
