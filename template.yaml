@@ -255,6 +255,12 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Products/search-by-description
             Method: POST
+        ProductsLastUpdatedGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/Products/last-updated
+            Method: GET
         AuthLoginPost:
           Type: HttpApi
           Properties:
