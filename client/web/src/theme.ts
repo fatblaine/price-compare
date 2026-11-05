@@ -1,25 +1,44 @@
 import { createTheme } from "@mui/material/styles";
 
 /**
- * Glassmorphism ("liquid glass") theme inspired by docs/frontend-style.
- * Purple accent (#6e7bff → #8b6eff), translucent frosted surfaces,
- * rounded corners and soft ambient shadows. The animated colour-mesh
- * background lives in index.css (body::before); this theme styles the
- * glass surfaces that sit on top of it.
+ * Clean retail theme (BTS-161), from the "PricePeer 设计精进" design canvas:
+ * one indigo brand, two store colours, green for savings, amber for promos;
+ * white cards with hairline borders on a light grey ground. Plus Jakarta Sans
+ * for display text and prices, Inter for UI. No glass, gradients or blur.
  */
+export const tokens = {
+	ink: "#14161B",
+	ink2: "#565E6E",
+	ink3: "#767E8D",
+	ground: "#F4F5F7",
+	surface: "#FFFFFF",
+	line: "#E6E8EE",
+	lineStrong: "#C9CCD6",
+	imageGround: "#FAFBFC",
+	brand: "#4F46E5",
+	brandDark: "#3B32C9",
+	brandTint: "#EEEFFE",
+	save: "#0B7A43",
+	saveTint: "#E3F4EA",
+	promo: "#8A5A00",
+	promoTint: "#F7EFDF",
+	fav: "#E0407A",
+	cardShadow: "0 1px 2px rgba(20,22,30,.04), 0 12px 28px rgba(20,22,30,.05)",
+} as const;
 
-const ACCENT = "#6e7bff";
-const ACCENT_DARK = "#8b6eff";
-const TEXT_PRIMARY = "#1d1d1f";
-const TEXT_SECONDARY = "#86868b";
-
-const SF_STACK = [
+export const DISPLAY_FONT = [
+	'"Plus Jakarta Sans"',
+	'"Inter"',
+	"system-ui",
 	"-apple-system",
-	"BlinkMacSystemFont",
-	'"SF Pro Display"',
-	'"SF Pro Text"',
+	"sans-serif",
+].join(",");
+
+const UI_FONT = [
+	'"Inter"',
+	"system-ui",
+	"-apple-system",
 	'"Segoe UI"',
-	'"Helvetica Neue"',
 	"Roboto",
 	"sans-serif",
 ].join(",");
@@ -27,57 +46,56 @@ const SF_STACK = [
 const theme = createTheme({
 	palette: {
 		mode: "light",
-		primary: { main: ACCENT, dark: ACCENT_DARK, contrastText: "#ffffff" },
-		secondary: { main: ACCENT_DARK, contrastText: "#ffffff" },
-		success: { main: "#1f9d57" },
-		warning: { main: "#e08a1e" },
-		error: { main: "#ff3b6b" },
-		background: { default: "#eef0f4", paper: "rgba(255,255,255,0.62)" },
-		text: { primary: TEXT_PRIMARY, secondary: TEXT_SECONDARY },
-		divider: "rgba(120,120,128,0.2)",
+		primary: { main: tokens.brand, dark: tokens.brandDark, contrastText: "#ffffff" },
+		secondary: { main: tokens.brandDark, contrastText: "#ffffff" },
+		success: { main: tokens.save },
+		warning: { main: tokens.promo },
+		error: { main: "#C62828" },
+		background: { default: tokens.ground, paper: tokens.surface },
+		text: { primary: tokens.ink, secondary: tokens.ink2 },
+		divider: tokens.line,
 	},
-	shape: { borderRadius: 14 },
+	shape: { borderRadius: 12 },
 	typography: {
-		fontFamily: SF_STACK,
-		h4: { fontWeight: 700, letterSpacing: "-0.03em" },
-		h5: { fontWeight: 700, letterSpacing: "-0.02em" },
-		h6: { fontWeight: 700, letterSpacing: "-0.02em" },
-		subtitle1: { letterSpacing: "-0.01em" },
-		button: { textTransform: "none", fontWeight: 600, letterSpacing: "-0.01em" },
+		fontFamily: UI_FONT,
+		h1: { fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: "-0.03em" },
+		h2: { fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: "-0.03em" },
+		h3: { fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: "-0.02em" },
+		h4: { fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: "-0.02em" },
+		h5: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: "-0.02em" },
+		h6: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: "-0.01em" },
+		button: { textTransform: "none", fontWeight: 600 },
 	},
 	components: {
+		MuiCssBaseline: {
+			styleOverrides: {
+				body: { backgroundColor: tokens.ground },
+			},
+		},
 		MuiButton: {
 			defaultProps: { disableElevation: true },
 			styleOverrides: {
-				root: { borderRadius: 13, paddingInline: 18 },
+				root: { borderRadius: 12, paddingInline: 18, fontWeight: 600 },
 				containedPrimary: {
-					background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DARK})`,
-					boxShadow: "0 6px 16px rgba(110,123,255,0.35)",
-					"&:hover": {
-						background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DARK})`,
-						filter: "brightness(1.06)",
-						boxShadow: "0 8px 20px rgba(110,123,255,0.42)",
-					},
+					backgroundColor: tokens.brand,
+					"&:hover": { backgroundColor: tokens.brandDark },
 				},
-				outlinedPrimary: {
-					borderColor: "rgba(110,123,255,0.4)",
-					backgroundColor: "rgba(110,123,255,0.06)",
-					"&:hover": {
-						borderColor: ACCENT,
-						backgroundColor: "rgba(110,123,255,0.14)",
-					},
+				outlined: {
+					backgroundColor: tokens.surface,
+					borderColor: tokens.line,
+					color: tokens.ink,
+					"&:hover": { backgroundColor: tokens.surface, borderColor: tokens.lineStrong },
 				},
 			},
 		},
 		MuiCard: {
+			defaultProps: { elevation: 0 },
 			styleOverrides: {
 				root: {
-					borderRadius: 22,
-					backgroundColor: "rgba(255,255,255,0.6)",
-					backdropFilter: "blur(24px) saturate(180%)",
-					WebkitBackdropFilter: "blur(24px) saturate(180%)",
-					border: "0.5px solid rgba(255,255,255,0.85)",
-					boxShadow: "0 10px 34px rgba(50,55,95,0.1)",
+					borderRadius: 16,
+					backgroundColor: tokens.surface,
+					border: `1px solid ${tokens.line}`,
+					boxShadow: tokens.cardShadow,
 					backgroundImage: "none",
 				},
 			},
@@ -90,40 +108,44 @@ const theme = createTheme({
 		MuiDialog: {
 			styleOverrides: {
 				paper: {
-					borderRadius: 24,
-					backgroundColor: "rgba(255,255,255,0.78)",
-					backdropFilter: "blur(30px) saturate(180%)",
-					WebkitBackdropFilter: "blur(30px) saturate(180%)",
-					border: "0.5px solid rgba(255,255,255,0.7)",
-					boxShadow: "0 24px 70px rgba(50,55,95,0.22)",
+					borderRadius: 18,
+					backgroundColor: tokens.surface,
+					boxShadow: "0 24px 70px rgba(20,22,30,0.18)",
 				},
-				// Mobile full-screen dialogs: square edges and a near-opaque surface so the
-				// page underneath does not bleed through the content or the action bar.
 				paperFullScreen: {
 					borderRadius: 0,
-					backgroundColor: "rgba(248,248,252,0.97)",
-					border: "none",
+					backgroundColor: tokens.surface,
 				},
+			},
+		},
+		MuiDialogTitle: {
+			styleOverrides: {
+				root: { fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: "-0.02em" },
 			},
 		},
 		MuiChip: {
 			styleOverrides: {
-				root: { borderRadius: 980, fontWeight: 600 },
+				root: { borderRadius: 999, fontWeight: 600 },
 			},
 		},
 		MuiOutlinedInput: {
 			styleOverrides: {
 				root: {
-					borderRadius: 13,
-					backgroundColor: "rgba(120,120,128,0.08)",
-					"& fieldset": { borderColor: "rgba(120,120,128,0.18)" },
-					"&:hover fieldset": { borderColor: "rgba(110,123,255,0.4)" },
+					borderRadius: 12,
+					backgroundColor: tokens.surface,
+					"& fieldset": { borderColor: tokens.line },
+					"&:hover fieldset": { borderColor: tokens.lineStrong },
 				},
 			},
 		},
 		MuiTab: {
 			styleOverrides: {
-				root: { textTransform: "none", fontWeight: 500, letterSpacing: "-0.01em" },
+				root: { textTransform: "none", fontWeight: 600 },
+			},
+		},
+		MuiPaginationItem: {
+			styleOverrides: {
+				root: { fontWeight: 600 },
 			},
 		},
 	},

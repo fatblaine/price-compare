@@ -36,6 +36,7 @@ import { fetchAdminWhoAmI } from "./api/admin";
 import MyReceiptsPage from "./MyReceiptsPage";
 import MyFavoritesPage from "./MyFavoritesPage";
 import AdminJobsPage from "./AdminJobsPage";
+import { tokens } from "./theme";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import FavoriteIcon from "@mui/icons-material/Favorite";
@@ -224,14 +225,14 @@ function App() {
 				sx={{
 					// Phones: scroll away with the page instead of pinning the header.
 					position: { xs: "static", md: "sticky" },
-					background: { xs: "rgba(255,255,255,0.9)", md: "rgba(255,255,255,0.55)" },
-					backdropFilter: "blur(30px) saturate(180%)",
-					WebkitBackdropFilter: "blur(30px) saturate(180%)",
-					borderBottom: "0.5px solid rgba(255,255,255,0.6)",
-					boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
+					// BTS-161: plain white bar with a hairline, no glass.
+					background: tokens.surface,
+					color: tokens.ink,
+					borderBottom: `1px solid ${tokens.line}`,
+					boxShadow: "none",
 				}}
 			>
-				<Toolbar sx={{ py: { xs: 0.5, sm: 1.5 }, px: { xs: 0 } }}>
+				<Toolbar sx={{ py: { xs: 0.5, sm: 1 }, px: { xs: 0 }, minHeight: { md: 68 } }}>
 					<Container
 						maxWidth="lg"
 						sx={{
@@ -257,7 +258,7 @@ function App() {
 								component="img"
 								src="/price-peer-logo-horizontal.svg"
 								alt="Price Peer"
-								sx={{ height: { xs: 40, sm: 58, md: 68 }, width: "auto", maxWidth: "100%" }}
+								sx={{ height: { xs: 40, sm: 46, md: 50 }, width: "auto", maxWidth: "100%" }}
 							/>
 						</Box>
 						{showTabs && (
@@ -279,19 +280,25 @@ function App() {
 									width: { xs: "100%", md: "auto" },
 									"& .MuiTabs-flexContainer": {
 										justifyContent: { xs: "center", md: "flex-start" },
+										gap: 0.5,
 									},
+									// BTS-161: the current tab is a tinted pill, no underline.
 									"& .MuiTab-root": {
 										minWidth: "auto",
-										px: { xs: 1.25, md: 2 },
-										minHeight: { xs: 44, md: "auto" },
-										fontSize: { xs: 13, sm: 13, md: 14 },
-										color: "text.secondary",
+										minHeight: 40,
+										px: 1.5,
+										my: 0.5,
+										borderRadius: "9px",
+										fontSize: 14,
+										fontWeight: 600,
+										color: tokens.ink2,
 									},
 									"& .MuiTab-root.Mui-selected": {
-										color: "#6e7bff",
+										color: tokens.ink,
+										backgroundColor: tokens.brandTint,
 									},
 									"& .MuiTabs-indicator": {
-										backgroundColor: "#6e7bff",
+										display: "none",
 									},
 								}}
 							>
@@ -357,9 +364,7 @@ function App() {
 									onClick={() => auth.signinRedirect()}
 									sx={{
 										fontWeight: 500,
-										minHeight: { xs: 40, md: "auto" },
-										background: "linear-gradient(135deg, #6e7bff, #8b6eff)",
-										"&:hover": { background: "linear-gradient(135deg, #6e7bff, #8b6eff)", filter: "brightness(1.06)" },
+										minHeight: 40,
 									}}
 								>
 									Sign in
@@ -400,10 +405,8 @@ function App() {
 						bottom: 0,
 						zIndex: (t) => t.zIndex.appBar,
 						borderRadius: 0,
-						background: "rgba(255,255,255,0.94)",
-						backdropFilter: "blur(30px) saturate(180%)",
-						WebkitBackdropFilter: "blur(30px) saturate(180%)",
-						borderTop: "0.5px solid rgba(120,120,128,0.25)",
+						background: tokens.surface,
+						borderTop: `1px solid ${tokens.line}`,
 						pb: "env(safe-area-inset-bottom)",
 					}}
 				>
@@ -419,7 +422,7 @@ function App() {
 								color: "text.secondary",
 							},
 							"& .MuiBottomNavigationAction-root.Mui-selected": {
-								color: "#6e7bff",
+								color: tokens.brand,
 							},
 							"& .MuiBottomNavigationAction-label": { fontSize: 11 },
 							"& .MuiBottomNavigationAction-label.Mui-selected": { fontSize: 11 },
