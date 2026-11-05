@@ -4,8 +4,6 @@ import Box from "@mui/material/Box";
 import {
 	Button,
 	Stack,
-	FormControl,
-	InputLabel,
 	Select,
 	MenuItem,
 	Typography,
@@ -517,6 +515,7 @@ export default function ProductsPage() {
 					>
 						Search
 					</Button>
+					<TourButton onClick={startTour} disabled={compareOpen} />
 				</Box>
 
 				<Box
@@ -580,10 +579,6 @@ export default function ProductsPage() {
 								</Button>
 							);
 						})}
-					</Box>
-					<Box sx={{ flex: 1 }} />
-					<Box sx={{ flexShrink: 0 }}>
-						<TourButton onClick={startTour} disabled={compareOpen} />
 					</Box>
 				</Box>
 			</Box>
@@ -825,10 +820,10 @@ export default function ProductsPage() {
 
 			<Stack
 				direction={{ xs: "column", sm: "row" }}
-				spacing={2}
+				spacing={{ xs: 1.5, sm: 2.5 }}
 				sx={{ mt: 3 }}
-				alignItems={{ xs: "stretch", sm: "center" }}
-				justifyContent="flex-end"
+				alignItems="center"
+				justifyContent={{ xs: "center", sm: "flex-end" }}
 			>
 				<Pagination
 					count={totalPages}
@@ -840,18 +835,29 @@ export default function ProductsPage() {
 						}))
 					}
 					color="primary"
-					// Phones keep the 32px "medium" size so page numbers stay tappable.
+					// Phones keep the 32px "medium" size so page numbers stay tappable,
+					// and drop the sibling pages so the whole control fits on one line.
 					size={isMdDown && !isXs ? "small" : "medium"}
+					siblingCount={isXs ? 0 : 1}
 				/>
-				<FormControl size="small" sx={{ minWidth: 120 }}>
-					<InputLabel id="page-size-label">Page size</InputLabel>
+				{/* Compact "Per page" picker instead of a full-width labelled field (BTS-161). */}
+				<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+					<Box component="span" id="page-size-label" sx={{ fontSize: 13, color: tokens.ink2 }}>
+						Per page
+					</Box>
 					<Select
 						labelId="page-size-label"
-						label="Page size"
+						size="small"
 						value={String(paginationModel.pageSize)}
 						onChange={(e) => {
 							const nextSize = Number(e.target.value);
 							setPaginationModel({ page: 0, pageSize: nextSize });
+						}}
+						sx={{
+							height: 40,
+							fontSize: 14,
+							fontWeight: 600,
+							"& .MuiSelect-select": { py: 0, pl: 1.5 },
 						}}
 					>
 						{[10, 20, 50].map((opt) => (
@@ -860,7 +866,7 @@ export default function ProductsPage() {
 							</MenuItem>
 						))}
 					</Select>
-				</FormControl>
+				</Box>
 			</Stack>
 
 			<CompareDialog
