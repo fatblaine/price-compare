@@ -54,9 +54,13 @@ namespace PriceCompareCore.Services
             var cached = await _cache.GetStringAsync(CacheKey.WOOLWORTHS_LOWER_SHELF_PRODUCTS, ct);
             if (!string.IsNullOrWhiteSpace(cached))
             {
-                _logger.LogInformation("WWS DOM: returning cached lower-shelf products.");
                 var cachedItems = JsonSerializer.Deserialize<List<WoolworthsSpecialProduct>>(cached) ?? new();
-                return cachedItems.Take(limit).ToList();
+                // An empty cached list is a failed run, not data: scrape again instead of serving it.
+                if (cachedItems.Count > 0)
+                {
+                    _logger.LogInformation("WWS DOM: returning cached lower-shelf products.");
+                    return cachedItems.Take(limit).ToList();
+                }
             }
 
             var fetchLimit = hardCap;
@@ -99,6 +103,7 @@ namespace PriceCompareCore.Services
             var page = await context.NewPageAsync();
             var domItems = new List<DomProduct>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var sawProductTiles = false;
             var maxPages = GetMaxPages();
             var startPage = GetStartPage();
 
@@ -137,9 +142,15 @@ namespace PriceCompareCore.Services
                 if (selector is null)
                 {
                     _logger.LogWarning("WWS DOM: no product selector detected on page {Page}.", pageNumber);
+                    if (pageNumber == startPage)
+                    {
+                        throw WoolworthsTileReader.NoProductsOnFirstPage("lower-shelf", await page.TitleAsync(), page.Url);
+                    }
+
                     break;
                 }
 
+                sawProductTiles = true;
                 var remaining = fetchLimit - domItems.Count;
                 var pageItems = await ExtractDomItemsAsync(page, remaining, ct, seen, GetMaxScrollRounds());
                 _logger.LogInformation("WWS DOM: page {Page} -> {Count} items.", pageNumber, pageItems.Count);
@@ -154,6 +165,7 @@ namespace PriceCompareCore.Services
 
             var scrapedAt = DateTime.UtcNow;
             var mapped = MapDomItems(domItems, scrapedAt);
+            WoolworthsTileReader.EnsureParsed("lower-shelf", sawProductTiles, domItems.Count, mapped.Count);
             _logger.LogInformation("WWS DOM: extracted {Count} products.", mapped.Count);
 
             var serialized = JsonSerializer.Serialize(mapped);
@@ -232,6 +244,12 @@ namespace PriceCompareCore.Services
             var result = new List<WoolworthsSpecialProduct>();
             foreach (var item in items)
             {
+                if (item.Tile is not null)
+                {
+                    result.Add(WoolworthsTileReader.ToProduct(item.Tile, item.Image, scrapedAt, null));
+                    continue;
+                }
+
                 var name = item.Name?.Trim() ?? string.Empty;
                 if (!IsValidName(name))
                 {
@@ -344,18 +362,21 @@ namespace PriceCompareCore.Services
                         ? href
                         : new Uri(new Uri(LowerShelfUrl), href).ToString();
 
-                    if (!seen.Add(fullHref))
+                    if (seen.Contains(fullHref))
                     {
                         continue;
                     }
 
                     var aria = (await anchor.GetAttributeAsync("aria-label")) ?? string.Empty;
-                    if (!IsProductAria(aria))
+                    var tile = await WoolworthsTileReader.ReadAsync(anchor);
+                    if (tile is null && !IsProductAria(aria))
                     {
                         continue;
                     }
 
-                    var name = ExtractNameFromAria(aria);
+                    seen.Add(fullHref);
+
+                    var name = tile?.Name ?? ExtractNameFromAria(aria);
                     if (string.IsNullOrWhiteSpace(name))
                     {
                         name = (await anchor.InnerTextAsync()).Trim();
@@ -375,7 +396,8 @@ namespace PriceCompareCore.Services
                         Name = name,
                         Href = fullHref,
                         Image = image,
-                        Aria = aria
+                        Aria = aria,
+                        Tile = tile
                     });
                 }
 
@@ -531,7 +553,7 @@ window.navigator.permissions.query = (parameters) => (
         private static int GetDomHardCap()
         {
             var raw = Environment.GetEnvironmentVariable("WWS_DOM_MAX_ITEMS");
-            return int.TryParse(raw, out var v) && v > 0 ? v : 1000;
+            return int.TryParse(raw, out var v) && v > 0 ? v : 10000;
         }
 
         private static int GetMaxScrollRounds()
@@ -543,7 +565,7 @@ window.navigator.permissions.query = (parameters) => (
         private static int GetMaxPages()
         {
             var raw = Environment.GetEnvironmentVariable("WWS_DOM_MAX_PAGES");
-            return int.TryParse(raw, out var v) && v > 0 ? v : 50;
+            return int.TryParse(raw, out var v) && v > 0 ? v : 300;
         }
 
         private static int GetStartPage()
@@ -561,6 +583,7 @@ window.navigator.permissions.query = (parameters) => (
             public string? Href { get; set; }
             public string? Image { get; set; }
             public string? Aria { get; set; }
+            public WoolworthsTileData? Tile { get; set; }
         }
 
         private static bool IsProductAria(string? aria)
