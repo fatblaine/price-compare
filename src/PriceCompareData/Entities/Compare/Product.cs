@@ -11,6 +11,9 @@ namespace PriceCompareData.Entities.Compare
         public Guid ProductId { get; set; } = Guid.NewGuid();
         public int? ShopType { get; set; } // COLES / WOOLWORTHS
         public string? SourceId { get; set; }  // Coles: Id; WWS: Barcode
+        // WWS stockcode (BTS-163). Not an identity key: the prod SQL import matches on SourceId,
+        // so the stockcode lives in its own column instead of filling SourceId.
+        public string? Stockcode { get; set; }
         public string Name { get; set; } = default!;
         public string? Brand { get; set; }
         public decimal? SizeValue { get; set; }   // 2, 500

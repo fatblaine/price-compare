@@ -392,23 +392,24 @@ namespace PriceCompareWeb.Services
             await writer.WriteLineAsync("  sizeunknown = d.sizeunknown,");
             await writer.WriteLineAsync("  brandunknown = d.brandunknown,");
             await writer.WriteLineAsync("  categoryunknown = d.categoryunknown,");
+            await writer.WriteLineAsync("  stockcode = COALESCE(d.stockcode, p.stockcode),");
             await writer.WriteLineAsync("  lastseenat = GREATEST(p.lastseenat, d.lastseenat)");
             await writer.WriteLineAsync("FROM (");
             await writer.WriteLineAsync("  SELECT DISTINCT ON (v.shoptype, v.sourceid)");
             await writer.WriteLineAsync("    v.shoptype, v.sourceid, v.name, v.brand, v.sizevalue, v.sizeunit, v.packageqty, v.categoryid, v.imageurl, v.lastseenat,");
             await writer.WriteLineAsync("    v.normalizedname, v.normalizedbrand, v.sizestandardvalue, v.sizestandardunit,");
-            await writer.WriteLineAsync("    v.sizeunknown, v.brandunknown, v.categoryunknown");
+            await writer.WriteLineAsync("    v.sizeunknown, v.brandunknown, v.categoryunknown, v.stockcode");
             await writer.WriteLineAsync("  FROM (VALUES");
 
             for (var i = 0; i < batch.Count; i++)
             {
                 var row = batch[i];
-                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, false)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)}, {Sql.Text(row.NormalizedName, true)}, {Sql.Text(row.NormalizedBrand, true)}, {Sql.Decimal(row.SizeStandardValue)}::numeric, {Sql.Text(row.SizeStandardUnit, true)}, {Sql.Bool(row.SizeUnknown)}, {Sql.Bool(row.BrandUnknown)}, {Sql.Bool(row.CategoryUnknown)})";
+                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, false)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)}, {Sql.Text(row.NormalizedName, true)}, {Sql.Text(row.NormalizedBrand, true)}, {Sql.Decimal(row.SizeStandardValue)}::numeric, {Sql.Text(row.SizeStandardUnit, true)}, {Sql.Bool(row.SizeUnknown)}, {Sql.Bool(row.BrandUnknown)}, {Sql.Bool(row.CategoryUnknown)}, {Sql.Text(row.Stockcode, true)})";
                 line += i == batch.Count - 1 ? string.Empty : ",";
                 await writer.WriteLineAsync(line);
             }
 
-            await writer.WriteLineAsync("  ) AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown)");
+            await writer.WriteLineAsync("  ) AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown, stockcode)");
             await writer.WriteLineAsync("  WHERE v.sourceid IS NOT NULL");
             await writer.WriteLineAsync("  ORDER BY v.shoptype, v.sourceid, v.lastseenat DESC, v.name DESC");
             await writer.WriteLineAsync(") AS d");
@@ -416,24 +417,24 @@ namespace PriceCompareWeb.Services
             await writer.WriteLineAsync("  AND p.sourceid = d.sourceid;");
             await writer.WriteLineAsync();
 
-            await writer.WriteLineAsync("INSERT INTO product (shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown)");
-            await writer.WriteLineAsync("SELECT d.shoptype, d.sourceid, d.name, d.brand, d.sizevalue, d.sizeunit, d.packageqty, d.categoryid, d.imageurl, d.lastseenat, d.normalizedname, d.normalizedbrand, d.sizestandardvalue, d.sizestandardunit, d.sizeunknown, d.brandunknown, d.categoryunknown");
+            await writer.WriteLineAsync("INSERT INTO product (shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown, stockcode)");
+            await writer.WriteLineAsync("SELECT d.shoptype, d.sourceid, d.name, d.brand, d.sizevalue, d.sizeunit, d.packageqty, d.categoryid, d.imageurl, d.lastseenat, d.normalizedname, d.normalizedbrand, d.sizestandardvalue, d.sizestandardunit, d.sizeunknown, d.brandunknown, d.categoryunknown, d.stockcode");
             await writer.WriteLineAsync("FROM (");
             await writer.WriteLineAsync("  SELECT DISTINCT ON (v.shoptype, v.sourceid)");
             await writer.WriteLineAsync("    v.shoptype, v.sourceid, v.name, v.brand, v.sizevalue, v.sizeunit, v.packageqty, v.categoryid, v.imageurl, v.lastseenat,");
             await writer.WriteLineAsync("    v.normalizedname, v.normalizedbrand, v.sizestandardvalue, v.sizestandardunit,");
-            await writer.WriteLineAsync("    v.sizeunknown, v.brandunknown, v.categoryunknown");
+            await writer.WriteLineAsync("    v.sizeunknown, v.brandunknown, v.categoryunknown, v.stockcode");
             await writer.WriteLineAsync("  FROM (VALUES");
 
             for (var i = 0; i < batch.Count; i++)
             {
                 var row = batch[i];
-                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, false)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)}, {Sql.Text(row.NormalizedName, true)}, {Sql.Text(row.NormalizedBrand, true)}, {Sql.Decimal(row.SizeStandardValue)}::numeric, {Sql.Text(row.SizeStandardUnit, true)}, {Sql.Bool(row.SizeUnknown)}, {Sql.Bool(row.BrandUnknown)}, {Sql.Bool(row.CategoryUnknown)})";
+                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, false)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)}, {Sql.Text(row.NormalizedName, true)}, {Sql.Text(row.NormalizedBrand, true)}, {Sql.Decimal(row.SizeStandardValue)}::numeric, {Sql.Text(row.SizeStandardUnit, true)}, {Sql.Bool(row.SizeUnknown)}, {Sql.Bool(row.BrandUnknown)}, {Sql.Bool(row.CategoryUnknown)}, {Sql.Text(row.Stockcode, true)})";
                 line += i == batch.Count - 1 ? string.Empty : ",";
                 await writer.WriteLineAsync(line);
             }
 
-            await writer.WriteLineAsync("  ) AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown)");
+            await writer.WriteLineAsync("  ) AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown, stockcode)");
             await writer.WriteLineAsync("  WHERE v.sourceid IS NOT NULL");
             await writer.WriteLineAsync("  ORDER BY v.shoptype, v.sourceid, v.lastseenat DESC, v.name DESC");
             await writer.WriteLineAsync(") AS d");
@@ -461,36 +462,37 @@ namespace PriceCompareWeb.Services
             await writer.WriteLineAsync("  sizeunknown = v.sizeunknown,");
             await writer.WriteLineAsync("  brandunknown = v.brandunknown,");
             await writer.WriteLineAsync("  categoryunknown = v.categoryunknown,");
+            await writer.WriteLineAsync("  stockcode = COALESCE(v.stockcode, p.stockcode),");
             await writer.WriteLineAsync("  lastseenat = GREATEST(p.lastseenat, v.lastseenat)");
             await writer.WriteLineAsync("FROM (VALUES");
 
             for (var i = 0; i < batch.Count; i++)
             {
                 var row = batch[i];
-                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, true)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)}, {Sql.Text(row.NormalizedName, true)}, {Sql.Text(row.NormalizedBrand, true)}, {Sql.Decimal(row.SizeStandardValue)}::numeric, {Sql.Text(row.SizeStandardUnit, true)}, {Sql.Bool(row.SizeUnknown)}, {Sql.Bool(row.BrandUnknown)}, {Sql.Bool(row.CategoryUnknown)})";
+                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, true)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)}, {Sql.Text(row.NormalizedName, true)}, {Sql.Text(row.NormalizedBrand, true)}, {Sql.Decimal(row.SizeStandardValue)}::numeric, {Sql.Text(row.SizeStandardUnit, true)}, {Sql.Bool(row.SizeUnknown)}, {Sql.Bool(row.BrandUnknown)}, {Sql.Bool(row.CategoryUnknown)}, {Sql.Text(row.Stockcode, true)})";
                 line += i == batch.Count - 1 ? string.Empty : ",";
                 await writer.WriteLineAsync(line);
             }
 
-            await writer.WriteLineAsync(") AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown)");
+            await writer.WriteLineAsync(") AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown, stockcode)");
             await writer.WriteLineAsync("WHERE v.sourceid IS NULL");
             await writer.WriteLineAsync("  AND p.shoptype = v.shoptype");
             await writer.WriteLineAsync("  AND p.name = v.name;");
             await writer.WriteLineAsync();
 
-            await writer.WriteLineAsync("INSERT INTO product (shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown)");
-            await writer.WriteLineAsync("SELECT v.shoptype, v.sourceid, v.name, v.brand, v.sizevalue, v.sizeunit, v.packageqty, v.categoryid, v.imageurl, v.lastseenat, v.normalizedname, v.normalizedbrand, v.sizestandardvalue, v.sizestandardunit, v.sizeunknown, v.brandunknown, v.categoryunknown");
+            await writer.WriteLineAsync("INSERT INTO product (shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown, stockcode)");
+            await writer.WriteLineAsync("SELECT v.shoptype, v.sourceid, v.name, v.brand, v.sizevalue, v.sizeunit, v.packageqty, v.categoryid, v.imageurl, v.lastseenat, v.normalizedname, v.normalizedbrand, v.sizestandardvalue, v.sizestandardunit, v.sizeunknown, v.brandunknown, v.categoryunknown, v.stockcode");
             await writer.WriteLineAsync("FROM (VALUES");
 
             for (var i = 0; i < batch.Count; i++)
             {
                 var row = batch[i];
-                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, true)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)}, {Sql.Text(row.NormalizedName, true)}, {Sql.Text(row.NormalizedBrand, true)}, {Sql.Decimal(row.SizeStandardValue)}::numeric, {Sql.Text(row.SizeStandardUnit, true)}, {Sql.Bool(row.SizeUnknown)}, {Sql.Bool(row.BrandUnknown)}, {Sql.Bool(row.CategoryUnknown)})";
+                var line = $"  ({Sql.Int(row.ShopType)}::int, {Sql.Text(row.SourceId, true)}, {Sql.Text(row.Name, false)}, {Sql.Text(row.Brand, true)}, {Sql.Decimal(row.SizeValue)}::numeric, {Sql.Text(row.SizeUnit, true)}, {Sql.Int(row.PackageQty)}::int, {Sql.Int(row.CategoryId)}::int, {Sql.Text(row.ImageUrl, true)}, {Sql.Timestamp(row.LastSeenAt)}, {Sql.Text(row.NormalizedName, true)}, {Sql.Text(row.NormalizedBrand, true)}, {Sql.Decimal(row.SizeStandardValue)}::numeric, {Sql.Text(row.SizeStandardUnit, true)}, {Sql.Bool(row.SizeUnknown)}, {Sql.Bool(row.BrandUnknown)}, {Sql.Bool(row.CategoryUnknown)}, {Sql.Text(row.Stockcode, true)})";
                 line += i == batch.Count - 1 ? string.Empty : ",";
                 await writer.WriteLineAsync(line);
             }
 
-            await writer.WriteLineAsync(") AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown)");
+            await writer.WriteLineAsync(") AS v(shoptype, sourceid, name, brand, sizevalue, sizeunit, packageqty, categoryid, imageurl, lastseenat, normalizedname, normalizedbrand, sizestandardvalue, sizestandardunit, sizeunknown, brandunknown, categoryunknown, stockcode)");
             await writer.WriteLineAsync("WHERE v.sourceid IS NULL");
             await writer.WriteLineAsync("  AND NOT EXISTS (");
             await writer.WriteLineAsync("    SELECT 1 FROM product p");
@@ -553,7 +555,8 @@ namespace PriceCompareWeb.Services
             string? SizeStandardUnit,
             bool SizeUnknown,
             bool BrandUnknown,
-            bool CategoryUnknown)
+            bool CategoryUnknown,
+            string? Stockcode)
         {
             public static ProductRow FromCsv(IReadOnlyList<string> values, IReadOnlyDictionary<string, int> map)
             {
@@ -567,6 +570,18 @@ namespace PriceCompareWeb.Services
                 if (string.IsNullOrWhiteSpace(sizeStandardUnit))
                 {
                     sizeStandardUnit = null;
+                }
+
+                // BTS-163: exports made before the stockcode column existed have no such header, and
+                // Csv.Get throws on a missing column even when the value is optional.
+                string? stockcode = null;
+                if (map.ContainsKey("stockcode"))
+                {
+                    stockcode = Csv.Get(values, map, "stockcode", required: false);
+                    if (string.IsNullOrWhiteSpace(stockcode))
+                    {
+                        stockcode = null;
+                    }
                 }
 
                 return new ProductRow(
@@ -586,7 +601,8 @@ namespace PriceCompareWeb.Services
                     sizeStandardUnit,
                     Csv.Bool(values, map, "sizeunknown"),
                     Csv.Bool(values, map, "brandunknown"),
-                    Csv.Bool(values, map, "categoryunknown"));
+                    Csv.Bool(values, map, "categoryunknown"),
+                    stockcode);
             }
         }
 

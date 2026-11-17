@@ -252,7 +252,7 @@ namespace PriceCompareCore.Services
 
                 result.Add(new WoolworthsSpecialProduct
                 {
-                    Stockcode = 0,
+                    Stockcode = WoolworthsTileReader.ParseStockcode(item.Href),
                     Barcode = string.Empty,
                     DisplayName = name,
                     Brand = string.Empty,

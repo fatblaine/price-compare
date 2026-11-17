@@ -472,6 +472,84 @@ Resources:
         Arn: !GetAtt FavoritePriceTrackingJob.Arn
         RoleArn: !GetAtt FavoritePriceTrackingScheduleRole.Arn
 
+  # BTS-163: next-week catalogue fetch (SaleFinder) for both supermarkets, written straight into the DB.
+  # Catalogues are published Monday 17:00 Sydney; the Tuesday run fails if one is still missing.
+  CatalogueFetchJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "price-catalogue-${Environment}"
+      Handler: PriceCompareWeb::PriceCompareWeb.LambdaEntryPoint::FunctionHandlerAsync
+      CodeUri: ./src/PriceCompareWeb/
+      PackageType: Zip
+      Timeout: 600
+      Environment:
+        Variables:
+          TARGET_JOB: CATALOGUE_FETCH
+          ConnectionStrings__DefaultConnection: !Ref DbConnectionString
+          DOTNET_SYSTEM_NET_DISABLEIPV6: "1"
+
+  CatalogueFetchScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeCatalogueFetch
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt CatalogueFetchJob.Arn
+
+  CatalogueFetchScheduleMonEarly:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "price-compare-${Environment}-catalogue-fetch-mon-1730"
+      ScheduleExpression: "cron(30 17 ? * MON *)"
+      ScheduleExpressionTimezone: "Australia/Sydney"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt CatalogueFetchJob.Arn
+        RoleArn: !GetAtt CatalogueFetchScheduleRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 0
+
+  CatalogueFetchScheduleMonLate:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "price-compare-${Environment}-catalogue-fetch-mon-2100"
+      ScheduleExpression: "cron(0 21 ? * MON *)"
+      ScheduleExpressionTimezone: "Australia/Sydney"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt CatalogueFetchJob.Arn
+        RoleArn: !GetAtt CatalogueFetchScheduleRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 0
+
+  CatalogueFetchScheduleTue:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "price-compare-${Environment}-catalogue-fetch-tue-0800"
+      ScheduleExpression: "cron(0 8 ? * TUE *)"
+      ScheduleExpressionTimezone: "Australia/Sydney"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt CatalogueFetchJob.Arn
+        RoleArn: !GetAtt CatalogueFetchScheduleRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 0
+
 Outputs:
   FrontendBucketName:
     Description: S3 bucket for frontend static hosting

@@ -12,12 +12,14 @@ namespace PriceCompareData.CompiledModels
     public partial class AppDbContextModel
     {
         private AppDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("12196b1a-d236-452b-b52b-4298c2ae5021"), entityTypeCount: 13)
+            : base(skipDetectChanges: false, modelId: new Guid("03dfcc5c-10d3-4995-aff1-0f3658a67160"), entityTypeCount: 15)
         {
         }
 
         partial void Initialize()
         {
+            var catalogueSpecial = CatalogueSpecialEntityType.Create(this);
+            var catalogueSpecialSku = CatalogueSpecialSkuEntityType.Create(this);
             var category = CategoryEntityType.Create(this);
             var categoryKeyword = CategoryKeywordEntityType.Create(this);
             var matchJob = MatchJobEntityType.Create(this);
@@ -37,6 +39,8 @@ namespace PriceCompareData.CompiledModels
             FavoritePriceAlertEntityType.CreateForeignKey1(favoritePriceAlert, favoriteItem);
             ReceiptItemEntityType.CreateForeignKey1(receiptItem, receipt);
 
+            CatalogueSpecialEntityType.CreateAnnotations(catalogueSpecial);
+            CatalogueSpecialSkuEntityType.CreateAnnotations(catalogueSpecialSku);
             CategoryEntityType.CreateAnnotations(category);
             CategoryKeywordEntityType.CreateAnnotations(categoryKeyword);
             MatchJobEntityType.CreateAnnotations(matchJob);
@@ -52,7 +56,7 @@ namespace PriceCompareData.CompiledModels
             UserEntityType.CreateAnnotations(user);
 
             AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-            AddAnnotation("ProductVersion", "10.0.9");
+            AddAnnotation("ProductVersion", "10.0.13");
             AddAnnotation("Relational:MaxIdentifierLength", 63);
         }
     }

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PriceCompareCore.Services;
+using PriceCompareCore.Services.Catalogue;
 using PriceCompareData.Data;
 using PriceCompareWeb.Controllers.Models;
 using PriceCompareWeb.Services;
@@ -217,7 +218,79 @@ public class AdminController : ControllerBase
 
         return Ok(new { triggered = triggered.Count, jobs = triggered });
     }
+
+    /// <summary>
+    /// BTS-163: fetch one shop's next-week catalogue now (0 Coles, 1 Woolworths) and return the counts.
+    /// Takes 1–3 minutes (one detail request per item), longer than API Gateway allows, so use it on a
+    /// local backend; production runs the price-catalogue Lambda on its schedule.
+    /// </summary>
+    [HttpPost("catalogue/fetch")]
+    public async Task<IActionResult> FetchCatalogue(
+        [FromQuery] int shop,
+        [FromServices] ICatalogueFetchService catalogueFetchService,
+        CancellationToken ct = default)
+    {
+        if (shop is not (0 or 1))
+        {
+            return BadRequest("shop must be 0 (Coles) or 1 (Woolworths).");
+        }
+
+        var result = await catalogueFetchService.RunAsync(shop, failIfNotPublished: false, ct);
+        return Ok(result);
+    }
+
+    /// <summary>BTS-163: latest stored catalogue per shop with item and match counts.</summary>
+    [HttpGet("catalogue/status")]
+    public async Task<IActionResult> GetCatalogueStatus(CancellationToken ct = default)
+    {
+        var latest = await _db.CatalogueSpecials.AsNoTracking()
+            .GroupBy(c => c.ShopType)
+            .Select(g => new
+            {
+                ShopType = g.Key,
+                SaleId = g.OrderByDescending(c => c.ValidFrom).ThenByDescending(c => c.SaleId).Select(c => c.SaleId).First(),
+            })
+            .ToListAsync(ct);
+
+        var result = new List<CatalogueStatusDto>();
+        foreach (var shop in latest.OrderBy(l => l.ShopType))
+        {
+            var items = _db.CatalogueSpecials.AsNoTracking()
+                .Where(c => c.ShopType == shop.ShopType && c.SaleId == shop.SaleId);
+            var skus = _db.CatalogueSpecialSkus.AsNoTracking()
+                .Where(k => k.ShopType == shop.ShopType && k.SaleId == shop.SaleId);
+
+            var first = await items.OrderByDescending(c => c.ScrapedAt).FirstAsync(ct);
+            result.Add(new CatalogueStatusDto(
+                shop.ShopType,
+                shop.SaleId,
+                first.Region,
+                first.ValidFrom,
+                first.ValidTo,
+                first.ScrapedAt,
+                await items.CountAsync(ct),
+                await skus.Select(k => k.ItemId).Distinct().CountAsync(ct),
+                await skus.CountAsync(ct),
+                await skus.CountAsync(k => k.ProductId != null, ct),
+                await skus.Where(k => k.ProductId != null).Select(k => k.ItemId).Distinct().CountAsync(ct)));
+        }
+
+        return Ok(result);
+    }
 }
+
+public record CatalogueStatusDto(
+    int ShopType,
+    int SaleId,
+    string Region,
+    DateOnly ValidFrom,
+    DateOnly ValidTo,
+    DateTime LastScrapedAt,
+    int Items,
+    int ItemsWithSku,
+    int Skus,
+    int SkusMatched,
+    int ItemsMatched);
 
 public record JobRunDto(
     long Id,

@@ -21,7 +21,7 @@ namespace PriceCompareData.CompiledModels
                 "PriceCompareData.Entities.Compare.Product",
                 typeof(Product),
                 baseEntityType,
-                propertyCount: 18,
+                propertyCount: 19,
                 foreignKeyCount: 1,
                 unnamedIndexCount: 6,
                 keyCount: 1);
@@ -192,6 +192,15 @@ namespace PriceCompareData.CompiledModels
                 nullable: true);
             sourceId.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
             sourceId.AddAnnotation("Relational:ColumnName", "sourceid");
+
+            var stockcode = runtimeEntityType.AddProperty(
+                "Stockcode",
+                typeof(string),
+                propertyInfo: typeof(Product).GetProperty("Stockcode", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(Product).GetField("<Stockcode>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true);
+            stockcode.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
+            stockcode.AddAnnotation("Relational:ColumnName", "stockcode");
 
             var key = runtimeEntityType.AddKey(
                 new[] { productId });

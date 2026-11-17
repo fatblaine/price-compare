@@ -112,12 +112,26 @@ namespace PriceCompareCore.Services
                 : null;
         }
 
+        private static readonly Regex StockcodeRegex =
+            new(@"/productdetails/(\d+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// Stockcode from a product link (/shop/productdetails/{stockcode}/{slug}); 0 when the link has none (BTS-163).
+        /// </summary>
+        public static int ParseStockcode(string? href)
+        {
+            var match = StockcodeRegex.Match(href ?? string.Empty);
+            return match.Success && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : 0;
+        }
+
         /// <summary>Builds the scraped product from tile data; savings is was minus price when a was price exists.</summary>
-        public static WoolworthsSpecialProduct ToProduct(WoolworthsTileData tile, string? image, DateTime scrapedAt, string? promoText)
+        public static WoolworthsSpecialProduct ToProduct(WoolworthsTileData tile, string? image, DateTime scrapedAt, string? promoText, string? href)
         {
             return new WoolworthsSpecialProduct
             {
-                Stockcode = 0,
+                Stockcode = ParseStockcode(href),
                 Barcode = string.Empty,
                 DisplayName = tile.Name,
                 Brand = string.Empty,

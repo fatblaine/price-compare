@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -100,22 +101,16 @@ namespace PriceCompareCore.Services
             var (sv, su, pk) = _mapper.ParseSpec(name);
             var catId = _mapper.MapCategoryId(name, p.Brand);
 
-            // Prefer stable upstream IDs. Lower-shelf DOM scraping may have empty barcode and stockcode=0.
-            // In that case keep SourceId null so import uses name-based branch instead of collapsing to "0".
-            string? sourceId = null;
-            if (!string.IsNullOrWhiteSpace(p.Barcode))
-            {
-                sourceId = p.Barcode.Trim();
-            }
-            else if (p.Stockcode > 0)
-            {
-                sourceId = p.Stockcode.ToString();
-            }
+            // SourceId is the identity key of the prod SQL import ((shoptype, sourceid)). It must not
+            // switch from null to the stockcode now that DOM scrapes read one, or every WWS product
+            // would be inserted again. The stockcode goes into its own column instead (BTS-163).
+            string? sourceId = string.IsNullOrWhiteSpace(p.Barcode) ? null : p.Barcode.Trim();
 
             var product = new Product
             {
                 ShopType = ShopType.WOOLWORTHS,
                 SourceId = sourceId,
+                Stockcode = p.Stockcode > 0 ? p.Stockcode.ToString(CultureInfo.InvariantCulture) : null,
                 Name = name,
                 Brand = string.IsNullOrWhiteSpace(p.Brand) ? null : p.Brand,
                 SizeValue = sv,
@@ -160,19 +155,30 @@ namespace PriceCompareCore.Services
                 .Distinct()
                 .ToList();
 
+            var batchStockcodes = list
+                .Where(c => !string.IsNullOrWhiteSpace(c.Stockcode))
+                .Select(c => c.Stockcode!)
+                .Distinct()
+                .ToList();
+
             var existingProducts = await _dbContext.Products
                 .Where(p => shopTypes.Contains(p.ShopType)
                             && ((p.SourceId != null && batchSourceIds.Contains(p.SourceId))
+                                || (p.Stockcode != null && batchStockcodes.Contains(p.Stockcode))
                                 || (p.Name != null && batchNames.Contains(p.Name))))
                 .ToListAsync();
 
-            // Build O(1) lookups: SourceId-first, Name-fallback
+            // Build O(1) lookups: SourceId first, then stockcode (WWS, BTS-163: keeps a renamed product
+            // on the same row now that the stockcode no longer fills SourceId), then Name.
             var bySourceId = new Dictionary<(int? ShopType, string SourceId), Product>();
+            var byStockcode = new Dictionary<(int? ShopType, string Stockcode), Product>();
             var byName = new Dictionary<(int? ShopType, string Name), Product>();
             foreach (var p in existingProducts)
             {
                 if (!string.IsNullOrWhiteSpace(p.SourceId))
                     bySourceId.TryAdd((p.ShopType, p.SourceId!), p);
+                if (!string.IsNullOrWhiteSpace(p.Stockcode))
+                    byStockcode.TryAdd((p.ShopType, p.Stockcode!), p);
                 if (!string.IsNullOrWhiteSpace(p.Name))
                     byName.TryAdd((p.ShopType, p.Name!), p);
             }
@@ -184,6 +190,9 @@ namespace PriceCompareCore.Services
                 if (!string.IsNullOrWhiteSpace(c.SourceId))
                     bySourceId.TryGetValue((c.ShopType, c.SourceId!), out existing);
 
+                if (existing is null && !string.IsNullOrWhiteSpace(c.Stockcode))
+                    byStockcode.TryGetValue((c.ShopType, c.Stockcode!), out existing);
+
                 if (existing is null && !string.IsNullOrWhiteSpace(c.Name))
                     byName.TryGetValue((c.ShopType, c.Name!), out existing);
 
@@ -193,6 +202,8 @@ namespace PriceCompareCore.Services
                     // Track newly added products to handle duplicates within the same batch
                     if (!string.IsNullOrWhiteSpace(c.SourceId))
                         bySourceId.TryAdd((c.ShopType, c.SourceId!), c);
+                    if (!string.IsNullOrWhiteSpace(c.Stockcode))
+                        byStockcode.TryAdd((c.ShopType, c.Stockcode!), c);
                     if (!string.IsNullOrWhiteSpace(c.Name))
                         byName.TryAdd((c.ShopType, c.Name!), c);
                 }
@@ -205,6 +216,7 @@ namespace PriceCompareCore.Services
                     existing.PackageQty = c.PackageQty ?? existing.PackageQty;
                     existing.CategoryId = c.CategoryId ?? existing.CategoryId;
                     existing.ImageUrl = c.ImageUrl ?? existing.ImageUrl;
+                    existing.Stockcode = c.Stockcode ?? existing.Stockcode;
                     ApplyStandardFields(existing);
                     existing.LastSeenAt = DateTime.UtcNow;
                 }

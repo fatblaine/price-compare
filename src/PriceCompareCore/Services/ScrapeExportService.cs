@@ -143,7 +143,8 @@ namespace PriceCompareCore.Services
                 "sizestandardunit",
                 "sizeunknown",
                 "brandunknown",
-                "categoryunknown"
+                "categoryunknown",
+                "stockcode"
             };
 
             await using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
@@ -171,7 +172,8 @@ namespace PriceCompareCore.Services
                     row.SizeStandardUnit ?? string.Empty,
                     row.SizeUnknown ? "true" : "false",
                     row.BrandUnknown ? "true" : "false",
-                    row.CategoryUnknown ? "true" : "false"
+                    row.CategoryUnknown ? "true" : "false",
+                    row.Stockcode ?? string.Empty
                 };
 
                 await CsvWriter.WriteRowAsync(writer, fields, ct);
