@@ -25,6 +25,9 @@ import {
 	updateFavorite,
 	type FavoriteItem,
 } from "./api/favorites";
+import { fetchUpcomingByProducts, type UpcomingSpecial } from "./api/upcoming";
+import { favoriteUpcomingText } from "./utils/waitAdvice";
+import { tokens } from "./theme";
 
 // Basic page listing user's favorite products by ID.
 // The backend currently returns product IDs only; name/price lookup can be added later.
@@ -33,6 +36,27 @@ export default function MyFavoritesPage() {
 	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 
 	const [items, setItems] = React.useState<FavoriteItem[]>([]);
+	// BTS-163: next-week catalogue offers for the favourited products.
+	const [upcoming, setUpcoming] = React.useState<Record<string, UpcomingSpecial | null>>({});
+	const productIdsKey = items.map((f) => f.productId).join(",");
+	React.useEffect(() => {
+		const ids = productIdsKey ? productIdsKey.split(",") : [];
+		if (ids.length === 0) {
+			setUpcoming({});
+			return;
+		}
+		let cancelled = false;
+		fetchUpcomingByProducts(ids)
+			.then((map) => {
+				if (!cancelled) setUpcoming(map);
+			})
+			.catch(() => {
+				// Optional information: the list works without it.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [productIdsKey]);
 	const [loading, setLoading] = React.useState(false);
 	const [busyIds, setBusyIds] = React.useState<number[]>([]);
 	const [pendingDelete, setPendingDelete] = React.useState<FavoriteItem | null>(
@@ -174,6 +198,7 @@ export default function MyFavoritesPage() {
 								}
 								secondaryParts.push(statusText);
 								const secondaryText = secondaryParts.join(" • ");
+								const nextWeekText = favoriteUpcomingText(upcoming[fav.productId]);
 								const isBusy = busyIds.includes(fav.id);
 								return (
 									<ListItem
@@ -200,7 +225,22 @@ export default function MyFavoritesPage() {
 											primary={
 												fav.productName || `Product ${fav.productId}`
 											}
-											secondary={secondaryText}
+											secondary={
+												nextWeekText ? (
+													<>
+														<Box
+															component="span"
+															className="next-week-text"
+															sx={{ display: "block", color: tokens.promo, fontWeight: 600 }}
+														>
+															{nextWeekText}
+														</Box>
+														{secondaryText}
+													</>
+												) : (
+													secondaryText
+												)
+											}
 											sx={{ flex: 1, minWidth: 0 }}
 										/>
 										<Stack

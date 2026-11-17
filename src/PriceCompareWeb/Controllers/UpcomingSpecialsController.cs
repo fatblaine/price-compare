@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using PriceCompareCore.Utils;
 using PriceCompareData.Data;
 using PriceCompareWeb.Controllers.Models;
@@ -27,6 +28,9 @@ namespace PriceCompareWeb.Controllers
         private readonly IConfiguration _configuration;
         private readonly Func<DateOnly> _today;
 
+        // ASP.NET builds controllers with ActivatorUtilities, which refuses a type with two usable
+        // constructors; this marks the one to use. The other exists so tests can fix "today".
+        [ActivatorUtilitiesConstructor]
         public UpcomingSpecialsController(AppDbContext db, IConfiguration configuration)
             : this(db, configuration, SydneyClock.Today)
         {

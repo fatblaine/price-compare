@@ -6,6 +6,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using PriceCompareData.Data;
 using PriceCompareData.Entities.Catalogue;
 using PriceCompareWeb.Controllers;
@@ -116,6 +117,26 @@ namespace PriceCompareTests
             var results = Results(await controller.ByProducts(new UpcomingSpecialsRequest { ProductIds = { product } }));
 
             results[product.ToString()].Should().BeNull();
+        }
+
+        // ASP.NET creates controllers through ActivatorUtilities; two usable constructors made every
+        // request fail with 500 ("Multiple constructors accepting all given argument types").
+        [Fact]
+        public void CanBeCreatedTheWayAspNetCreatesControllers()
+        {
+            var services = new ServiceCollection();
+            services.AddDbContext<AppDbContext>(o => o.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+            services.AddSingleton(Config());
+            using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+
+            // Same call MVC's controller activator makes (no explicit arguments).
+            var act = () => ActivatorUtilities
+                .CreateFactory(typeof(UpcomingSpecialsController), Type.EmptyTypes)
+                .Invoke(scope.ServiceProvider, null);
+
+            act.Should().NotThrow();
+            act().Should().BeOfType<UpcomingSpecialsController>();
         }
 
         [Fact]

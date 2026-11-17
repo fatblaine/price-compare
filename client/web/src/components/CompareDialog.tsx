@@ -27,6 +27,8 @@ import {
 	type PairedSeriesPoint,
 } from "../api/compare";
 import { formatUpdatedDate, type LastUpdated } from "../api/products";
+import { fetchUpcomingByProducts, type UpcomingSpecial } from "../api/upcoming";
+import { formatStartDate, upcomingLine } from "../utils/waitAdvice";
 import { ShopTypes, shopColors, shopTypeName } from "../constants/shopTypes";
 import { DISPLAY_FONT, tokens } from "../theme";
 import StoreChip from "./StoreChip";
@@ -145,6 +147,7 @@ function StorePriceCard({
 	note,
 	promo,
 	updated,
+	nextWeek,
 }: {
 	shopType?: number;
 	item?: CompareProduct;
@@ -154,6 +157,8 @@ function StorePriceCard({
 	note?: string | null;
 	promo?: string | null;
 	updated?: string | null;
+	/** BTS-163: this store's lower price from next week's catalogue, e.g. "From Wed 18 Nov: $2.75". */
+	nextWeek?: string | null;
 }) {
 	return (
 		<Box
@@ -209,6 +214,14 @@ function StorePriceCard({
 						{money(item.price)}
 					</Typography>
 					<PromoChip text={promo} />
+					{nextWeek && (
+						<Typography
+							className="next-week-text"
+							sx={{ fontSize: 13, fontWeight: 600, color: tokens.promo, fontVariantNumeric: "tabular-nums" }}
+						>
+							{nextWeek}
+						</Typography>
+					)}
 					{note && (
 						<Typography sx={{ fontSize: 13, color: tokens.ink2, fontVariantNumeric: "tabular-nums" }}>
 							{note}
@@ -310,6 +323,26 @@ export default function CompareDialog(props: CompareDialogProps) {
 		selectedTarget?.shopType,
 	]);
 
+	// BTS-163: next-week catalogue prices for the source and every matched product.
+	const [upcoming, setUpcoming] = React.useState<Record<string, UpcomingSpecial | null>>({});
+	// A string key: `targets` is a new array on every render, so depending on it would refetch forever.
+	const upcomingKey = [source?.productId, ...targets.map((t) => t.productId)].filter(Boolean).join(",");
+	React.useEffect(() => {
+		setUpcoming({});
+		if (!open || !upcomingKey) return;
+		let cancelled = false;
+		fetchUpcomingByProducts(upcomingKey.split(","))
+			.then((map) => {
+				if (!cancelled) setUpcoming(map);
+			})
+			.catch(() => {
+				// Optional information: on failure the dialog simply shows no next-week box.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, upcomingKey]);
+
 	// Which store is cheaper, from the two prices already on screen.
 	const sourcePrice = source?.price ?? null;
 	const targetPrice = selectedTarget?.price ?? null;
@@ -326,6 +359,38 @@ export default function CompareDialog(props: CompareDialogProps) {
 	const savingPct = bothPriced && otherPrice ? Math.round((saving / (otherPrice as number)) * 100) : 0;
 	const updatedFor = (shop?: number) =>
 		shop == null ? null : formatUpdatedDate(lastUpdated?.shops?.[String(shop)]);
+
+	const nextWeek = source
+		? upcomingLine({
+				herePrice: sourcePrice,
+				hereShopType: source.shopType,
+				hereNext: source.productId ? upcoming[source.productId] : null,
+				otherPrice: targetPrice,
+				otherShopType: targetShop ?? null,
+				otherNext: selectedTarget?.productId ? upcoming[selectedTarget.productId] : null,
+				shopName: shopTypeName,
+			})
+		: null;
+	const nextWeekUpcoming = nextWeek
+		? nextWeek.shopType === source?.shopType
+			? source?.productId
+				? upcoming[source.productId]
+				: null
+			: selectedTarget?.productId
+				? upcoming[selectedTarget.productId]
+				: null
+		: null;
+	// Each store's own next-week line (its price vs its own price today).
+	const ownNextWeek = (item?: CompareProduct | null) =>
+		item?.productId
+			? upcomingLine({
+					herePrice: item.price,
+					hereShopType: item.shopType,
+					hereNext: upcoming[item.productId],
+					shopName: shopTypeName,
+				})?.text ?? null
+			: null;
+	const bestNowPrice = bothPriced ? Math.min(sourcePrice as number, targetPrice as number) : sourcePrice;
 
 	const sourceColor = shopColors(source?.shopType).main;
 	const targetColor = shopColors(targetShop).main;
@@ -406,6 +471,36 @@ export default function CompareDialog(props: CompareDialogProps) {
 							</Box>
 						)}
 
+						{nextWeek && nextWeekUpcoming && (
+							<Box
+								className="next-week-box"
+								sx={{
+									p: { xs: 2, sm: 2.5 },
+									borderRadius: "16px",
+									bgcolor: tokens.promoTint,
+									border: "1px solid #EAD9B5",
+								}}
+							>
+								<Typography sx={{ fontSize: 12, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: tokens.promo }}>
+									Cheaper from {formatStartDate(nextWeekUpcoming.validFrom)}
+								</Typography>
+								<Stack direction="row" alignItems="center" spacing={1.25} sx={{ mt: 1 }}>
+									<StoreChip shopType={nextWeek.shopType} />
+									<Typography
+										component="span"
+										sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: "-0.02em", fontSize: { xs: 24, sm: 28 }, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}
+									>
+										{money(nextWeek.price)}
+									</Typography>
+								</Stack>
+								<Typography sx={{ mt: 1, fontSize: 14, fontWeight: 600, color: tokens.promo }}>
+									{nextWeekUpcoming.promoText ? `${nextWeekUpcoming.promoText} · ` : ""}
+									In next week&apos;s catalogue
+									{bestNowPrice != null ? `, ${money((bestNowPrice as number) - nextWeek.price)} less than the best price today` : ""}
+								</Typography>
+							</Box>
+						)}
+
 						{targets.length > 1 && (
 							<FormControl size="small" fullWidth={isXs} sx={{ minWidth: { xs: "100%", sm: 320 }, alignSelf: "flex-start" }}>
 								<InputLabel id="target-label">Matched product</InputLabel>
@@ -456,6 +551,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 									muted={targetCheapest}
 									promo={promoText.source}
 									updated={updatedFor(source.shopType)}
+									nextWeek={ownNextWeek(source)}
 									note={targetCheapest ? `${money(saving)} more than ${shopTypeName(targetShop)}` : null}
 								/>
 								<StorePriceCard
@@ -465,6 +561,7 @@ export default function CompareDialog(props: CompareDialogProps) {
 									muted={sourceCheapest}
 									promo={promoText.target}
 									updated={updatedFor(targetShop)}
+									nextWeek={ownNextWeek(selectedTarget)}
 									note={sourceCheapest ? `${money(saving)} more than ${shopTypeName(source.shopType)}` : null}
 								/>
 							</Stack>

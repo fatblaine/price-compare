@@ -18,6 +18,7 @@ import FavoriteIcon from "@mui/icons-material/Favorite";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import SearchIcon from "@mui/icons-material/Search";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import EventIcon from "@mui/icons-material/Event";
 import { useMediaQuery, useTheme } from "@mui/material";
 import { SHOP_OPTIONS, shopColors, shopTypeName } from "./constants/shopTypes";
 import {
@@ -32,6 +33,8 @@ import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
 import StoreChip from "./components/StoreChip";
 import { fetchBestMatchesByProducts, type CompareProduct } from "./api/compare";
+import { fetchUpcomingByProducts, type UpcomingSpecial } from "./api/upcoming";
+import { upcomingLine } from "./utils/waitAdvice";
 import { addFavorite, fetchFavorites, removeFavorite } from "./api/favorites";
 import { useAuth } from "react-oidc-context";
 import { useTour } from "./hooks/useTour";
@@ -151,6 +154,8 @@ export default function ProductsPage() {
 	const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 	const [favoriteBusyIds, setFavoriteBusyIds] = useState<string[]>([]);
 	const [compareDataMap, setCompareDataMap] = useState<Record<string, CompareProduct | null>>({});
+	// BTS-163: next-week catalogue prices for the cards on this page and their other-store matches.
+	const [upcomingMap, setUpcomingMap] = useState<Record<string, UpcomingSpecial | null>>({});
 
 	// Compare dialog state
 	const [compareOpen, setCompareOpen] = useState(false);
@@ -382,6 +387,34 @@ export default function ProductsPage() {
 			cancelled = true;
 		};
 	}, [rows]);
+
+	// BTS-163: fetched once the best matches are in, so the other store's next-week price can be
+	// compared too. A failure only hides the "next week" line; nothing else on the card depends on it.
+	useEffect(() => {
+		if (rows.length === 0) {
+			setUpcomingMap({});
+			return;
+		}
+		const matchesLoaded = rows.every((row) => row.productId in compareDataMap);
+		if (!matchesLoaded) return;
+
+		let cancelled = false;
+		const ids = rows.map((row) => row.productId);
+		for (const row of rows) {
+			const targetId = compareDataMap[row.productId]?.productId;
+			if (targetId) ids.push(targetId);
+		}
+		fetchUpcomingByProducts(ids)
+			.then((map) => {
+				if (!cancelled) setUpcomingMap(map);
+			})
+			.catch(() => {
+				if (!cancelled) setUpcomingMap({});
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [rows, compareDataMap]);
 
 	const totalPages = Math.max(
 		1,
@@ -674,6 +707,15 @@ export default function ProductsPage() {
 										recommendation = { text: `Save $${diff.toFixed(2)} vs ${other}`, save: true };
 									}
 								}
+								const nextWeek = upcomingLine({
+									herePrice: row.price,
+									hereShopType: Number(row.shopType),
+									hereNext: upcomingMap[row.productId],
+									otherPrice: compareTarget?.price ?? null,
+									otherShopType: compareTarget?.shopType ?? null,
+									otherNext: compareTarget?.productId ? upcomingMap[compareTarget.productId] : null,
+									shopName: shopTypeName,
+								});
 								return (
 									<Card
 										key={row.productId}
@@ -825,6 +867,35 @@ export default function ProductsPage() {
 													</Typography>
 												)}
 											</Box>
+											{nextWeek && (
+												<Typography
+													component="span"
+													className="next-week-text"
+													title={`${nextWeek.text} (next week's catalogue)`}
+													sx={{
+														display: "inline-flex",
+														alignItems: "center",
+														gap: 0.5,
+														mt: -0.5,
+														fontSize: { xs: 11.5, sm: 13 },
+														fontWeight: 600,
+														color: tokens.promo,
+														fontVariantNumeric: "tabular-nums",
+														minWidth: 0,
+														whiteSpace: "nowrap",
+														overflow: "hidden",
+														textOverflow: "ellipsis",
+													}}
+												>
+													<EventIcon aria-hidden="true" sx={{ fontSize: 14, flexShrink: 0 }} />
+													<Box component="span" sx={{ display: { xs: "none", sm: "inline" }, overflow: "hidden", textOverflow: "ellipsis" }}>
+														{nextWeek.text}
+													</Box>
+													<Box component="span" sx={{ display: { xs: "inline", sm: "none" }, overflow: "hidden", textOverflow: "ellipsis" }}>
+														{nextWeek.shortText}
+													</Box>
+												</Typography>
+											)}
 											<Button
 												className="compare-btn"
 												variant="contained"
