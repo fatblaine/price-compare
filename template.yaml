@@ -261,6 +261,18 @@ Resources:
             ApiId: !Ref AppHttpApi
             Path: /api/Products/last-updated
             Method: GET
+        UpcomingSpecialsByProductsPost:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/upcoming-specials/by-products
+            Method: POST
+        AdminCatalogueStatusGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /api/admin/catalogue/status
+            Method: GET
         AuthLoginPost:
           Type: HttpApi
           Properties:
