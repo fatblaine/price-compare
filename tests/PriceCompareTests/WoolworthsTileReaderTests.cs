@@ -79,8 +79,11 @@ namespace PriceCompareTests
             var tile = new WoolworthsTileData("Jif Cleaner 280mL", 5.25m, 10.50m, null);
             var scrapedAt = new DateTime(2026, 11, 14, 0, 0, 0, DateTimeKind.Utc);
 
-            var product = WoolworthsTileReader.ToProduct(tile, null, scrapedAt, "autumn price");
+            var product = WoolworthsTileReader.ToProduct(tile, null, scrapedAt, "autumn price",
+                "https://www.woolworths.com.au/shop/productdetails/724514/cocobella-coconut-water-straight-up");
 
+            product.Stockcode.Should().Be(724514);
+            product.Barcode.Should().BeEmpty();
             product.DisplayName.Should().Be("Jif Cleaner 280mL");
             product.Price.Should().Be(5.25m);
             product.WasPrice.Should().Be(10.50m);
@@ -89,6 +92,19 @@ namespace PriceCompareTests
             product.PromoText.Should().Be("autumn price");
             product.IsOnSpecial.Should().BeTrue();
             product.ScrapedAt.Should().Be(scrapedAt);
+        }
+
+        [Theory]
+        [InlineData("https://www.woolworths.com.au/shop/productdetails/724514/cocobella-coconut-water", 724514)]
+        [InlineData("/shop/productdetails/6074120/cocobella-coconut-water-straight-up", 6074120)]
+        [InlineData("/shop/ProductDetails/143168", 143168)]
+        [InlineData("/shop/productdetails/abc/name", 0)]
+        [InlineData("/shop/browse/specials/half-price", 0)]
+        [InlineData("", 0)]
+        [InlineData(null, 0)]
+        public void ParseStockcode_ReadsNumberFromProductLink(string? href, int expected)
+        {
+            WoolworthsTileReader.ParseStockcode(href).Should().Be(expected);
         }
 
         [Fact]

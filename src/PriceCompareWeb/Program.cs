@@ -14,6 +14,7 @@ using PriceCompareCore.Config;
 using PriceCompareCore.Interfaces;
 using PriceCompareCore.Jobs;
 using PriceCompareCore.Services;
+using PriceCompareCore.Services.Catalogue;
 using PriceCompareData.Data;
 using PriceCompareWeb.Filters;
 using PriceCompareWeb.JobsLambda;
@@ -247,6 +248,33 @@ if (enableQuartzJobs)
             .WithIdentity("CleanPriceHistoryJob-trigger")
             .WithCronSchedule("0 0 6 ? 1/3 TUE#1", x => x.InTimeZone(localTz)));
 
+        // next-week catalogue (BTS-163): local fallback only, prod uses the price-catalogue Lambda.
+        // Published Monday 17:00 Sydney; Tuesday's run fails if the catalogue is still missing.
+        if (builder.Configuration.GetValue<bool?>("Scraping:EnableCatalogueSchedule") ?? false)
+        {
+            foreach (var (jobName, shopType, minuteOffset) in new[] { ("CatalogueFetchJob-Wws", 1, 0), ("CatalogueFetchJob-Coles", 0, 10) })
+            {
+                var catalogueJobKey = new JobKey(jobName);
+                q.AddJob<CatalogueFetchJob>(opts => opts
+                    .WithIdentity(catalogueJobKey)
+                    .UsingJobData(CatalogueFetchJob.ShopTypeKey, shopType));
+                var crons = new[]
+                {
+                    $"0 {30 + minuteOffset} 17 ? * MON",
+                    $"0 {minuteOffset} 21 ? * MON",
+                    $"0 {minuteOffset} 8 ? * TUE",
+                };
+                for (var i = 0; i < crons.Length; i++)
+                {
+                    var cron = crons[i];
+                    q.AddTrigger(opts => opts
+                        .ForJob(catalogueJobKey)
+                        .WithIdentity($"{jobName}-trigger-{i + 1}")
+                        .WithCronSchedule(cron, x => x.InTimeZone(localTz)));
+                }
+            }
+        }
+
         // favorite price tracking
         var favoriteTrackJobKey = new JobKey("FavoritePriceTrackingJob");
         q.AddJob<FavoritePriceTrackingJob>(opts => opts.WithIdentity(favoriteTrackJobKey));
@@ -305,6 +333,14 @@ builder.Services.AddScoped<IFavoriteService, FavoriteService>();
 // Admin schedule aggregation (AWS + Quartz).
 builder.Services.AddScoped<AdminScheduleService>();
 builder.Services.AddScoped<IScrapeImportSqlService, ScrapeImportSqlService>();
+
+// Next-week catalogue (BTS-163). Production fetches from the price-catalogue Lambda; the API
+// process only needs these for the admin endpoints and the local Quartz fallback.
+builder.Services.Configure<CatalogueOptions>(builder.Configuration.GetSection(CatalogueOptions.SectionName));
+builder.Services.AddHttpClient(SaleFinderClient.HttpClientName, CatalogueFetchLambda.ConfigureSaleFinderHttpClient);
+builder.Services.AddScoped<ISaleFinderClient, SaleFinderClient>();
+builder.Services.AddScoped<ICatalogueSqlExecutor, DbContextCatalogueSqlExecutor>();
+builder.Services.AddScoped<ICatalogueFetchService, CatalogueFetchService>();
 
 // Cognito auth — JWT validated against the User Pool's JWKS endpoint
 var cognitoRegion = builder.Configuration["Cognito:Region"]
@@ -447,10 +483,15 @@ namespace PriceCompareWeb
                 var job = new FavoritePriceTrackingLambda();
                 await job.Handler();
             }
+            else if (string.Equals(target, "CATALOGUE_FETCH", StringComparison.OrdinalIgnoreCase))
+            {
+                var job = new CatalogueFetchLambda();
+                await job.Handler();
+            }
             else
             {
                 Console.WriteLine("No valid TARGET_JOB environment variable found.");
-                Console.WriteLine("Available: COLES_SPECIAL | WWS_SPECIAL | FAVORITE_TRACK");
+                Console.WriteLine("Available: COLES_SPECIAL | WWS_SPECIAL | FAVORITE_TRACK | CATALOGUE_FETCH");
             }
         }
     }

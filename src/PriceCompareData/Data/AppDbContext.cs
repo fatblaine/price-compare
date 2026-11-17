@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using PriceCompareData.Entities;
+using PriceCompareData.Entities.Catalogue;
 using PriceCompareData.Entities.Compare;
 using PriceCompareData.Entities.History;
 using PriceCompareData.Entities.Jobs;
@@ -32,6 +33,8 @@ namespace PriceCompareData.Data
             public DbSet<JobRun> JobRuns => Set<JobRun>();
             public DbSet<ProductMatch> ProductMatches => Set<ProductMatch>();
             public DbSet<MatchJob> MatchJobs => Set<MatchJob>();
+            public DbSet<CatalogueSpecial> CatalogueSpecials => Set<CatalogueSpecial>();
+            public DbSet<CatalogueSpecialSku> CatalogueSpecialSkus => Set<CatalogueSpecialSku>();
 
 
 
@@ -138,6 +141,49 @@ namespace PriceCompareData.Data
                   modelBuilder.Entity<PriceHistory>()
                       .Property(p => p.PromoText)
                       .HasColumnName("promotext");
+
+                  // Next-week catalogue (BTS-163). Tables come from tools/sql/bts163_catalogue_special.sql;
+                  // rows are written by CatalogueFetchService through raw SQL, EF only reads them.
+                  modelBuilder.Entity<CatalogueSpecial>(entity =>
+                  {
+                        entity.ToTable("catalogue_special");
+                        entity.HasKey(e => e.Id).HasName("pk_catalogue_special");
+                        entity.Property(e => e.Id).HasColumnName("id");
+                        entity.Property(e => e.ShopType).HasColumnName("shoptype");
+                        entity.Property(e => e.SaleId).HasColumnName("saleid");
+                        entity.Property(e => e.Region).HasColumnName("region");
+                        entity.Property(e => e.ItemId).HasColumnName("itemid");
+                        entity.Property(e => e.Name).HasColumnName("name");
+                        entity.Property(e => e.Price).HasColumnName("price").HasPrecision(18, 4);
+                        entity.Property(e => e.PriceUnit).HasColumnName("priceunit");
+                        entity.Property(e => e.WasPrice).HasColumnName("wasprice").HasPrecision(18, 4);
+                        entity.Property(e => e.SaveAmount).HasColumnName("saveamount").HasPrecision(18, 4);
+                        entity.Property(e => e.UnitPriceText).HasColumnName("unitpricetext");
+                        entity.Property(e => e.PromoText).HasColumnName("promotext");
+                        entity.Property(e => e.ImageUrl).HasColumnName("imageurl");
+                        entity.Property(e => e.ValidFrom).HasColumnName("validfrom");
+                        entity.Property(e => e.ValidTo).HasColumnName("validto");
+                        entity.Property(e => e.ScrapedAt).HasColumnName("scrapedat");
+                        entity.HasIndex(e => new { e.ShopType, e.SaleId, e.ItemId })
+                              .IsUnique()
+                              .HasDatabaseName("ux_catalogue_special_item");
+                        entity.HasIndex(e => e.ValidFrom)
+                              .HasDatabaseName("ix_catalogue_special_validfrom");
+                  });
+
+                  modelBuilder.Entity<CatalogueSpecialSku>(entity =>
+                  {
+                        entity.ToTable("catalogue_special_sku");
+                        entity.HasKey(e => new { e.ShopType, e.SaleId, e.ItemId, e.Sku })
+                              .HasName("pk_catalogue_special_sku");
+                        entity.Property(e => e.ShopType).HasColumnName("shoptype");
+                        entity.Property(e => e.SaleId).HasColumnName("saleid");
+                        entity.Property(e => e.ItemId).HasColumnName("itemid");
+                        entity.Property(e => e.Sku).HasColumnName("sku");
+                        entity.Property(e => e.ProductId).HasColumnName("productid");
+                        entity.HasIndex(e => e.ProductId)
+                              .HasDatabaseName("ix_catalogue_special_sku_productid");
+                  });
 
                   // JobDefinition
                   modelBuilder.Entity<JobDefinition>(entity =>
@@ -447,6 +493,9 @@ namespace PriceCompareData.Data
 
                         entity.Property(e => e.SourceId)
                         .HasColumnName("sourceid");
+
+                        entity.Property(e => e.Stockcode)
+                        .HasColumnName("stockcode");
 
                         entity.Property(e => e.Name)
                         .HasColumnName("name")

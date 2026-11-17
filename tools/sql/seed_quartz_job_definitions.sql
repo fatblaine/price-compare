@@ -41,7 +41,9 @@ VALUES
     ('WwsSummerPriceDomJob',             'quartz', '',                    'Australia/Sydney', false, 'Woolworths - Summer Price (trigger disabled, replaced by Autumn Price)', now(), now()),
     ('WwsAutumnPriceDomJob',             'quartz', '0 15 6 ? * WED',      'Australia/Sydney', true,  'Woolworths - Autumn Price',                    now(), now()),
     ('CleanPriceHistoryJob',             'quartz', '0 0 6 ? 1/3 TUE#1',   'Australia/Sydney', true,  'Quarterly price history cleanup',              now(), now()),
-    ('FavoritePriceTrackingJob',         'quartz', '0 55 6 ? * WED',      'Australia/Sydney', true,  'Favourite price-drop digest (local copy; prod runs the AWS Lambda)', now(), now())
+    ('FavoritePriceTrackingJob',         'quartz', '0 55 6 ? * WED',      'Australia/Sydney', true,  'Favourite price-drop digest (local copy; prod runs the AWS Lambda)', now(), now()),
+    ('CatalogueFetchJob-Wws',            'quartz', '0 30 17 ? * MON',     'Australia/Sydney', false, 'BTS-163 next-week catalogue, Woolworths (also Mon 21:00, Tue 08:00). Local fallback only: needs Scraping:EnableCatalogueSchedule=true; prod runs the price-catalogue Lambda', now(), now()),
+    ('CatalogueFetchJob-Coles',          'quartz', '0 40 17 ? * MON',     'Australia/Sydney', false, 'BTS-163 next-week catalogue, Coles (also Mon 21:10, Tue 08:10). Local fallback only: needs Scraping:EnableCatalogueSchedule=true; prod runs the price-catalogue Lambda', now(), now())
 ON CONFLICT (job_name, source) DO UPDATE
 SET schedule_expression = EXCLUDED.schedule_expression,
     timezone            = EXCLUDED.timezone,

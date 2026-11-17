@@ -246,7 +246,7 @@ namespace PriceCompareCore.Services
             {
                 if (item.Tile is not null)
                 {
-                    result.Add(WoolworthsTileReader.ToProduct(item.Tile, item.Image, scrapedAt, null));
+                    result.Add(WoolworthsTileReader.ToProduct(item.Tile, item.Image, scrapedAt, null, item.Href));
                     continue;
                 }
 
@@ -264,7 +264,7 @@ namespace PriceCompareCore.Services
 
                 result.Add(new WoolworthsSpecialProduct
                 {
-                    Stockcode = 0,
+                    Stockcode = WoolworthsTileReader.ParseStockcode(item.Href),
                     Barcode = string.Empty,
                     DisplayName = name,
                     Brand = string.Empty,

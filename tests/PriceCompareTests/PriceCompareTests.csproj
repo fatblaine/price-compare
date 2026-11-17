@@ -39,4 +39,9 @@
     <ProjectReference Include="..\..\src\PriceCompareCore\PriceCompareCore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- BTS-163: saved SaleFinder responses used by SaleFinderParserTests -->
+    <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
