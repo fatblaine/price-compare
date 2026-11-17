@@ -26,9 +26,7 @@ namespace PriceCompareCore.Services.Catalogue
 
         private const string WebServiceBase = "https://webservice.salefinder.com.au/index.php/api";
         private const string EmbedBase = "https://embed.salefinder.com.au";
-        private const string WoolworthsCataloguePage = "https://www.woolworths.com.au/shop/catalogue";
 
-        private static readonly Regex WoolworthsKeyRegex = new(@"apikey=([A-Za-z0-9]+)", RegexOptions.Compiled);
         private static readonly Regex EmbedKeyRegex = new(@"apiKey:'([^']+)'", RegexOptions.Compiled);
 
         private readonly IHttpClientFactory _httpClientFactory;
@@ -95,8 +93,8 @@ namespace PriceCompareCore.Services.Catalogue
         }
 
         /// <summary>
-        /// The public front-end key, read at run time so a rotation does not break the job:
-        /// Woolworths embeds it in the catalogue page, Coles in SaleFinder's embed script.
+        /// The public front-end key, read at run time from SaleFinder's embed script
+        /// (embed.salefinder.com.au/{retailerId}/) so a rotation does not break the job.
         /// </summary>
         private async Task<string> GetApiKeyAsync(int shopType, CatalogueRetailerOptions retailer, CancellationToken ct)
         {
@@ -110,17 +108,10 @@ namespace PriceCompareCore.Services.Catalogue
                 return cached;
             }
 
-            string? key;
-            if (shopType == 1)
-            {
-                var page = await GetStringAsync(WoolworthsCataloguePage, ct);
-                key = WoolworthsKeyRegex.Match(page).Groups[1].Value;
-            }
-            else
-            {
-                var script = await GetStringAsync($"{EmbedBase}/{retailer.RetailerId}/", ct);
-                key = EmbedKeyRegex.Match(script).Groups[1].Value;
-            }
+            // Read from SaleFinder's own embed script for both retailers. woolworths.com.au is not used:
+            // its Akamai front end answers 403 to AWS (Lambda) addresses, while SaleFinder does not.
+            var script = await GetStringAsync($"{EmbedBase}/{retailer.RetailerId}/", ct);
+            var key = EmbedKeyRegex.Match(script).Groups[1].Value;
 
             if (string.IsNullOrWhiteSpace(key))
             {
