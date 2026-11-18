@@ -21,9 +21,9 @@ namespace PriceCompareData.CompiledModels
                 "PriceCompareData.Entities.Compare.Product",
                 typeof(Product),
                 baseEntityType,
-                propertyCount: 19,
+                propertyCount: 20,
                 foreignKeyCount: 1,
-                unnamedIndexCount: 6,
+                unnamedIndexCount: 7,
                 keyCount: 1);
 
             var productId = runtimeEntityType.AddProperty(
@@ -72,6 +72,17 @@ namespace PriceCompareData.CompiledModels
                 sentinel: false);
             categoryUnknown.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
             categoryUnknown.AddAnnotation("Relational:ColumnName", "categoryunknown");
+
+            var hasCrossShopMatch = runtimeEntityType.AddProperty(
+                "HasCrossShopMatch",
+                typeof(bool),
+                propertyInfo: typeof(Product).GetProperty("HasCrossShopMatch", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(Product).GetField("<HasCrossShopMatch>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                valueGenerated: ValueGenerated.OnAdd,
+                sentinel: false);
+            hasCrossShopMatch.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
+            hasCrossShopMatch.AddAnnotation("Relational:ColumnName", "hascrossshopmatch");
+            hasCrossShopMatch.AddAnnotation("Relational:DefaultValue", false);
 
             var imageUrl = runtimeEntityType.AddProperty(
                 "ImageUrl",
@@ -208,22 +219,26 @@ namespace PriceCompareData.CompiledModels
             key.AddAnnotation("Relational:Name", "pk_product");
 
             var index = runtimeEntityType.AddIndex(
-                new[] { shopType, lastSeenAt });
-            index.AddAnnotation("Relational:Name", "IX_Products_ShopType_LastSeenAt");
+                new[] { hasCrossShopMatch, productId });
+            index.AddAnnotation("Relational:Name", "ix_product_hascrossshopmatch_productid");
 
             var index0 = runtimeEntityType.AddIndex(
-                new[] { shopType, name });
+                new[] { shopType, lastSeenAt });
+            index0.AddAnnotation("Relational:Name", "IX_Products_ShopType_LastSeenAt");
 
             var index1 = runtimeEntityType.AddIndex(
-                new[] { shopType, normalizedName });
+                new[] { shopType, name });
 
             var index2 = runtimeEntityType.AddIndex(
-                new[] { shopType, sourceId });
+                new[] { shopType, normalizedName });
 
             var index3 = runtimeEntityType.AddIndex(
-                new[] { categoryId, sizeStandardUnit, sizeStandardValue });
+                new[] { shopType, sourceId });
 
             var index4 = runtimeEntityType.AddIndex(
+                new[] { categoryId, sizeStandardUnit, sizeStandardValue });
+
+            var index5 = runtimeEntityType.AddIndex(
                 new[] { categoryId, sizeUnit, sizeValue });
 
             return runtimeEntityType;

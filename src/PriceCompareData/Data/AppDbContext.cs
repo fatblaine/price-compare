@@ -59,6 +59,13 @@ namespace PriceCompareData.Data
                   modelBuilder.Entity<Product>()
                       .HasIndex(p => new { p.ShopType, p.LastSeenAt })
                       .HasDatabaseName("IX_Products_ShopType_LastSeenAt");
+                  // Default product-list order: products sold by both shops first, then ProductId.
+                  // Matches ORDER BY hascrossshopmatch DESC, productid so PostgreSQL can walk the
+                  // index and stop after one page.
+                  modelBuilder.Entity<Product>()
+                      .HasIndex(p => new { p.HasCrossShopMatch, p.ProductId })
+                      .IsDescending(true, false)
+                      .HasDatabaseName("ix_product_hascrossshopmatch_productid");
 
                   // ProductMatch
                   modelBuilder.Entity<ProductMatch>(entity =>
@@ -537,6 +544,9 @@ namespace PriceCompareData.Data
                         entity.Property(e => e.SizeUnknown).HasColumnName("sizeunknown");
                         entity.Property(e => e.BrandUnknown).HasColumnName("brandunknown");
                         entity.Property(e => e.CategoryUnknown).HasColumnName("categoryunknown");
+                        entity.Property(e => e.HasCrossShopMatch)
+                        .HasColumnName("hascrossshopmatch")
+                        .HasDefaultValue(false);
                   });
 
                   // PriceHistory

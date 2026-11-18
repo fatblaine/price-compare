@@ -31,5 +31,10 @@ namespace PriceCompareData.Entities.Compare
         public bool BrandUnknown { get; set; }
         public bool CategoryUnknown { get; set; }
 
+        // True when the product sits on either side of a same_product match (sold by both shops).
+        // Denormalised from productmatch so the product list can sort these first without reading
+        // productmatch per request; refreshed by CrossShopMatchFlags after matches change.
+        public bool HasCrossShopMatch { get; set; }
+
     }
 }
