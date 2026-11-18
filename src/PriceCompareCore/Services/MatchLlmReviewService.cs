@@ -255,6 +255,9 @@ namespace PriceCompareCore.Services
 
                 _logger.LogError(ex, "LLM review job failed jobId={JobId}", jobId);
             }
+
+            // Reviews may promote matches to same_product even if the job failed part-way.
+            await CrossShopMatchFlags.RefreshAllAsync(db, _logger);
         }
     }
 }

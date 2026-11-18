@@ -3,7 +3,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PriceCompareCore.Interfaces;
+using PriceCompareCore.Services;
 using PriceCompareData.Common;
 using PriceCompareData.Data;
 using PriceCompareData.DTOs;
@@ -18,12 +20,14 @@ namespace PriceCompareWeb.Controllers
         private readonly IMatchJobService _matchJobService;
         private readonly IMatchLlmReviewService _llmReviewService;
         private readonly AppDbContext _db;
+        private readonly ILogger<MatchController> _logger;
 
-        public MatchController(IMatchJobService matchJobService, IMatchLlmReviewService llmReviewService, AppDbContext db)
+        public MatchController(IMatchJobService matchJobService, IMatchLlmReviewService llmReviewService, AppDbContext db, ILogger<MatchController> logger)
         {
             _matchJobService = matchJobService;
             _llmReviewService = llmReviewService;
             _db = db;
+            _logger = logger;
         }
 
         [HttpGet("productmatches/review")]
@@ -145,6 +149,12 @@ namespace PriceCompareWeb.Controllers
             match.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            // Switching between same_product and comparable can change whether either product
+            // counts as sold by both shops (product-list ordering).
+            await CrossShopMatchFlags.RefreshProductsAsync(
+                _db, new[] { match.SourceProductId, match.TargetProductId }, _logger);
+
             return Ok(new { success = true });
         }
 

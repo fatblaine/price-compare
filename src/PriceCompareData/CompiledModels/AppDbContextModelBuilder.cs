@@ -12,7 +12,7 @@ namespace PriceCompareData.CompiledModels
     public partial class AppDbContextModel
     {
         private AppDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("03dfcc5c-10d3-4995-aff1-0f3658a67160"), entityTypeCount: 15)
+            : base(skipDetectChanges: false, modelId: new Guid("8505fea9-82a3-4e81-8b09-99f34e3e1808"), entityTypeCount: 15)
         {
         }
 

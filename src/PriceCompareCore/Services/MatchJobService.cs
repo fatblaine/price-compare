@@ -287,6 +287,9 @@ namespace PriceCompareCore.Services
 
                 _logger.LogError(ex, "Match job failed jobId={JobId}", jobId);
             }
+
+            // Matches may have been written even if the job failed part-way, so refresh either way.
+            await CrossShopMatchFlags.RefreshAllAsync(db, _logger);
         }
 
         private static bool HasFreshMatch(Dictionary<Guid, ProductMatch> latestBySource, Product source)

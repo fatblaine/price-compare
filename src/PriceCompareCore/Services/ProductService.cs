@@ -78,9 +78,13 @@ namespace PriceCompareCore.Services
                 // index when a shop filter is applied. The frontend (ProductsPage useMemo over
                 // compareDataMap) already sorts same_product matches first within the visible page, so
                 // only cross-page match concentration is dropped — an acceptable trade-off.
+                //
+                // Unfiltered view: products sold by both shops come first. HasCrossShopMatch is a
+                // column on product (refreshed by CrossShopMatchFlags when matches change), so this
+                // reads no productmatch rows and walks ix_product_hascrossshopmatch_productid.
                 IQueryable<Product> orderedQuery = hasFilter
                     ? query.OrderBy(p => p.Name).ThenBy(p => p.ProductId)
-                    : query.OrderBy(p => p.ProductId);
+                    : query.OrderByDescending(p => p.HasCrossShopMatch).ThenBy(p => p.ProductId);
 
                 var itemsQuery = orderedQuery
                     .Skip((page - 1) * pageSize)
