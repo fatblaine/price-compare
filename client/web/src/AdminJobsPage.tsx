@@ -1,31 +1,35 @@
 import * as React from "react";
 import {
 	Alert,
+	Avatar,
 	Box,
 	Button,
-	Card,
-	CardContent,
+	ButtonBase,
 	Checkbox,
 	Chip,
 	CircularProgress,
-	Divider,
+	Collapse,
 	FormControl,
+	FormControlLabel,
+	IconButton,
 	InputLabel,
+	LinearProgress,
 	ListItemText,
 	MenuItem,
 	OutlinedInput,
+	Pagination,
 	Select,
-	Stack,
-	Tab,
-	Tabs,
+	Switch,
 	TextField,
 	Typography,
+	useMediaQuery,
+	useTheme,
 } from "@mui/material";
-import {
-	DataGrid,
-	type GridColDef,
-	type GridRowSelectionModel,
-} from "@mui/x-data-grid";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import { DataGrid, type GridColDef, type GridRowSelectionModel } from "@mui/x-data-grid";
 import {
 	CartesianGrid,
 	Line,
@@ -57,6 +61,10 @@ import {
 	type MatchRunRequest,
 	type ProductMatchReviewItem,
 } from "./api/admin";
+import SegmentedControl from "./components/SegmentedControl";
+import ConfirmSheet from "./components/ConfirmSheet";
+import StoreLogo from "./components/StoreLogo";
+import { DISPLAY_FONT, tokens } from "./theme";
 
 type TrendPoint = {
 	label: string;
@@ -72,9 +80,6 @@ const SHOP_OPTIONS = [
 
 const scheduleKey = (schedule: JobSchedule) =>
 	`${schedule.source}:${schedule.jobName}`;
-
-const formatDateTime = (value?: string | null) =>
-	value ? new Date(value).toLocaleString() : "-";
 
 const formatDuration = (value?: number | null) => {
 	if (value === null || value === undefined) return "-";
@@ -147,19 +152,6 @@ const buildTrendData = (
 		...entry,
 		failureRate: entry.total === 0 ? 0 : entry.failed / entry.total,
 	}));
-};
-
-const statusChip = (status?: string | null) => {
-	if (!status) {
-		return <Chip label="-" size="small" variant="outlined" />;
-	}
-	if (status === "success") {
-		return <Chip label="success" size="small" color="success" />;
-	}
-	if (status === "fail") {
-		return <Chip label="fail" size="small" color="error" />;
-	}
-	return <Chip label={status} size="small" variant="outlined" />;
 };
 
 const shopLabel = (value: number) =>
@@ -240,14 +232,6 @@ export default function AdminJobsPage() {
 		() => schedules.find((s) => scheduleKey(s) === selectedKey) ?? null,
 		[schedules, selectedKey],
 	);
-	const selectionModel = React.useMemo<GridRowSelectionModel>(
-		() => ({
-			type: "include",
-			ids: new Set(selectedKey ? [selectedKey] : []),
-		}),
-		[selectedKey],
-	);
-
 	const reviewScoreMin = 0.5;
 	const reviewScoreMax = 0.9;
 
@@ -283,52 +267,18 @@ export default function AdminJobsPage() {
 		});
 	};
 
-	const scheduleColumns: GridColDef<JobSchedule>[] = [
-		{ field: "jobName", headerName: "Job", flex: 1, minWidth: 220 },
-		{ field: "source", headerName: "Source", width: 100 },
-		{
-			field: "enabled",
-			headerName: "State",
-			width: 110,
-			renderCell: (params) =>
-				params.value ? (
-					<Chip label="enabled" size="small" color="success" />
-				) : (
-					<Chip label="disabled" size="small" color="default" />
-				),
-		},
-		{
-			field: "nextFireTimeUtc",
-			headerName: "Next run",
-			width: 180,
-			valueFormatter: (value) => formatDateTime(value as string | null),
-		},
-		{
-			field: "lastRunStatus",
-			headerName: "Last status",
-			width: 120,
-			renderCell: (params) => statusChip(params.value as string | null),
-		},
-		{
-			field: "lastRunTimeUtc",
-			headerName: "Last run",
-			width: 180,
-			valueFormatter: (value) => formatDateTime(value as string | null),
-		},
-	];
-
 	const runColumns: GridColDef<JobRun>[] = [
 		{
 			field: "startTime",
 			headerName: "Started",
 			width: 180,
-			valueFormatter: (value) => formatDateTime(value as string),
+			valueFormatter: (value) => shortDateTime(value as string),
 		},
 		{
 			field: "status",
 			headerName: "Status",
 			width: 110,
-			renderCell: (params) => statusChip(params.value as string | null),
+			renderCell: (params) => <StatusPill status={params.value as string | null} />,
 		},
 		{
 			field: "durationMs",
@@ -365,7 +315,7 @@ export default function AdminJobsPage() {
 			field: "status",
 			headerName: "Status",
 			width: 120,
-			renderCell: (params) => statusChip(params.value as string | null),
+			renderCell: (params) => <StatusPill status={params.value as string | null} />,
 		},
 		{
 			field: "sourceShop",
@@ -403,19 +353,19 @@ export default function AdminJobsPage() {
 			field: "since",
 			headerName: "Since",
 			width: 180,
-			valueFormatter: (value) => formatDateTime(value as string | null),
+			valueFormatter: (value) => shortDateTime(value as string | null),
 		},
 		{
 			field: "createdAt",
 			headerName: "Created",
 			width: 180,
-			valueFormatter: (value) => formatDateTime(value as string | null),
+			valueFormatter: (value) => shortDateTime(value as string | null),
 		},
 		{
 			field: "updatedAt",
 			headerName: "Updated",
 			width: 180,
-			valueFormatter: (value) => formatDateTime(value as string | null),
+			valueFormatter: (value) => shortDateTime(value as string | null),
 		},
 		{
 			field: "errorMessage",
@@ -435,180 +385,6 @@ export default function AdminJobsPage() {
 					{params.value ? String(params.value) : "-"}
 				</Box>
 			),
-		},
-	];
-
-	const reviewColumns: GridColDef<ProductMatchReviewItem>[] = [
-		{
-			field: "sourceName",
-			headerName: "Source",
-			minWidth: 220,
-			flex: 1,
-			renderCell: (params) => (
-				<Stack direction="row" spacing={1.2} alignItems="center">
-					<Box
-						component="img"
-						src={params.row.sourceImageUrl || ""}
-						alt={params.row.sourceName}
-						sx={{
-							width: 48,
-							height: 48,
-							borderRadius: 1,
-							objectFit: "contain",
-							bgcolor: "#f5f5f7",
-						}}
-						onError={(e) => {
-							(e.currentTarget as HTMLImageElement).style.display = "none";
-						}}
-					/>
-					<Box>
-						<Typography variant="body2" fontWeight={600} noWrap>
-							{params.row.sourceName}
-						</Typography>
-						<Typography variant="caption" color="text.secondary">
-							{params.row.sourceShopName}
-						</Typography>
-					</Box>
-				</Stack>
-			),
-		},
-		{
-			field: "targetName",
-			headerName: "Target",
-			minWidth: 220,
-			flex: 1,
-			renderCell: (params) => (
-				<Stack direction="row" spacing={1.2} alignItems="center">
-					<Box
-						component="img"
-						src={params.row.targetImageUrl || ""}
-						alt={params.row.targetName}
-						sx={{
-							width: 48,
-							height: 48,
-							borderRadius: 1,
-							objectFit: "contain",
-							bgcolor: "#f5f5f7",
-						}}
-						onError={(e) => {
-							(e.currentTarget as HTMLImageElement).style.display = "none";
-						}}
-					/>
-					<Box>
-						<Typography variant="body2" fontWeight={600} noWrap>
-							{params.row.targetName}
-						</Typography>
-						<Typography variant="caption" color="text.secondary">
-							{params.row.targetShopName}
-						</Typography>
-					</Box>
-				</Stack>
-			),
-		},
-		{
-			field: "score",
-			headerName: "Score",
-			width: 110,
-			valueFormatter: (value) =>
-				Number.isFinite(Number(value))
-					? Number(value).toFixed(4)
-					: "-",
-		},
-		{
-			field: "updatedAt",
-			headerName: "Updated",
-			width: 180,
-			valueFormatter: (value) => formatDateTime(value as string | null),
-		},
-		{
-			field: "actions",
-			headerName: "Update",
-			minWidth: 320,
-			flex: 1,
-			sortable: false,
-			filterable: false,
-			renderCell: (params) => {
-				const row = params.row;
-				const edit = getReviewEdit(row);
-				const isSaving = reviewSavingIds.includes(row.matchId);
-				const isSame = edit.matchType === "same_product";
-				return (
-					<Stack direction="row" spacing={1} alignItems="center">
-						<FormControl size="small" sx={{ minWidth: 140 }}>
-							<InputLabel id={`match-type-${row.matchId}`} shrink>
-								Match type
-							</InputLabel>
-							<Select
-								labelId={`match-type-${row.matchId}`}
-								label="Match type"
-								value={edit.matchType}
-								onChange={(e) =>
-									setReviewEdit(row, {
-										matchType: e.target.value as "same_product" | "comparable",
-									})
-								}
-								input={<OutlinedInput label="Match type" notched />}
-							>
-								<MenuItem value="same_product">same_product</MenuItem>
-								<MenuItem value="comparable">comparable</MenuItem>
-							</Select>
-						</FormControl>
-						<TextField
-							label="Score"
-							size="small"
-							type="number"
-							value={edit.score}
-							disabled={isSame}
-							onChange={(e) => setReviewEdit(row, { score: e.target.value })}
-							inputProps={{ min: 0.5, max: 0.9999, step: 0.0001 }}
-							sx={{ width: 120 }}
-						/>
-						<Button
-							variant="contained"
-							size="small"
-							disabled={isSaving}
-							onClick={() => {
-								const nextType = edit.matchType;
-								const nextScore = Number(edit.score);
-								if (nextType === "comparable") {
-									if (!Number.isFinite(nextScore)) {
-										setReviewError("Score must be a number.");
-										return;
-									}
-									if (nextScore < 0.5 || nextScore > 0.9999) {
-										setReviewError("Score must be between 0.5000 and 0.9999.");
-										return;
-									}
-								}
-								setReviewSavingIds((prev) =>
-									prev.includes(row.matchId) ? prev : [...prev, row.matchId],
-								);
-								setReviewError(null);
-								void updateProductMatch({
-									matchId: row.matchId,
-									matchType: nextType,
-									score: nextType === "comparable" ? nextScore : undefined,
-								})
-									.then(() => loadReviewMatches())
-									.catch((e) => {
-										if (axios.isAxiosError(e) && e.response?.status === 403) {
-											setReviewError("Not authorized to update match.");
-										} else {
-											setReviewError("Failed to update match.");
-										}
-									})
-									.finally(() => {
-										setReviewSavingIds((prev) =>
-											prev.filter((id) => id !== row.matchId),
-										);
-									});
-							}}
-						>
-							Save
-						</Button>
-					</Stack>
-				);
-			},
 		},
 	];
 
@@ -794,803 +570,1195 @@ export default function AdminJobsPage() {
 		void loadReviewMatches();
 	}, [adminTab, loadReviewMatches]);
 
-	return (
-		<Box>
-			<Stack spacing={3}>
-				<Stack
-					direction={{ xs: "column", md: "row" }}
-					alignItems={{ xs: "flex-start", md: "center" }}
-					justifyContent="space-between"
-					spacing={1.5}
+	const saveReview = (row: ProductMatchReviewItem) => {
+		const edit = getReviewEdit(row);
+		const nextType = edit.matchType;
+		const nextScore = Number(edit.score);
+		if (nextType === "comparable") {
+			if (!Number.isFinite(nextScore)) {
+				setReviewError("Score must be a number.");
+				return;
+			}
+			if (nextScore < 0.5 || nextScore > 0.9999) {
+				setReviewError("Score must be between 0.5000 and 0.9999.");
+				return;
+			}
+		}
+		setReviewSavingIds((prev) => (prev.includes(row.matchId) ? prev : [...prev, row.matchId]));
+		setReviewError(null);
+		void updateProductMatch({
+			matchId: row.matchId,
+			matchType: nextType,
+			score: nextType === "comparable" ? nextScore : undefined,
+		})
+			.then(() => loadReviewMatches())
+			.catch((e) => {
+				if (axios.isAxiosError(e) && e.response?.status === 403) {
+					setReviewError("Not authorized to update match.");
+				} else {
+					setReviewError("Failed to update match.");
+				}
+			})
+			.finally(() => {
+				setReviewSavingIds((prev) => prev.filter((id) => id !== row.matchId));
+			});
+	};
+
+	const theme = useTheme();
+	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
+	const [optionsOpen, setOptionsOpen] = React.useState(false);
+	const [filtersOpen, setFiltersOpen] = React.useState(false);
+	const [schedPaging, setSchedPaging] = React.useState({ page: 0, pageSize: 10 });
+	const [runsPaging, setRunsPaging] = React.useState({ page: 0, pageSize: 10 });
+	const [cleanConfirmOpen, setCleanConfirmOpen] = React.useState(false);
+	const [statusRefreshing, setStatusRefreshing] = React.useState(false);
+
+	React.useEffect(() => {
+		setRunsPaging((prev) => ({ ...prev, page: 0 }));
+	}, [selectedKey]);
+
+	const refreshAll = () => {
+		void loadSchedules();
+		void loadHealth();
+		void loadRunsAndStats();
+	};
+
+	const runCleanNow = () => {
+		setCleanConfirmOpen(false);
+		setCleanResult(null);
+		setCleanError(null);
+		setCleanLoading(true);
+		void runCleanPriceHistory()
+			.then((res) => setCleanResult(res.deleted))
+			.catch(() => setCleanError("Failed to clean price history."))
+			.finally(() => setCleanLoading(false));
+	};
+
+	const refreshPreMatchStatus = async () => {
+		if (!preMatchJobId) return;
+		setStatusRefreshing(true);
+		try {
+			setPreMatchStatus(await fetchMatchJobStatus(preMatchJobId));
+		} catch {
+			setPreMatchError("Failed to refresh the job status.");
+		} finally {
+			setStatusRefreshing(false);
+		}
+	};
+
+	const jobStatus = (s: JobSchedule) => (s.enabled ? s.lastRunStatus || "never run" : "disabled");
+	// Oldest → newest, so the strip reads left to right like a timeline.
+	const runStrip = runs.slice(0, 20).reverse();
+	const preMatchProgress =
+		preMatchStatus && preMatchStatus.total > 0
+			? Math.min(100, Math.round((preMatchStatus.processed / preMatchStatus.total) * 100))
+			: 0;
+
+	const shopBox = (shop: number) => (
+		<Box
+			sx={{
+				flex: 1,
+				minWidth: 0,
+				height: 44,
+				px: 1.25,
+				border: `1px solid ${tokens.line}`,
+				borderRadius: "12px",
+				display: "flex",
+				alignItems: "center",
+				gap: 1,
+				fontSize: 14,
+				fontWeight: 600,
+			}}
+		>
+			<StoreLogo shopType={shop} size={22} decorative />
+			{shopLabel(shop)}
+		</Box>
+	);
+
+	const preMatchOptions = (
+		<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+			<Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.5 }}>
+				<TextField
+					select
+					label="Mode"
+					size="small"
+					value={preMatchRequest.mode ?? "incremental"}
+					onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, mode: String(e.target.value) }))}
+					sx={fieldSx}
 				>
-					<Typography variant="h4" component="h2" fontWeight={800}>
-						Admin Monitoring
-					</Typography>
-					{adminTab === "schedules" && (
-						<Stack direction="row" spacing={1} alignItems="center">
-							<Button variant="contained" onClick={loadSchedules}>
-								Refresh schedules
-							</Button>
-							<Button
-								variant="outlined"
-								color="warning"
-								disabled={cleanLoading}
-								onClick={() => {
-									setCleanResult(null);
-									setCleanError(null);
-									setCleanLoading(true);
-									void runCleanPriceHistory()
-										.then((res) => setCleanResult(res.deleted))
-										.catch(() => setCleanError("Failed to clean price history."))
-										.finally(() => setCleanLoading(false));
+					<MenuItem value="incremental">Incremental</MenuItem>
+					<MenuItem value="full">Full</MenuItem>
+				</TextField>
+				<TextField
+					label="Limit"
+					size="small"
+					type="number"
+					value={preMatchRequest.limit ?? 0}
+					onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, limit: Number(e.target.value) }))}
+					inputProps={{ min: 0 }}
+					sx={fieldSx}
+				/>
+				<TextField
+					label="Top N"
+					size="small"
+					type="number"
+					value={preMatchRequest.topN ?? 20}
+					onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, topN: Number(e.target.value) }))}
+					inputProps={{ min: 1, max: 50 }}
+					sx={fieldSx}
+				/>
+				<TextField
+					label="Resume job ID"
+					size="small"
+					placeholder="Optional"
+					value={preMatchRequest.resumeJobId ?? ""}
+					onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, resumeJobId: e.target.value }))}
+					InputLabelProps={{ shrink: true }}
+					sx={fieldSx}
+				/>
+			</Box>
+			<Box sx={{ borderTop: `1px solid ${tokens.line}` }}>
+				<FormControlLabel
+					labelPlacement="start"
+					control={
+						<Switch
+							checked={Boolean(preMatchRequest.useLlm)}
+							onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, useLlm: e.target.checked }))}
+						/>
+					}
+					label="Use LLM"
+					sx={switchRowSx}
+				/>
+				<FormControlLabel
+					labelPlacement="start"
+					control={
+						<Switch
+							checked={Boolean(preMatchRequest.force)}
+							onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, force: e.target.checked }))}
+						/>
+					}
+					label="Force re-match"
+					sx={{ ...switchRowSx, borderBottom: "none" }}
+				/>
+			</Box>
+		</Box>
+	);
+
+	const matchJobFilters = (
+		<Box
+			sx={{
+				display: "grid",
+				gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(5, minmax(0, 1fr))" },
+				gap: 1.5,
+			}}
+		>
+			<FormControl size="small" sx={{ ...fieldSx, gridColumn: { xs: "span 2", md: "auto" } }}>
+				<InputLabel id="match-jobs-status-label" shrink>
+					Status
+				</InputLabel>
+				<Select
+					labelId="match-jobs-status-label"
+					label="Status"
+					multiple
+					displayEmpty
+					value={matchJobsFilters.statuses}
+					onChange={(e) => {
+						const value = e.target.value;
+						setMatchJobsPagination((prev) => ({ ...prev, page: 0 }));
+						setMatchJobsFilters((prev) => ({
+							...prev,
+							statuses: typeof value === "string" ? value.split(",") : value,
+						}));
+					}}
+					input={<OutlinedInput label="Status" notched />}
+					renderValue={(selected) => {
+						const list = selected as string[];
+						if (list.length === 0) {
+							return <Typography color="text.secondary">Any</Typography>;
+						}
+						return list.join(", ");
+					}}
+				>
+					{["queued", "running", "completed", "failed"].map((status) => (
+						<MenuItem key={status} value={status}>
+							<Checkbox checked={matchJobsFilters.statuses.includes(status)} />
+							<ListItemText primary={status} />
+						</MenuItem>
+					))}
+				</Select>
+			</FormControl>
+			{(["updatedFrom", "updatedTo"] as const).map((key) => (
+				<TextField
+					key={key}
+					label={key === "updatedFrom" ? "Updated from" : "Updated to"}
+					size="small"
+					type="datetime-local"
+					InputLabelProps={{ shrink: true }}
+					value={matchJobsFilters[key]}
+					onChange={(e) => {
+						setMatchJobsPagination((prev) => ({ ...prev, page: 0 }));
+						setMatchJobsFilters((prev) => ({ ...prev, [key]: e.target.value }));
+					}}
+					sx={{ ...fieldSx, gridColumn: { xs: "span 2", md: "auto" } }}
+				/>
+			))}
+			<TextField
+				select
+				label="Sort by"
+				size="small"
+				value={matchJobsFilters.sortBy}
+				onChange={(e) => {
+					setMatchJobsPagination((prev) => ({ ...prev, page: 0 }));
+					setMatchJobsFilters((prev) => ({ ...prev, sortBy: e.target.value as "updatedAt" | "createdAt" }));
+				}}
+				sx={fieldSx}
+			>
+				<MenuItem value="updatedAt">Updated</MenuItem>
+				<MenuItem value="createdAt">Created</MenuItem>
+			</TextField>
+			<TextField
+				select
+				label="Direction"
+				size="small"
+				value={matchJobsFilters.sortDir}
+				onChange={(e) => {
+					setMatchJobsPagination((prev) => ({ ...prev, page: 0 }));
+					setMatchJobsFilters((prev) => ({ ...prev, sortDir: e.target.value as "asc" | "desc" }));
+				}}
+				sx={fieldSx}
+			>
+				<MenuItem value="desc">Newest first</MenuItem>
+				<MenuItem value="asc">Oldest first</MenuItem>
+			</TextField>
+		</Box>
+	);
+
+	// Desktop (sm+) keeps the data tables: readability and paging first (user feedback 2026-11-19).
+	const scheduleSelection = React.useMemo<GridRowSelectionModel>(
+		() => ({ type: "include", ids: new Set(selectedKey ? [selectedKey] : []) }),
+		[selectedKey],
+	);
+
+	const scheduleColumns: GridColDef<JobSchedule>[] = [
+		{ field: "jobName", headerName: "Job", flex: 2, minWidth: 300 },
+		{ field: "source", headerName: "Source", width: 90 },
+		{
+			field: "enabled",
+			headerName: "State",
+			width: 100,
+			renderCell: (params) => <StatusPill status={params.value ? "enabled" : "disabled"} />,
+		},
+		{
+			field: "nextFireTimeUtc",
+			headerName: "Next run",
+			width: 170,
+			valueFormatter: (value) => shortDateTime(value as string | null),
+		},
+		{
+			field: "lastRunStatus",
+			headerName: "Last status",
+			width: 110,
+			renderCell: (params) => <StatusPill status={params.value as string | null} />,
+		},
+		{
+			field: "lastRunTimeUtc",
+			headerName: "Last run",
+			width: 170,
+			valueFormatter: (value) => shortDateTime(value as string | null),
+		},
+		{
+			field: "lastRunDurationMs",
+			headerName: "Duration",
+			width: 100,
+			valueFormatter: (value) => formatDuration(value as number | null),
+		},
+	];
+
+	const productCell = (name: string, shopName: string, shopType?: number | null, imageUrl?: string | null) => (
+		<Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0, height: "100%" }}>
+			<Avatar
+				variant="rounded"
+				src={imageUrl ?? undefined}
+				alt=""
+				sx={{
+					width: 48,
+					height: 48,
+					flexShrink: 0,
+					borderRadius: "10px",
+					bgcolor: tokens.imageGround,
+					border: `1px solid ${tokens.line}`,
+					"& img": { objectFit: "contain" },
+				}}
+			>
+				<StoreLogo shopType={shopType} size={22} decorative />
+			</Avatar>
+			<Box sx={{ minWidth: 0 }}>
+				<Typography title={name} sx={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, whiteSpace: "normal", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{name}</Typography>
+				<Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.25 }}>
+					<StoreLogo shopType={shopType} size={14} decorative />
+					<Typography sx={{ fontSize: 12, color: tokens.ink2 }}>{shopName}</Typography>
+				</Box>
+			</Box>
+		</Box>
+	);
+
+	const reviewColumns: GridColDef<ProductMatchReviewItem>[] = [
+		{
+			field: "sourceName",
+			headerName: "Source",
+			minWidth: 200,
+			flex: 1,
+			renderCell: (params) =>
+				productCell(params.row.sourceName, params.row.sourceShopName, params.row.sourceShopType, params.row.sourceImageUrl),
+		},
+		{
+			field: "targetName",
+			headerName: "Target",
+			minWidth: 200,
+			flex: 1,
+			renderCell: (params) =>
+				productCell(params.row.targetName, params.row.targetShopName, params.row.targetShopType, params.row.targetImageUrl),
+		},
+		{
+			field: "score",
+			headerName: "Score",
+			width: 90,
+			valueFormatter: (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(4) : "-"),
+		},
+		{ field: "method", headerName: "Method", width: 100 },
+		{
+			field: "updatedAt",
+			headerName: "Updated",
+			width: 150,
+			valueFormatter: (value) => shortDateTime(value as string | null),
+		},
+		{
+			field: "actions",
+			headerName: "Update",
+			minWidth: 350,
+			flex: 1,
+			sortable: false,
+			filterable: false,
+			renderCell: (params) => {
+				const row = params.row;
+				const edit = getReviewEdit(row);
+				const isSaving = reviewSavingIds.includes(row.matchId);
+				const isSame = edit.matchType === "same_product";
+				return (
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1, height: "100%" }}>
+						<TextField
+							select
+							size="small"
+							label="Match type"
+							value={edit.matchType}
+							onChange={(e) =>
+								setReviewEdit(row, { matchType: e.target.value as "same_product" | "comparable" })
+							}
+							sx={{ width: 140 }}
+						>
+							<MenuItem value="same_product">Same product</MenuItem>
+							<MenuItem value="comparable">Comparable</MenuItem>
+						</TextField>
+						<TextField
+							label="Score"
+							size="small"
+							type="number"
+							value={edit.score}
+							disabled={isSame}
+							onChange={(e) => setReviewEdit(row, { score: e.target.value })}
+							inputProps={{ min: 0.5, max: 0.9999, step: 0.0001 }}
+							sx={{ width: 92 }}
+						/>
+						<Button variant="contained" size="small" disabled={isSaving} onClick={() => saveReview(row)} sx={{ height: 40 }}>
+							{isSaving ? "Saving…" : "Save"}
+						</Button>
+					</Box>
+				);
+			},
+		},
+	];
+
+	const desktopSchedules = (
+		<>
+			<Section
+				title="Health"
+				action={
+					<SegmentedControl
+						ariaLabel="Time range"
+						value={rangeHours}
+						height={34}
+						options={[
+							{ value: 24, label: "Last 24h" },
+							{ value: 168, label: "Last 7d" },
+							{ value: 720, label: "Last 30d" },
+						]}
+						onChange={(v) => setRangeHours(v)}
+					/>
+				}
+			>
+				<Box sx={{ display: "flex", flexWrap: "wrap", gap: "12px 40px", opacity: loadingHealth ? 0.6 : 1 }}>
+					<InlineStat label="Total runs" value={String(health?.totalRuns ?? 0)} />
+					<InlineStat label="Failed" value={String(health?.failedRuns ?? 0)} tone={health?.failedRuns ? "bad" : undefined} />
+					<InlineStat label="Failure rate" value={health ? `${Math.round(health.failureRate * 100)}%` : "0%"} />
+					<InlineStat label="Last failure" value={health?.lastFailureAtUtc ? shortDateTime(health.lastFailureAtUtc) : "—"} />
+				</Box>
+				{health?.recentFailures?.length ? (
+					<Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${tokens.line}` }}>
+						<SubHeading>Recent failures</SubHeading>
+						{health.recentFailures.map((failure) => (
+							<Typography
+								key={`${failure.source}:${failure.jobName}:${failure.startTimeUtc}`}
+								sx={{ fontSize: 13.5, lineHeight: 1.6, color: tokens.ink2, overflowWrap: "anywhere" }}
+							>
+								<Box component="strong" sx={{ color: tokens.ink, fontWeight: 600 }}>
+									{failure.jobName}
+								</Box>{" "}
+								({failure.source}) · {shortDateTime(failure.startTimeUtc)}
+								{failure.errorMessage ? ` — ${failure.errorMessage}` : ""}
+							</Typography>
+						))}
+					</Box>
+				) : null}
+			</Section>
+
+			<Section title="Schedules" action={<Hint>Select a row to see its runs</Hint>}>
+				<DataGrid
+					rows={schedules}
+					columns={scheduleColumns}
+					getRowId={(row) => scheduleKey(row)}
+					autoHeight
+					loading={loadingSchedules}
+					pageSizeOptions={[10, 25, 50]}
+					initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
+					rowSelectionModel={scheduleSelection}
+					onRowSelectionModelChange={(model) => {
+						const nextId = model.ids.size > 0 ? Array.from(model.ids)[0] : null;
+						setSelectedKey(nextId ? String(nextId) : null);
+					}}
+					sx={gridSx}
+				/>
+			</Section>
+
+			<Box sx={{ display: "grid", gridTemplateColumns: { sm: "minmax(0, 1fr)", md: "repeat(2, minmax(0, 1fr))" }, gap: 2.5, alignItems: "stretch" }}>
+				<Section title="Selected job">
+					{selectedSchedule ? (
+						<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+							<Box
+								sx={{
+									display: "grid",
+									gridTemplateColumns: "auto minmax(0, 1fr)",
+									gap: "8px 16px",
+									fontSize: 13.5,
 								}}
 							>
-								{cleanLoading ? "Cleaning…" : "Clean price history"}
-							</Button>
-							{cleanResult !== null && (
-								<Typography variant="body2" color="success.main">
-									Deleted {cleanResult} rows
-								</Typography>
-							)}
-							{cleanError && (
-								<Typography variant="body2" color="error">
-									{cleanError}
-								</Typography>
-							)}
-						</Stack>
-					)}
-				</Stack>
-
-				{error && <Alert severity="error">{error}</Alert>}
-
-				<Tabs
-					value={adminTab}
-					onChange={(_, value) => {
-						const next =
-							value === "prematch" ? "/admin/prematch" : "/admin/schedules";
-						navigate(next);
-					}}
-					textColor="primary"
-					indicatorColor="primary"
-				>
-					<Tab value="schedules" label="Schedules" />
-					<Tab value="prematch" label="Pre-match" />
-				</Tabs>
-
-				{adminTab === "schedules" && (
-					<>
-						<Card variant="outlined">
-					<CardContent>
-						<Stack
-							direction={{ xs: "column", md: "row" }}
-							spacing={2}
-							alignItems={{ xs: "flex-start", md: "center" }}
-						>
-							<Typography variant="h6" component="h3" fontWeight={700}>
-								Health summary
-							</Typography>
-							<FormControl size="small" sx={{ minWidth: 160 }}>
-								<InputLabel id="range-hours-label">Range</InputLabel>
-								<Select
-									labelId="range-hours-label"
-									label="Range"
-									value={rangeHours}
-									onChange={(e) => setRangeHours(Number(e.target.value))}
-								>
-									<MenuItem value={24}>Last 24h</MenuItem>
-									<MenuItem value={168}>Last 7d</MenuItem>
-									<MenuItem value={720}>Last 30d</MenuItem>
-								</Select>
-							</FormControl>
-							<Button variant="outlined" onClick={loadHealth}>
-								Refresh summary
-							</Button>
-						</Stack>
-
-						<Divider sx={{ my: 2 }} />
-
-						{loadingHealth ? (
-							<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-								<CircularProgress size={20} />
-								<Typography variant="body2">Loading health...</Typography>
+								<Box component="span" sx={{ color: tokens.ink2 }}>Job</Box>
+								<Box component="span" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
+									{selectedSchedule.jobName} ({selectedSchedule.source})
+								</Box>
+								<Box component="span" sx={{ color: tokens.ink2 }}>Schedule</Box>
+								<Box component="span" sx={{ fontFamily: MONO, fontSize: 13 }}>{selectedSchedule.scheduleExpression || "-"}</Box>
+								<Box component="span" sx={{ color: tokens.ink2 }}>Time zone</Box>
+								<Box component="span">{selectedSchedule.timezone}</Box>
+								<Box component="span" sx={{ color: tokens.ink2 }}>Next run</Box>
+								<Box component="span">{shortDateTime(selectedSchedule.nextFireTimeUtc)}</Box>
+								<Box component="span" sx={{ color: tokens.ink2 }}>Last run</Box>
+								<Box component="span" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+									{shortDateTime(selectedSchedule.lastRunTimeUtc)}
+									{selectedSchedule.lastRunStatus && <StatusPill status={selectedSchedule.lastRunStatus} />}
+								</Box>
+								<Box component="span" sx={{ color: tokens.ink2 }}>Last error</Box>
+								<Box component="span" sx={{ fontFamily: selectedSchedule.lastRunErrorMessage ? MONO : undefined, fontSize: selectedSchedule.lastRunErrorMessage ? 12.5 : undefined, color: selectedSchedule.lastRunErrorMessage ? "#8F1D14" : tokens.ink2, overflowWrap: "anywhere" }}>
+									{selectedSchedule.lastRunErrorMessage || "—"}
+								</Box>
 							</Box>
-						) : (
-							<Stack
-								direction={{ xs: "column", md: "row" }}
-								spacing={2}
-								flexWrap="wrap"
-							>
-								<Stack spacing={0.5}>
-									<Typography variant="subtitle2" color="text.secondary">
-										Total runs
-									</Typography>
-									<Typography variant="h6" component="h3" fontWeight={700}>
-										{health?.totalRuns ?? 0}
-									</Typography>
-								</Stack>
-								<Stack spacing={0.5}>
-									<Typography variant="subtitle2" color="text.secondary">
-										Failed runs
-									</Typography>
-									<Typography variant="h6" component="h3" fontWeight={700}>
-										{health?.failedRuns ?? 0}
-									</Typography>
-								</Stack>
-								<Stack spacing={0.5}>
-									<Typography variant="subtitle2" color="text.secondary">
-										Failure rate
-									</Typography>
-									<Typography variant="h6" component="h3" fontWeight={700}>
-										{health ? `${Math.round(health.failureRate * 100)}%` : "0%"}
-									</Typography>
-								</Stack>
-								<Stack spacing={0.5}>
-									<Typography variant="subtitle2" color="text.secondary">
-										Last failure
-									</Typography>
-									<Typography variant="h6" component="h3" fontWeight={700}>
-										{health?.lastFailureAtUtc
-											? formatDateTime(health.lastFailureAtUtc)
-											: "-"}
-									</Typography>
-								</Stack>
-							</Stack>
-						)}
+							{runStrip.length > 0 && (
+								<Box>
+									<SubHeading>Last {runStrip.length} runs</SubHeading>
+									<Box
+										role="img"
+										aria-label={`Last ${runStrip.length} runs: ${runStrip.filter((r) => r.status === "fail").length} failed`}
+										sx={{ display: "flex", gap: "3px", flexWrap: "wrap" }}
+									>
+										{runStrip.map((r) => (
+											<Box
+												key={r.id}
+												title={`${shortDateTime(r.startTime)} · ${r.status}`}
+												sx={{ width: 10, height: 20, borderRadius: "3px", bgcolor: r.status === "fail" ? BAD : r.status === "success" ? "#7FC79E" : tokens.lineStrong }}
+											/>
+										))}
+									</Box>
+								</Box>
+							)}
+						</Box>
+					) : (
+						<Hint>Select a schedule to view details.</Hint>
+					)}
+				</Section>
 
+				<Section
+					title="Failure-rate trend"
+					action={
+						<SegmentedControl
+							ariaLabel="Trend bucket"
+							value={trendBucket}
+							height={34}
+							options={[
+								{ value: "day", label: "Daily" },
+								{ value: "hour", label: "Hourly" },
+							]}
+							onChange={(v) => setTrendBucket(v)}
+						/>
+					}
+				>
+					<ResponsiveContainer width="100%" height={240}>
+						<LineChart data={trendData} margin={{ left: -16, right: 8, top: 8 }}>
+							<CartesianGrid strokeDasharray="3 3" stroke={tokens.line} />
+							<XAxis dataKey="label" tick={{ fontSize: 11, fill: tokens.ink2 }} />
+							<YAxis tickFormatter={(value) => `${Math.round(value * 100)}%`} domain={[0, 1]} tick={{ fontSize: 11, fill: tokens.ink2 }} />
+							<Tooltip formatter={(value) => `${Math.round(Number(value) * 100)}%`} />
+							<Line type="monotone" dataKey="failureRate" stroke={BAD} strokeWidth={2} dot={false} />
+						</LineChart>
+					</ResponsiveContainer>
+				</Section>
+			</Box>
+
+			<Section
+				title="Recent runs"
+				action={
+					stats ? (
+						<Box sx={{ display: "flex", flexWrap: "wrap", gap: "4px 20px", fontSize: 13, color: tokens.ink2 }}>
+							<span>
+								Total <Box component="strong" sx={{ color: tokens.ink }}>{stats.totalRuns}</Box>
+							</span>
+							<span>
+								Failed <Box component="strong" sx={{ color: stats.failedRuns ? BAD : tokens.ink }}>{stats.failedRuns}</Box>
+							</span>
+							<span>
+								Failure rate <Box component="strong" sx={{ color: tokens.ink }}>{Math.round(stats.failureRate * 100)}%</Box>
+							</span>
+							<span>
+								Avg duration <Box component="strong" sx={{ color: tokens.ink }}>{formatDuration(stats.averageDurationMs)}</Box>
+							</span>
+						</Box>
+					) : undefined
+				}
+			>
+				<DataGrid
+					rows={runs}
+					columns={runColumns}
+					getRowId={(row) => row.id}
+					autoHeight
+					loading={loadingRuns || loadingStats}
+					pageSizeOptions={[10, 25, 50]}
+					initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
+					disableRowSelectionOnClick
+					sx={gridSx}
+				/>
+			</Section>
+		</>
+	);
+
+	const desktopPrematch = (
+		<>
+			<Section
+				title="Batch pre-match"
+				action={
+					<Button variant="contained" onClick={runPreMatch} disabled={preMatchLoading} sx={{ height: 44, px: 3 }}>
+						{preMatchLoading ? "Starting..." : "Run pre-match"}
+					</Button>
+				}
+			>
+				<Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 2 }}>
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1, width: 320 }}>
+						{shopBox(preMatchRequest.sourceShop)}
+						<IconButton
+							aria-label="Swap source and target shop"
+							onClick={() => setPreMatchRequest((prev) => ({ ...prev, sourceShop: prev.targetShop, targetShop: prev.sourceShop }))}
+							sx={{ width: 44, height: 44, flexShrink: 0, border: `1px solid ${tokens.line}`, borderRadius: "12px", color: tokens.brand }}
+						>
+							<SwapHorizIcon />
+						</IconButton>
+						{shopBox(preMatchRequest.targetShop)}
+					</Box>
+					<TextField
+						select
+						label="Mode"
+						size="small"
+						value={preMatchRequest.mode ?? "incremental"}
+						onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, mode: String(e.target.value) }))}
+						sx={{ width: 150, ...fieldSx }}
+					>
+						<MenuItem value="incremental">Incremental</MenuItem>
+						<MenuItem value="full">Full</MenuItem>
+					</TextField>
+					<TextField
+						label="Limit"
+						size="small"
+						type="number"
+						value={preMatchRequest.limit ?? 0}
+						onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, limit: Number(e.target.value) }))}
+						inputProps={{ min: 0 }}
+						sx={{ width: 110, ...fieldSx }}
+					/>
+					<TextField
+						label="Top N"
+						size="small"
+						type="number"
+						value={preMatchRequest.topN ?? 20}
+						onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, topN: Number(e.target.value) }))}
+						inputProps={{ min: 1, max: 50 }}
+						sx={{ width: 90, ...fieldSx }}
+					/>
+					<TextField
+						label="Resume job ID"
+						size="small"
+						placeholder="Optional"
+						value={preMatchRequest.resumeJobId ?? ""}
+						onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, resumeJobId: e.target.value }))}
+						InputLabelProps={{ shrink: true }}
+						sx={{ width: 220, ...fieldSx }}
+					/>
+					<FormControlLabel
+						control={
+							<Switch
+								checked={Boolean(preMatchRequest.useLlm)}
+								onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, useLlm: e.target.checked }))}
+							/>
+						}
+						label="Use LLM"
+						sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 14, fontWeight: 600 } }}
+					/>
+					<FormControlLabel
+						control={
+							<Switch
+								checked={Boolean(preMatchRequest.force)}
+								onChange={(e) => setPreMatchRequest((prev) => ({ ...prev, force: e.target.checked }))}
+							/>
+						}
+						label="Force re-match"
+						sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 14, fontWeight: 600 } }}
+					/>
+				</Box>
+
+				{preMatchError && (
+					<Alert severity="error" sx={{ mt: 2 }}>
+						{preMatchError}
+					</Alert>
+				)}
+
+				{preMatchStatus && (
+					<Box
+						sx={{
+							mt: 2,
+							pt: 1.75,
+							borderTop: `1px solid ${tokens.line}`,
+							display: "flex",
+							flexWrap: "wrap",
+							alignItems: "center",
+							gap: "8px 20px",
+							fontSize: 13.5,
+							color: tokens.ink2,
+						}}
+					>
+						<StatusPill status={preMatchStatus.status} />
+						<Box component="strong" sx={{ color: tokens.ink }}>
+							{shopLabel(preMatchStatus.sourceShop)} → {shopLabel(preMatchStatus.targetShop)}
+						</Box>
+						<Box sx={{ display: "flex", alignItems: "center", gap: 1, fontVariantNumeric: "tabular-nums" }}>
+							<LinearProgress
+								variant="determinate"
+								value={preMatchProgress}
+								aria-label="Pre-match progress"
+								sx={{ width: 160, height: 6, borderRadius: 6, bgcolor: tokens.line }}
+							/>
+							{preMatchStatus.processed}/{preMatchStatus.total}
+						</Box>
+						<span>
+							Matched <Box component="strong" sx={{ color: tokens.save }}>{preMatchStatus.matched}</Box> · Comparable{" "}
+							<Box component="strong" sx={{ color: tokens.ink }}>{preMatchStatus.comparable}</Box> · Failed{" "}
+							<Box component="strong" sx={{ color: BAD }}>{preMatchStatus.failed}</Box>
+						</span>
+						<span>
+							{preMatchStatus.mode} · Top {preMatchStatus.topN} · Limit {preMatchStatus.limitNum} · LLM{" "}
+							{preMatchStatus.useLlm ? "on" : "off"}
+						</span>
+						<span>Updated {shortDateTime(preMatchStatus.updatedAt)}</span>
+						{preMatchJobId && <Box component="span" sx={{ fontFamily: MONO, fontSize: 12 }}>Job {preMatchJobId}</Box>}
+						<Button
+							variant="outlined"
+							onClick={() => void refreshPreMatchStatus()}
+							disabled={statusRefreshing}
+							startIcon={<RefreshIcon />}
+							sx={{ height: 36 }}
+						>
+							Refresh status
+						</Button>
+						{preMatchStatus.errorMessage && (
+							<Box sx={{ flexBasis: "100%", color: BAD }}>Error: {preMatchStatus.errorMessage}</Box>
+						)}
+					</Box>
+				)}
+			</Section>
+
+			<Section title="Match jobs">
+				<Box sx={{ mb: 2 }}>{matchJobFilters}</Box>
+				{matchJobsError && (
+					<Alert severity="error" sx={{ mb: 2 }}>
+						{matchJobsError}
+					</Alert>
+				)}
+				<DataGrid
+					rows={matchJobs}
+					columns={matchJobColumns}
+					getRowId={(row) => row.id}
+					autoHeight
+					loading={matchJobsLoading}
+					rowCount={matchJobsTotal}
+					paginationMode="server"
+					paginationModel={matchJobsPagination}
+					onPaginationModelChange={(model) => setMatchJobsPagination(model)}
+					pageSizeOptions={[10, 20, 50]}
+					disableRowSelectionOnClick
+					sx={gridSx}
+				/>
+			</Section>
+
+			<Section title="Match review" action={<Hint>Score range {reviewScoreMin.toFixed(2)}–{reviewScoreMax.toFixed(2)}</Hint>}>
+				{reviewError && (
+					<Alert severity="error" sx={{ mb: 2 }}>
+						{reviewError}
+					</Alert>
+				)}
+				<DataGrid
+					rows={reviewItems}
+					columns={reviewColumns}
+					getRowId={(row) => row.matchId}
+					autoHeight
+					rowHeight={84}
+					loading={reviewLoading}
+					rowCount={reviewTotal}
+					paginationMode="server"
+					paginationModel={reviewPagination}
+					onPaginationModelChange={(model) => setReviewPagination(model)}
+					pageSizeOptions={[10, 20, 50]}
+					disableRowSelectionOnClick
+					sx={{ ...gridSx, "& .MuiDataGrid-cell": { display: "flex", alignItems: "center" } }}
+				/>
+			</Section>
+		</>
+	);
+
+	return (
+		<Box sx={{ display: "flex", flexDirection: "column", gap: { xs: 1.5, sm: 2.5 } }}>
+			<Box
+				sx={{
+					display: "flex",
+					flexWrap: "wrap",
+					alignItems: "center",
+					justifyContent: "space-between",
+					gap: { xs: 1.5, sm: 2 },
+				}}
+			>
+				<Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: { xs: 1.5, sm: 3 }, flex: { xs: "1 1 100%", sm: "0 1 auto" } }}>
+					<Typography
+						component="h1"
+						sx={{
+							fontFamily: DISPLAY_FONT,
+							fontWeight: 800,
+							fontSize: { xs: 24, sm: 34 },
+							letterSpacing: { xs: "-0.02em", sm: "-0.03em" },
+							lineHeight: 1.12,
+							flex: { xs: 1, sm: "none" },
+						}}
+					>
+						Admin
+					</Typography>
+					{isXs && adminTab === "schedules" && (
+						<IconButton
+							aria-label="Refresh schedules and health"
+							onClick={refreshAll}
+							sx={{ width: 44, height: 44, border: `1px solid ${tokens.line}`, borderRadius: "12px", bgcolor: tokens.surface }}
+						>
+							<RefreshIcon />
+						</IconButton>
+					)}
+					<SegmentedControl
+						ariaLabel="Admin sections"
+						value={adminTab}
+						fullWidth={isXs}
+						sx={{ flex: { xs: "1 1 100%", sm: "none" } }}
+						options={[
+							{ value: "schedules", label: "Schedules" },
+							{ value: "prematch", label: "Pre-match" },
+						]}
+						onChange={(value) => navigate(value === "prematch" ? "/admin/prematch" : "/admin/schedules")}
+					/>
+				</Box>
+				{!isXs && adminTab === "schedules" && (
+					<Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
+						{cleanResult !== null && (
+							<Typography role="status" sx={{ fontSize: 13.5, color: tokens.save, fontWeight: 600 }}>
+								Deleted {cleanResult} rows
+							</Typography>
+						)}
+						{cleanError && (
+							<Typography role="alert" sx={{ fontSize: 13.5, color: BAD }}>
+								{cleanError}
+							</Typography>
+						)}
+						<Button variant="outlined" startIcon={<RefreshIcon />} onClick={refreshAll} sx={{ height: 44 }}>
+							Refresh
+						</Button>
+						<Button
+							variant="outlined"
+							disabled={cleanLoading}
+							onClick={() => setCleanConfirmOpen(true)}
+							sx={{ height: 44, color: tokens.promo, borderColor: "#E2C48A", "&:hover": { borderColor: tokens.promo, bgcolor: tokens.promoTint } }}
+						>
+							{cleanLoading ? "Cleaning…" : "Clean price history"}
+						</Button>
+					</Box>
+				)}
+			</Box>
+
+			{error && <Alert severity="error">{error}</Alert>}
+
+			<ConfirmSheet
+				open={cleanConfirmOpen}
+				title="Clean price history now?"
+				confirmLabel="Clean now"
+				onClose={() => setCleanConfirmOpen(false)}
+				onConfirm={runCleanNow}
+			>
+				<Typography sx={{ fontSize: 14, lineHeight: 1.5, color: tokens.ink2 }}>
+					Old price history rows are deleted permanently. Price trends older than the retention window
+					will be gone.
+				</Typography>
+			</ConfirmSheet>
+
+			{!isXs && adminTab === "schedules" && desktopSchedules}
+			{!isXs && adminTab === "prematch" && desktopPrematch}
+
+			{isXs && adminTab === "schedules" && (
+				<>
+					<Section
+						title="Health"
+						action={
+							<SegmentedControl
+								ariaLabel="Time range"
+								value={rangeHours}
+								height={34}
+								options={[
+									{ value: 24, label: isXs ? "24h" : "Last 24h" },
+									{ value: 168, label: isXs ? "7d" : "Last 7d" },
+									{ value: 720, label: isXs ? "30d" : "Last 30d" },
+								]}
+								onChange={(v) => setRangeHours(v)}
+							/>
+						}
+					>
+						<Box
+							sx={{
+								display: "grid",
+								gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" },
+								gap: { xs: 1, sm: 1.25 },
+								opacity: loadingHealth ? 0.6 : 1,
+							}}
+						>
+							<StatTile label="Total runs" value={String(health?.totalRuns ?? 0)} />
+							<StatTile label="Failed" value={String(health?.failedRuns ?? 0)} tone={health?.failedRuns ? "bad" : undefined} />
+							<StatTile label="Failure rate" value={health ? `${Math.round(health.failureRate * 100)}%` : "0%"} />
+							<StatTile label="Last failure" value={health?.lastFailureAtUtc ? shortDateTime(health.lastFailureAtUtc) : "—"} small />
+						</Box>
 						{health?.recentFailures?.length ? (
-							<Box sx={{ mt: 2 }}>
-								<Typography variant="subtitle2" color="text.secondary">
-									Recent failures
-								</Typography>
-								<Stack spacing={1} sx={{ mt: 1 }}>
+							<Box sx={{ mt: 1.75, borderTop: `1px solid ${tokens.line}`, pt: 1.25 }}>
+								<SubHeading>Recent failures</SubHeading>
+								<Box
+									component="ul"
+									sx={{
+										listStyle: "none",
+										m: 0,
+										p: 0,
+										display: "grid",
+										gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "repeat(2, minmax(0, 1fr))" },
+										columnGap: 3,
+									}}
+								>
 									{health.recentFailures.map((failure) => (
-										<Box key={`${failure.source}:${failure.jobName}:${failure.startTimeUtc}`}>
-											<Typography variant="body2" fontWeight={600}>
-												{failure.jobName} ({failure.source})
-											</Typography>
-											<Typography variant="caption" color="text.secondary">
-												{formatDateTime(failure.startTimeUtc)}{" "}
-												{failure.errorMessage ? `- ${failure.errorMessage}` : ""}
-											</Typography>
+										<Box
+											component="li"
+											key={`${failure.source}:${failure.jobName}:${failure.startTimeUtc}`}
+											sx={{ display: "flex", gap: 1.25, py: 1, borderTop: `1px solid ${tokens.line}`, "&:first-of-type": { borderTop: "none" } }}
+										>
+											<Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: BAD, mt: "6px", flexShrink: 0 }} />
+											<Box sx={{ minWidth: 0 }}>
+												<Typography sx={{ fontSize: 13.5, fontWeight: 600, overflowWrap: "anywhere" }}>{failure.jobName}</Typography>
+												<Typography sx={{ fontSize: 12.5, color: tokens.ink2 }}>
+													{failure.source} · {shortDateTime(failure.startTimeUtc)}
+												</Typography>
+												{failure.errorMessage && (
+													<Typography
+														title={failure.errorMessage}
+														sx={{
+															fontSize: 12.5,
+															color: tokens.ink2,
+															lineHeight: 1.4,
+															display: "-webkit-box",
+															WebkitLineClamp: 2,
+															WebkitBoxOrient: "vertical",
+															overflow: "hidden",
+															overflowWrap: "anywhere",
+														}}
+													>
+														{failure.errorMessage}
+													</Typography>
+												)}
+											</Box>
 										</Box>
 									))}
-								</Stack>
+								</Box>
 							</Box>
 						) : null}
-					</CardContent>
-						</Card>
-					</>
-				)}
+					</Section>
 
-				{adminTab === "prematch" && (
-					<Stack spacing={2}>
-						<Card variant="outlined">
-						<CardContent>
-							<Stack
-								direction={{ xs: "column", md: "row" }}
-								spacing={2}
-								alignItems={{ xs: "flex-start", md: "center" }}
-								justifyContent="space-between"
-							>
-								<Typography variant="h6" component="h3" fontWeight={700}>
-									Batch pre-match
-								</Typography>
-								<Stack direction="row" spacing={1}>
-									<Button
-										variant="contained"
-										onClick={runPreMatch}
-										disabled={preMatchLoading}
-									>
-										{preMatchLoading ? "Starting..." : "Run pre-match"}
-									</Button>
-								</Stack>
-							</Stack>
-
-							<Divider sx={{ my: 2 }} />
-
-							<Box sx={{ overflowX: "auto", pt: 1.5, pb: 0.5 }}>
-								<Stack
-									direction="row"
-									spacing={2}
-									alignItems="center"
-									flexWrap="nowrap"
-									sx={{ minWidth: "max-content" }}
-								>
-								<FormControl size="small" sx={{ minWidth: 160 }}>
-									<InputLabel id="pre-match-source-label">Source shop</InputLabel>
-									<Select
-										labelId="pre-match-source-label"
-										label="Source shop"
-										value={preMatchRequest.sourceShop}
-										onChange={(e) =>
-											setPreMatchRequest((prev) => ({
-												...prev,
-												sourceShop: Number(e.target.value),
-											}))
-										}
-									>
-										{SHOP_OPTIONS.map((option) => (
-											<MenuItem key={option.value} value={option.value}>
-												{option.label}
-											</MenuItem>
-										))}
-									</Select>
-								</FormControl>
-								<FormControl size="small" sx={{ minWidth: 160 }}>
-									<InputLabel id="pre-match-target-label">Target shop</InputLabel>
-									<Select
-										labelId="pre-match-target-label"
-										label="Target shop"
-										value={preMatchRequest.targetShop}
-										onChange={(e) =>
-											setPreMatchRequest((prev) => ({
-												...prev,
-												targetShop: Number(e.target.value),
-											}))
-										}
-									>
-										{SHOP_OPTIONS.map((option) => (
-											<MenuItem key={option.value} value={option.value}>
-												{option.label}
-											</MenuItem>
-										))}
-									</Select>
-								</FormControl>
-								<FormControl size="small" sx={{ minWidth: 160 }}>
-									<InputLabel id="pre-match-mode-label">Mode</InputLabel>
-									<Select
-										labelId="pre-match-mode-label"
-										label="Mode"
-										value={preMatchRequest.mode ?? "incremental"}
-										onChange={(e) =>
-											setPreMatchRequest((prev) => ({
-												...prev,
-												mode: String(e.target.value),
-											}))
-										}
-									>
-										<MenuItem value="incremental">Incremental</MenuItem>
-										<MenuItem value="full">Full</MenuItem>
-									</Select>
-								</FormControl>
-								<FormControl size="small" sx={{ minWidth: 220 }}>
-									<InputLabel id="pre-match-resume-label" shrink>
-										Resume Job ID
-									</InputLabel>
-									<OutlinedInput
-										label="Resume Job ID"
-										placeholder="Optional"
-										value={preMatchRequest.resumeJobId ?? ""}
-										onChange={(e) =>
-											setPreMatchRequest((prev) => ({
-												...prev,
-												resumeJobId: e.target.value,
-											}))
-										}
-										notched
-									/>
-								</FormControl>
-								<TextField
-									label="Limit"
-									size="small"
-									type="number"
-									value={preMatchRequest.limit ?? 0}
-									onChange={(e) =>
-										setPreMatchRequest((prev) => ({
-											...prev,
-											limit: Number(e.target.value),
-										}))
-									}
-									inputProps={{ min: 0 }}
-									sx={{ width: 120 }}
-								/>
-								<TextField
-									label="Top N"
-									size="small"
-									type="number"
-									value={preMatchRequest.topN ?? 20}
-									onChange={(e) =>
-										setPreMatchRequest((prev) => ({
-											...prev,
-											topN: Number(e.target.value),
-										}))
-									}
-									inputProps={{ min: 1, max: 50 }}
-									sx={{ width: 100 }}
-								/>
-								<FormControl size="small" sx={{ minWidth: 140 }}>
-									<InputLabel id="pre-match-llm-label">Use LLM</InputLabel>
-									<Select
-										labelId="pre-match-llm-label"
-										label="Use LLM"
-										value={preMatchRequest.useLlm ? "yes" : "no"}
-										onChange={(e) =>
-											setPreMatchRequest((prev) => ({
-												...prev,
-												useLlm: e.target.value === "yes",
-											}))
-										}
-									>
-										<MenuItem value="no">No</MenuItem>
-										<MenuItem value="yes">Yes</MenuItem>
-									</Select>
-								</FormControl>
-								<FormControl size="small" sx={{ minWidth: 160 }}>
-									<InputLabel id="pre-match-force-label">
-										Force re-match
-									</InputLabel>
-									<Select
-										labelId="pre-match-force-label"
-										label="Force re-match"
-										value={preMatchRequest.force ? "yes" : "no"}
-										onChange={(e) =>
-											setPreMatchRequest((prev) => ({
-												...prev,
-												force: e.target.value === "yes",
-											}))
-										}
-									>
-										<MenuItem value="no">No</MenuItem>
-										<MenuItem value="yes">Yes</MenuItem>
-									</Select>
-								</FormControl>
-								</Stack>
-							</Box>
-
-							{preMatchError && (
-								<Alert severity="error" sx={{ mt: 2 }}>
-									{preMatchError}
-								</Alert>
-							)}
-
-							{preMatchJobId && (
-								<Box sx={{ mt: 2 }}>
-									<Typography variant="subtitle2" color="text.secondary">
-										Job ID
-									</Typography>
-									<Typography variant="body2">{preMatchJobId}</Typography>
+					<Box
+						sx={{
+							display: "grid",
+							gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1.6fr) minmax(0, 1fr)" },
+							gap: { xs: 1.5, sm: 2.5 },
+							alignItems: "start",
+						}}
+					>
+						<Section title={`Jobs · ${schedules.length}`} flush action={!isXs ? <Hint>Select a job to see its runs</Hint> : undefined}>
+							{loadingSchedules && schedules.length === 0 ? (
+								<Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+									<CircularProgress size={24} />
 								</Box>
-							)}
-
-							{preMatchStatus && (
-								<Box sx={{ mt: 2 }}>
-									<Typography variant="subtitle2" color="text.secondary">
-										Status
-									</Typography>
-									<Stack spacing={0.5}>
-										<Typography variant="body2">
-											State: {preMatchStatus.status}
-										</Typography>
-										<Typography variant="body2">
-											{shopLabel(preMatchStatus.sourceShop)} →{" "}
-											{shopLabel(preMatchStatus.targetShop)}
-										</Typography>
-										<Typography variant="body2">
-											Mode: {preMatchStatus.mode}, Top N: {preMatchStatus.topN},
-											{" "}Limit: {preMatchStatus.limitNum}
-										</Typography>
-										<Typography variant="body2">
-											Use LLM: {preMatchStatus.useLlm ? "Yes" : "No"}
-										</Typography>
-										<Typography variant="body2">
-											Progress: {preMatchStatus.processed}/{preMatchStatus.total}
-										</Typography>
-										<Typography variant="body2">
-											Matched: {preMatchStatus.matched}, Comparable:{" "}
-											{preMatchStatus.comparable}, Failed:{" "}
-											{preMatchStatus.failed}
-										</Typography>
-										<Typography variant="body2">
-											Updated: {formatDateTime(preMatchStatus.updatedAt)}
-										</Typography>
-										{preMatchStatus.errorMessage ? (
-											<Typography variant="body2" color="error">
-												Error: {preMatchStatus.errorMessage}
-											</Typography>
-										) : null}
-									</Stack>
-								</Box>
-							)}
-						</CardContent>
-						</Card>
-
-						<Card variant="outlined">
-						<CardContent>
-							<Stack
-								direction={{ xs: "column", md: "row" }}
-								spacing={2}
-								alignItems={{ xs: "flex-start", md: "center" }}
-								justifyContent="space-between"
-							>
-								<Typography variant="h6" component="h3" fontWeight={700}>
-									Match jobs
-								</Typography>
-							</Stack>
-
-							<Divider sx={{ my: 2 }} />
-
-							<Stack
-								direction={{ xs: "column", md: "row" }}
-								spacing={2}
-								alignItems={{ xs: "stretch", md: "center" }}
-								flexWrap="wrap"
-							>
-								<FormControl size="small" sx={{ minWidth: 220 }}>
-									<InputLabel id="match-jobs-status-label" shrink>
-										Status
-									</InputLabel>
-									<Select
-										labelId="match-jobs-status-label"
-										label="Status"
-										multiple
-										displayEmpty
-										value={matchJobsFilters.statuses}
-										onChange={(e) => {
-											const value = e.target.value;
-											setMatchJobsPagination((prev) => ({
-												...prev,
-												page: 0,
-											}));
-											setMatchJobsFilters((prev) => ({
-												...prev,
-												statuses:
-													typeof value === "string" ? value.split(",") : value,
-											}));
-										}}
-										input={<OutlinedInput label="Status" notched />}
-										renderValue={(selected) => {
-											const list = selected as string[];
-											if (list.length === 0) {
-												return (
-													<Typography color="text.disabled">
-														Optional
-													</Typography>
-												);
-											}
-											return list.join(", ");
-										}}
-									>
-										{["queued", "running", "completed", "failed"].map((status) => (
-											<MenuItem key={status} value={status}>
-												<Checkbox
-													checked={matchJobsFilters.statuses.includes(status)}
-												/>
-												<ListItemText primary={status} />
-											</MenuItem>
-										))}
-									</Select>
-								</FormControl>
-								<TextField
-									label="Updated from"
-									size="small"
-									type="datetime-local"
-									InputLabelProps={{ shrink: true }}
-									value={matchJobsFilters.updatedFrom}
-									onChange={(e) =>
-										{
-											setMatchJobsPagination((prev) => ({
-												...prev,
-												page: 0,
-											}));
-											setMatchJobsFilters((prev) => ({
-												...prev,
-												updatedFrom: e.target.value,
-											}));
-										}
-									}
-									sx={{
-										minWidth: 220,
-										"& input": {
-											color: matchJobsFilters.updatedFrom
-												? "text.primary"
-												: "text.disabled",
-										},
-										"& input::-webkit-datetime-edit": {
-											color: matchJobsFilters.updatedFrom
-												? "inherit"
-												: "text.disabled",
-										},
-									}}
-								/>
-								<TextField
-									label="Updated to"
-									size="small"
-									type="datetime-local"
-									InputLabelProps={{ shrink: true }}
-									value={matchJobsFilters.updatedTo}
-									onChange={(e) =>
-										{
-											setMatchJobsPagination((prev) => ({
-												...prev,
-												page: 0,
-											}));
-											setMatchJobsFilters((prev) => ({
-												...prev,
-												updatedTo: e.target.value,
-											}));
-										}
-									}
-									sx={{
-										minWidth: 220,
-										"& input": {
-											color: matchJobsFilters.updatedTo
-												? "text.primary"
-												: "text.disabled",
-										},
-										"& input::-webkit-datetime-edit": {
-											color: matchJobsFilters.updatedTo
-												? "inherit"
-												: "text.disabled",
-										},
-									}}
-								/>
-								<FormControl size="small" sx={{ minWidth: 160 }}>
-									<InputLabel id="match-jobs-sortby-label">Sort by</InputLabel>
-									<Select
-										labelId="match-jobs-sortby-label"
-										label="Sort by"
-										value={matchJobsFilters.sortBy}
-										onChange={(e) =>
-											{
-												setMatchJobsPagination((prev) => ({
-													...prev,
-													page: 0,
-												}));
-												setMatchJobsFilters((prev) => ({
-													...prev,
-													sortBy: e.target.value as "updatedAt" | "createdAt",
-												}));
-											}
-										}
-									>
-										<MenuItem value="updatedAt">Updated</MenuItem>
-										<MenuItem value="createdAt">Created</MenuItem>
-									</Select>
-								</FormControl>
-								<FormControl size="small" sx={{ minWidth: 140 }}>
-									<InputLabel id="match-jobs-sortdir-label">
-										Direction
-									</InputLabel>
-									<Select
-										labelId="match-jobs-sortdir-label"
-										label="Direction"
-										value={matchJobsFilters.sortDir}
-										onChange={(e) =>
-											{
-												setMatchJobsPagination((prev) => ({
-													...prev,
-													page: 0,
-												}));
-												setMatchJobsFilters((prev) => ({
-													...prev,
-													sortDir: e.target.value as "asc" | "desc",
-												}));
-											}
-										}
-									>
-										<MenuItem value="desc">Desc</MenuItem>
-										<MenuItem value="asc">Asc</MenuItem>
-									</Select>
-								</FormControl>
-							</Stack>
-
-							{matchJobsError && (
-								<Alert severity="error" sx={{ mt: 2 }}>
-									{matchJobsError}
-								</Alert>
-							)}
-
-							<Box sx={{ mt: 2 }}>
-								<DataGrid
-									rows={matchJobs}
-									columns={matchJobColumns}
-									getRowId={(row) => row.id}
-									autoHeight
-									loading={matchJobsLoading}
-									rowCount={matchJobsTotal}
-									paginationMode="server"
-									paginationModel={matchJobsPagination}
-									onPaginationModelChange={(model) => {
-										setMatchJobsPagination(model);
-									}}
-									pageSizeOptions={[10, 20, 50]}
-									disableRowSelectionOnClick
-								/>
-							</Box>
-						</CardContent>
-						</Card>
-
-						<Card variant="outlined">
-						<CardContent>
-							<Stack
-								direction={{ xs: "column", md: "row" }}
-								spacing={2}
-								alignItems={{ xs: "flex-start", md: "center" }}
-								justifyContent="space-between"
-							>
-								<Box>
-									<Typography variant="h6" component="h3" fontWeight={700}>
-										Match review
-									</Typography>
-									<Typography variant="body2" color="text.secondary">
-										Score range: {reviewScoreMin.toFixed(2)}–{reviewScoreMax.toFixed(2)}
-									</Typography>
-								</Box>
-							</Stack>
-
-							<Divider sx={{ my: 2 }} />
-
-							{reviewError && (
-								<Alert severity="error" sx={{ mt: 2 }}>
-									{reviewError}
-								</Alert>
-							)}
-
-							<Box sx={{ mt: 2 }}>
-								<DataGrid
-									rows={reviewItems}
-									columns={reviewColumns}
-									getRowId={(row) => row.matchId}
-									autoHeight
-									rowHeight={92}
-									loading={reviewLoading}
-									rowCount={reviewTotal}
-									paginationMode="server"
-									paginationModel={reviewPagination}
-									onPaginationModelChange={(model) => {
-										setReviewPagination(model);
-									}}
-									pageSizeOptions={[10, 20, 50]}
-									disableRowSelectionOnClick
-									sx={{
-										"& .MuiDataGrid-columnHeaders": {
-											minHeight: 56,
-											maxHeight: 56,
-										},
-										"& .MuiDataGrid-cell": {
-											py: 1.5,
-											alignItems: "center",
-										},
-										"& .MuiDataGrid-row": {
-											maxHeight: "none",
-										},
-									}}
-								/>
-							</Box>
-						</CardContent>
-						</Card>
-					</Stack>
-				)}
-
-				{adminTab === "schedules" && (
-					<>
-						<Card variant="outlined">
-					<CardContent>
-						<Typography variant="h6" component="h3" fontWeight={700} sx={{ mb: 2 }}>
-							Schedules
-						</Typography>
-						<DataGrid
-							rows={schedules}
-							columns={scheduleColumns}
-							getRowId={(row) => scheduleKey(row)}
-							autoHeight
-							loading={loadingSchedules}
-							pageSizeOptions={[10, 25, 50]}
-							initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
-							rowSelectionModel={selectionModel}
-							onRowSelectionModelChange={(model) => {
-								const nextId =
-									model.ids.size > 0
-										? Array.from(model.ids)[0]
-										: null;
-								const nextKey = nextId ? String(nextId) : null;
-								setSelectedKey(nextKey);
-							}}
-						/>
-					</CardContent>
-						</Card>
-
-						<Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-					<Card variant="outlined" sx={{ flex: 1 }}>
-						<CardContent>
-							<Typography variant="h6" component="h3" fontWeight={700} sx={{ mb: 1 }}>
-								Selected job
-							</Typography>
-							{selectedSchedule ? (
-								<Stack spacing={1}>
-									<Typography variant="subtitle2" color="text.secondary">
-										{selectedSchedule.jobName} ({selectedSchedule.source})
-									</Typography>
-									<Typography variant="body2">
-										Schedule: {selectedSchedule.scheduleExpression || "-"}
-									</Typography>
-									<Typography variant="body2">
-										Timezone: {selectedSchedule.timezone}
-									</Typography>
-									<Typography variant="body2">
-										Next run: {formatDateTime(selectedSchedule.nextFireTimeUtc || null)}
-									</Typography>
-									<Typography variant="body2">
-										Last run: {formatDateTime(selectedSchedule.lastRunTimeUtc || null)}
-									</Typography>
-									<Typography variant="body2">
-										Status: {selectedSchedule.lastRunStatus || "-"}
-									</Typography>
-									<Typography variant="body2">
-										Last error: {selectedSchedule.lastRunErrorMessage || "-"}
-									</Typography>
-								</Stack>
 							) : (
-								<Typography variant="body2" color="text.secondary">
-									Select a schedule to view details.
-								</Typography>
+								<Box sx={{ overflowX: "auto" }}>
+									<Box sx={{ minWidth: { xs: 0, md: 620 } }}>
+										{!isXs && (
+											<Box sx={{ ...jobGridSx, py: 1.25, bgcolor: tokens.imageGround, borderTop: `1px solid ${tokens.line}`, borderBottom: `1px solid ${tokens.line}`, fontSize: 12, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: tokens.ink2 }}>
+												<span>Job</span>
+												<span>Status</span>
+												<span>Next run</span>
+												<span>Last run</span>
+											</Box>
+										)}
+										{schedules.slice(schedPaging.page * schedPaging.pageSize, (schedPaging.page + 1) * schedPaging.pageSize).map((s, i) => {
+											const key = scheduleKey(s);
+											const selected = key === selectedKey;
+											return (
+												<ButtonBase
+													key={key}
+													onClick={() => setSelectedKey(key)}
+													aria-pressed={selected}
+													sx={{
+														...(isXs
+															? { display: "flex", alignItems: "center", gap: 1.25, px: 1.75, py: 1.25 }
+															: { ...jobGridSx, py: 1.5 }),
+														width: "100%",
+														minHeight: 60,
+														textAlign: "left",
+														color: tokens.ink,
+														borderTop: isXs && i === 0 ? `1px solid ${tokens.line}` : "none",
+														borderBottom: `1px solid ${tokens.line}`,
+														bgcolor: selected ? tokens.brandTint : tokens.surface,
+														boxShadow: selected ? `inset 3px 0 0 ${tokens.brand}` : "none",
+														"&:hover": { bgcolor: selected ? tokens.brandTint : tokens.imageGround },
+														"&.Mui-focusVisible": { outline: `2px solid ${tokens.brand}`, outlineOffset: -2 },
+													}}
+												>
+													<Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.25 }}>
+														<Typography sx={{ fontSize: { xs: 13.5, sm: 14 }, fontWeight: 600, overflowWrap: "anywhere" }}>
+															{s.jobName}
+														</Typography>
+														<Typography sx={{ fontSize: 12.5, color: tokens.ink2 }}>
+															{s.source}
+															{isXs && ` · Next ${shortDateTime(s.nextFireTimeUtc)}`}
+														</Typography>
+													</Box>
+													<Box>
+														<StatusPill status={jobStatus(s)} />
+													</Box>
+													{!isXs && <Typography sx={{ fontSize: 13.5 }}>{shortDateTime(s.nextFireTimeUtc)}</Typography>}
+													{!isXs && <Typography sx={{ fontSize: 13.5 }}>{shortDateTime(s.lastRunTimeUtc)}</Typography>}
+												</ButtonBase>
+											);
+										})}
+									</Box>
+								</Box>
 							)}
-						</CardContent>
-					</Card>
+							{isXs && schedules.length > 0 && (
+									<PhonePager
+										page={schedPaging.page}
+										pageSize={schedPaging.pageSize}
+										total={schedules.length}
+										pageSizes={[10, 25, 50]}
+										onChange={setSchedPaging}
+									/>
+								)}
+							</Section>
 
-					<Card variant="outlined" sx={{ flex: 1 }}>
-						<CardContent>
-							<Stack
-								direction="row"
-								alignItems="center"
-								justifyContent="space-between"
-								sx={{ mb: 1 }}
-							>
-								<Typography variant="h6" component="h3" fontWeight={700}>
-									Trend
-								</Typography>
-								<FormControl size="small" sx={{ minWidth: 120 }}>
-									<InputLabel id="trend-bucket-label">Bucket</InputLabel>
-									<Select
-										labelId="trend-bucket-label"
-										label="Bucket"
-										value={trendBucket}
-										onChange={(e) =>
-											setTrendBucket(e.target.value as "day" | "hour")
-										}
+							<Section title="Selected job">
+							{selectedSchedule ? (
+								<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+									<Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}>
+										<Typography sx={{ fontSize: 15, fontWeight: 700, overflowWrap: "anywhere" }}>
+											{selectedSchedule.jobName}
+										</Typography>
+										<StatusPill status={jobStatus(selectedSchedule)} />
+									</Box>
+									<Box
+										sx={{
+											display: "grid",
+											gridTemplateColumns: "auto minmax(0, 1fr)",
+											gap: "8px 14px",
+											p: 1.5,
+											bgcolor: tokens.ground,
+											borderRadius: "12px",
+											fontSize: 13,
+										}}
 									>
-										<MenuItem value="day">Daily</MenuItem>
-										<MenuItem value="hour">Hourly</MenuItem>
-									</Select>
-								</FormControl>
-							</Stack>
-							<ResponsiveContainer width="100%" height={260}>
-								<LineChart data={trendData}>
-									<CartesianGrid strokeDasharray="3 3" />
-									<XAxis dataKey="label" tick={{ fontSize: 11 }} />
-									<YAxis
-										tickFormatter={(value) => `${Math.round(value * 100)}%`}
-										domain={[0, 1]}
-										tick={{ fontSize: 11 }}
-									/>
-									<Tooltip
-										formatter={(value) =>
-											`${Math.round(Number(value) * 100)}%`
-										}
-									/>
-									<Line
-										type="monotone"
-										dataKey="failureRate"
-										stroke="#ef4444"
-										strokeWidth={2}
-										dot={false}
-									/>
-								</LineChart>
-							</ResponsiveContainer>
-						</CardContent>
-					</Card>
-						</Stack>
+										<Box component="span" sx={{ color: tokens.ink2 }}>Source</Box>
+										<Box component="span" sx={{ fontWeight: 600 }}>{selectedSchedule.source}</Box>
+										<Box component="span" sx={{ color: tokens.ink2 }}>Schedule</Box>
+										<Box component="span" sx={{ fontWeight: 600, fontFamily: MONO, fontSize: 12.5, overflowWrap: "anywhere" }}>
+											{selectedSchedule.scheduleExpression || "-"}
+										</Box>
+										<Box component="span" sx={{ color: tokens.ink2 }}>Time zone</Box>
+										<Box component="span" sx={{ fontWeight: 600 }}>{selectedSchedule.timezone}</Box>
+										<Box component="span" sx={{ color: tokens.ink2 }}>Next run</Box>
+										<Box component="span" sx={{ fontWeight: 600 }}>{shortDateTime(selectedSchedule.nextFireTimeUtc)}</Box>
+										<Box component="span" sx={{ color: tokens.ink2 }}>Last run</Box>
+										<Box component="span" sx={{ fontWeight: 600 }}>
+											{shortDateTime(selectedSchedule.lastRunTimeUtc)}
+											{selectedSchedule.lastRunDurationMs != null && ` · ${formatDuration(selectedSchedule.lastRunDurationMs)}`}
+										</Box>
+									</Box>
+									{selectedSchedule.lastRunErrorMessage && (
+										<Box
+											sx={{
+												p: 1.25,
+												borderRadius: "12px",
+												bgcolor: BAD_TINT,
+												color: "#8F1D14",
+												fontFamily: MONO,
+												fontSize: 12,
+												lineHeight: 1.5,
+												overflowWrap: "anywhere",
+											}}
+										>
+											{selectedSchedule.lastRunErrorMessage}
+										</Box>
+									)}
+									{stats && (
+										<Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1 }}>
+											<StatTile label="Runs" value={String(stats.totalRuns)} compact />
+											<StatTile label="Failed" value={String(stats.failedRuns)} tone={stats.failedRuns ? "bad" : undefined} compact />
+											<StatTile label="Failure rate" value={`${Math.round(stats.failureRate * 100)}%`} compact />
+											<StatTile label="Avg duration" value={formatDuration(stats.averageDurationMs)} compact />
+										</Box>
+									)}
+									{runStrip.length > 0 && (
+										<Box>
+											<SubHeading>Last {runStrip.length} runs</SubHeading>
+											<Box
+												role="img"
+												aria-label={`Last ${runStrip.length} runs: ${runStrip.filter((r) => r.status === "fail").length} failed`}
+												sx={{ display: "flex", gap: "3px", flexWrap: "wrap" }}
+											>
+												{runStrip.map((r) => (
+													<Box
+														key={r.id}
+														title={`${shortDateTime(r.startTime)} · ${r.status}`}
+														sx={{
+															width: 10,
+															height: 20,
+															borderRadius: "3px",
+															bgcolor: r.status === "fail" ? BAD : r.status === "success" ? "#7FC79E" : tokens.lineStrong,
+														}}
+													/>
+												))}
+											</Box>
+										</Box>
+									)}
+								</Box>
+							) : (
+								<Hint>Select a job to see its details.</Hint>
+							)}
+						</Section>
+					</Box>
 
-						<Card variant="outlined">
-					<CardContent>
-						<Typography variant="h6" component="h3" fontWeight={700} sx={{ mb: 2 }}>
-							Recent runs
-						</Typography>
+					<Section
+						title="Failure-rate trend"
+						action={
+							<SegmentedControl
+								ariaLabel="Trend bucket"
+								value={trendBucket}
+								height={34}
+								options={[
+									{ value: "day", label: "Daily" },
+									{ value: "hour", label: "Hourly" },
+								]}
+								onChange={(v) => setTrendBucket(v)}
+							/>
+						}
+					>
+						<ResponsiveContainer width="100%" height={isXs ? 200 : 260}>
+							<LineChart data={trendData} margin={{ left: -16, right: 8, top: 8 }}>
+								<CartesianGrid strokeDasharray="3 3" stroke={tokens.line} />
+								<XAxis dataKey="label" tick={{ fontSize: 11, fill: tokens.ink2 }} />
+								<YAxis
+									tickFormatter={(value) => `${Math.round(value * 100)}%`}
+									domain={[0, 1]}
+									tick={{ fontSize: 11, fill: tokens.ink2 }}
+								/>
+								<Tooltip formatter={(value) => `${Math.round(Number(value) * 100)}%`} />
+								<Line type="monotone" dataKey="failureRate" stroke={BAD} strokeWidth={2} dot={false} />
+							</LineChart>
+						</ResponsiveContainer>
+					</Section>
+
+					<Section title="Recent runs" flush={isXs}>
 						{loadingRuns || loadingStats ? (
-							<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+							<Box sx={{ display: "flex", alignItems: "center", gap: 1, p: isXs ? 2 : 0 }}>
 								<CircularProgress size={20} />
 								<Typography variant="body2">Loading runs...</Typography>
 							</Box>
+						) : isXs ? (
+							runs.length === 0 ? (
+								<Box sx={{ px: 2, pb: 2 }}>
+									<Hint>No runs yet.</Hint>
+								</Box>
+							) : (
+								<>
+									{runs.slice(runsPaging.page * runsPaging.pageSize, (runsPaging.page + 1) * runsPaging.pageSize).map((r) => (
+										<Box key={r.id} sx={{ px: 1.75, py: 1.25, borderTop: `1px solid ${tokens.line}`, display: "flex", flexDirection: "column", gap: 0.5 }}>
+											<Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+												<Typography sx={{ fontSize: 13.5, fontWeight: 600 }}>{shortDateTime(r.startTime)}</Typography>
+												<StatusPill status={r.status} />
+											</Box>
+											<Typography sx={{ fontSize: 12.5, color: tokens.ink2 }}>
+												{formatDuration(r.durationMs)}
+												{r.environment ? ` · ${r.environment}` : ""}
+											</Typography>
+											{r.errorMessage && (
+												<Typography sx={{ fontSize: 12, color: "#8F1D14", fontFamily: MONO, overflowWrap: "anywhere", lineHeight: 1.45 }}>
+													{r.errorMessage}
+												</Typography>
+											)}
+										</Box>
+									))}
+									<PhonePager
+										page={runsPaging.page}
+										pageSize={runsPaging.pageSize}
+										total={runs.length}
+										pageSizes={[10, 25, 50]}
+										onChange={setRunsPaging}
+									/>
+								</>
+							)
 						) : (
 							<DataGrid
 								rows={runs}
@@ -1602,52 +1770,712 @@ export default function AdminJobsPage() {
 									pagination: { paginationModel: { pageSize: 10, page: 0 } },
 								}}
 								disableRowSelectionOnClick
+								sx={gridSx}
 							/>
 						)}
-						{stats && (
-							<Box sx={{ mt: 2 }}>
-								<Divider sx={{ mb: 2 }} />
-								<Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-									<Stack spacing={0.5}>
-										<Typography variant="subtitle2" color="text.secondary">
-											Total
-										</Typography>
-										<Typography variant="h6" component="h3" fontWeight={700}>
-											{stats.totalRuns}
-										</Typography>
-									</Stack>
-									<Stack spacing={0.5}>
-										<Typography variant="subtitle2" color="text.secondary">
-											Failed
-										</Typography>
-										<Typography variant="h6" component="h3" fontWeight={700}>
-											{stats.failedRuns}
-										</Typography>
-									</Stack>
-									<Stack spacing={0.5}>
-										<Typography variant="subtitle2" color="text.secondary">
-											Failure rate
-										</Typography>
-										<Typography variant="h6" component="h3" fontWeight={700}>
-											{Math.round(stats.failureRate * 100)}%
-										</Typography>
-									</Stack>
-									<Stack spacing={0.5}>
-										<Typography variant="subtitle2" color="text.secondary">
-											Avg duration
-										</Typography>
-										<Typography variant="h6" component="h3" fontWeight={700}>
-											{formatDuration(stats.averageDurationMs)}
-										</Typography>
-									</Stack>
-								</Stack>
-							</Box>
+					</Section>
+
+					<Section title="Maintenance">
+						<Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
+							<Typography sx={{ fontSize: 13.5, color: tokens.ink2, lineHeight: 1.5, flex: "1 1 260px" }}>
+								Delete old price history rows now. CleanPriceHistoryJob also does this on its schedule.
+							</Typography>
+							<Button
+								variant="outlined"
+								disabled={cleanLoading}
+								onClick={() => setCleanConfirmOpen(true)}
+								sx={{
+									height: 44,
+									flex: { xs: "1 1 100%", sm: "none" },
+									color: tokens.promo,
+									borderColor: "#E2C48A",
+									"&:hover": { borderColor: tokens.promo, bgcolor: tokens.promoTint },
+								}}
+							>
+								{cleanLoading ? "Cleaning…" : "Clean price history"}
+							</Button>
+						</Box>
+						{cleanResult !== null && (
+							<Typography role="status" sx={{ mt: 1, fontSize: 13.5, color: tokens.save, fontWeight: 600 }}>
+								Deleted {cleanResult} rows.
+							</Typography>
 						)}
-					</CardContent>
-						</Card>
-					</>
-				)}
-			</Stack>
+						{cleanError && (
+							<Typography role="alert" sx={{ mt: 1, fontSize: 13.5, color: BAD }}>
+								{cleanError}
+							</Typography>
+						)}
+					</Section>
+
+				</>
+			)}
+
+			{isXs && adminTab === "prematch" && (
+				<>
+					<Box
+						sx={{
+							display: "grid",
+							gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "340px minmax(0, 1fr)" },
+							gap: { xs: 1.5, sm: 2.5 },
+							alignItems: "start",
+						}}
+					>
+						<Section title="Batch pre-match">
+							<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+								<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+									{shopBox(preMatchRequest.sourceShop)}
+									<IconButton
+										aria-label="Swap source and target shop"
+										onClick={() =>
+											setPreMatchRequest((prev) => ({ ...prev, sourceShop: prev.targetShop, targetShop: prev.sourceShop }))
+										}
+										sx={{ width: 44, height: 44, flexShrink: 0, border: `1px solid ${tokens.line}`, borderRadius: "12px", color: tokens.brand }}
+									>
+										<SwapHorizIcon />
+									</IconButton>
+									{shopBox(preMatchRequest.targetShop)}
+								</Box>
+
+								{isXs ? (
+									<>
+										<ButtonBase
+											onClick={() => setOptionsOpen((v) => !v)}
+											aria-expanded={optionsOpen}
+											sx={{ minHeight: 44, display: "flex", justifyContent: "space-between", textAlign: "left", borderRadius: "10px", px: 0.25 }}
+										>
+											<Box>
+												<Typography sx={{ fontSize: 13.5, fontWeight: 600 }}>Options</Typography>
+												<Typography sx={{ fontSize: 12, color: tokens.ink2 }}>
+													{preMatchRequest.mode === "full" ? "Full" : "Incremental"} · Limit {preMatchRequest.limit ?? 0} · Top{" "}
+													{preMatchRequest.topN ?? 20} · LLM {preMatchRequest.useLlm ? "on" : "off"}
+													{preMatchRequest.force ? " · Force" : ""}
+												</Typography>
+											</Box>
+											<ExpandMoreIcon
+												aria-hidden="true"
+												sx={{ color: tokens.ink2, transition: "transform .15s", transform: optionsOpen ? "rotate(180deg)" : "none" }}
+											/>
+										</ButtonBase>
+										<Collapse in={optionsOpen}>{preMatchOptions}</Collapse>
+									</>
+								) : (
+									preMatchOptions
+								)}
+
+								<Button variant="contained" onClick={runPreMatch} disabled={preMatchLoading} sx={{ height: 48, fontSize: 15, fontWeight: 700 }}>
+									{preMatchLoading ? "Starting..." : "Run pre-match"}
+								</Button>
+
+								{preMatchError && <Alert severity="error">{preMatchError}</Alert>}
+
+								{preMatchStatus && (
+									<Box sx={{ p: 1.5, borderRadius: "12px", bgcolor: tokens.ground, display: "flex", flexDirection: "column", gap: 1 }}>
+										<Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+											<Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+												{shopLabel(preMatchStatus.sourceShop)} → {shopLabel(preMatchStatus.targetShop)}
+											</Typography>
+											<StatusPill status={preMatchStatus.status} />
+										</Box>
+										<LinearProgress
+											variant="determinate"
+											value={preMatchProgress}
+											aria-label="Pre-match progress"
+											sx={{ height: 6, borderRadius: 6, bgcolor: tokens.line }}
+										/>
+										<Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 1, fontSize: 12.5, color: tokens.ink2, fontVariantNumeric: "tabular-nums" }}>
+											<span>
+												{preMatchStatus.processed.toLocaleString()} / {preMatchStatus.total.toLocaleString()}
+											</span>
+											<span>
+												<Box component="strong" sx={{ color: tokens.save }}>{preMatchStatus.matched}</Box> same ·{" "}
+												<Box component="strong" sx={{ color: tokens.ink }}>{preMatchStatus.comparable}</Box> comparable ·{" "}
+												<Box component="strong" sx={{ color: BAD }}>{preMatchStatus.failed}</Box> failed
+											</span>
+										</Box>
+										<Typography sx={{ fontSize: 12, color: tokens.ink2 }}>
+											{preMatchStatus.mode} · Top {preMatchStatus.topN} · Limit {preMatchStatus.limitNum} · LLM{" "}
+											{preMatchStatus.useLlm ? "on" : "off"} · updated {shortDateTime(preMatchStatus.updatedAt)}
+										</Typography>
+										{preMatchJobId && (
+											<Typography sx={{ fontSize: 11.5, color: tokens.ink2, fontFamily: MONO, overflowWrap: "anywhere" }}>
+												Job {preMatchJobId}
+											</Typography>
+										)}
+										{preMatchStatus.errorMessage && (
+											<Typography sx={{ fontSize: 12.5, color: BAD }}>Error: {preMatchStatus.errorMessage}</Typography>
+										)}
+										<Button
+											variant="outlined"
+											onClick={() => void refreshPreMatchStatus()}
+											disabled={statusRefreshing}
+											startIcon={<RefreshIcon />}
+											sx={{ height: 40, alignSelf: "flex-start" }}
+										>
+											Refresh status
+										</Button>
+									</Box>
+								)}
+							</Box>
+						</Section>
+
+						<Box sx={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
+							<Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 1, mx: 0.5 }}>
+								<Typography component="h2" sx={{ fontSize: 16, fontWeight: 700 }}>
+									To review{" "}
+									<Box component="span" sx={{ color: tokens.ink2, fontWeight: 600 }}>
+										· {reviewTotal}
+									</Box>
+								</Typography>
+								<Hint>
+									Score {reviewScoreMin.toFixed(2)}–{reviewScoreMax.toFixed(2)}
+								</Hint>
+							</Box>
+							{reviewError && <Alert severity="error">{reviewError}</Alert>}
+							{reviewLoading && reviewItems.length === 0 ? (
+								<Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+									<CircularProgress size={24} />
+								</Box>
+							) : reviewItems.length === 0 ? (
+								<Box sx={{ p: 3, textAlign: "center", bgcolor: tokens.surface, border: `1px dashed ${tokens.lineStrong}`, borderRadius: "16px", color: tokens.ink2, fontSize: 14 }}>
+									Nothing to review in this score range.
+								</Box>
+							) : (
+								reviewItems.map((row) => {
+									const edit = getReviewEdit(row);
+									const isSaving = reviewSavingIds.includes(row.matchId);
+									const isSame = edit.matchType === "same_product";
+									return (
+										<Box
+											component="article"
+											key={row.matchId}
+											sx={{
+												bgcolor: tokens.surface,
+												border: `1px solid ${tokens.line}`,
+												borderRadius: "16px",
+												p: { xs: 1.5, sm: 1.75 },
+												display: "flex",
+												flexDirection: "column",
+												gap: 1.5,
+												boxShadow: "0 1px 2px rgba(20,22,30,.04)",
+												opacity: reviewLoading ? 0.7 : 1,
+											}}
+										>
+											<Box
+												sx={{
+													display: "grid",
+													gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) 28px minmax(0, 1fr)" },
+													alignItems: "center",
+													gap: { xs: 0, sm: 1 },
+													border: { xs: `1px solid ${tokens.line}`, sm: "none" },
+													borderRadius: "12px",
+												}}
+											>
+												<MatchSide name={row.sourceName} shopName={row.sourceShopName} shopType={row.sourceShopType} imageUrl={row.sourceImageUrl} />
+												<SwapHorizIcon aria-hidden="true" sx={{ display: { xs: "none", sm: "block" }, color: tokens.ink2, justifySelf: "center" }} />
+												<Box sx={{ borderTop: { xs: `1px dashed ${tokens.line}`, sm: "none" } }}>
+													<MatchSide name={row.targetName} shopName={row.targetShopName} shopType={row.targetShopType} imageUrl={row.targetImageUrl} />
+												</Box>
+											</Box>
+											<Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: { xs: 1, sm: "10px 14px" } }}>
+												<Box sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 12.5, color: tokens.ink2, fontWeight: 600, flex: { xs: "1 1 100%", sm: "1 1 auto" } }}>
+													Score
+													<Box sx={{ width: 72, height: 6, borderRadius: 6, bgcolor: tokens.line, overflow: "hidden" }}>
+														<Box
+															sx={{
+																height: "100%",
+																width: `${Math.round(Math.max(0, Math.min(1, row.score)) * 100)}%`,
+																bgcolor: row.score >= 0.8 ? tokens.save : row.score >= 0.65 ? tokens.brand : tokens.promo,
+															}}
+														/>
+													</Box>
+													<Box component="strong" sx={{ color: tokens.ink, fontVariantNumeric: "tabular-nums" }}>
+														{row.score.toFixed(2)}
+													</Box>
+													<Box component="span" sx={{ fontWeight: 500 }}>
+														{row.method ? `· ${row.method}` : ""} · {shortDateTime(row.updatedAt)}
+													</Box>
+												</Box>
+												<SegmentedControl
+													ariaLabel="Match type"
+													value={edit.matchType}
+													fullWidth={isXs}
+													sx={{ flex: { xs: "1 1 100%", sm: "none" } }}
+													options={[
+														{ value: "same_product", label: "Same product" },
+														{ value: "comparable", label: "Comparable" },
+													]}
+													onChange={(v) => setReviewEdit(row, { matchType: v })}
+												/>
+												{!isSame && (
+													<TextField
+														label="Score"
+														size="small"
+														type="number"
+														value={edit.score}
+														onChange={(e) => setReviewEdit(row, { score: e.target.value })}
+														inputProps={{ min: 0.5, max: 0.9999, step: 0.0001 }}
+														sx={{ width: { xs: "auto", sm: 120 }, flex: { xs: 1, sm: "none" }, ...fieldSx }}
+													/>
+												)}
+												<Button
+													variant="contained"
+													disabled={isSaving}
+													onClick={() => saveReview(row)}
+													sx={{ height: 44, minWidth: 84, bgcolor: tokens.ink, "&:hover": { bgcolor: "#000" } }}
+												>
+													{isSaving ? "Saving…" : "Save"}
+												</Button>
+											</Box>
+										</Box>
+									);
+								})
+							)}
+							{reviewTotal > 0 && (
+								<Box sx={{ bgcolor: tokens.surface, border: `1px solid ${tokens.line}`, borderRadius: "16px", overflow: "hidden" }}>
+									<PhonePager
+										page={reviewPagination.page}
+										pageSize={reviewPagination.pageSize}
+										total={reviewTotal}
+										pageSizes={[10, 20, 50]}
+										onChange={setReviewPagination}
+										noBorder
+									/>
+								</Box>
+							)}
+						</Box>
+					</Box>
+
+					<Section
+						title={`Match jobs · ${matchJobsTotal}`}
+						flush={isXs}
+						action={
+							isXs ? (
+								<Button
+									variant="outlined"
+									startIcon={<FilterListIcon />}
+									onClick={() => setFiltersOpen((v) => !v)}
+									aria-expanded={filtersOpen}
+									sx={{ height: 40 }}
+								>
+									Filters
+								</Button>
+							) : undefined
+						}
+					>
+						{isXs ? (
+							<Collapse in={filtersOpen}>
+								<Box sx={{ px: 1.75, pb: 1.75 }}>{matchJobFilters}</Box>
+							</Collapse>
+						) : (
+							<Box sx={{ mb: 2 }}>{matchJobFilters}</Box>
+						)}
+
+						{matchJobsError && (
+							<Alert severity="error" sx={{ mx: isXs ? 1.75 : 0, mb: 1.5 }}>
+								{matchJobsError}
+							</Alert>
+						)}
+
+						{isXs ? (
+							<>
+								{matchJobsLoading && matchJobs.length === 0 ? (
+									<Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+										<CircularProgress size={22} />
+									</Box>
+								) : matchJobs.length === 0 ? (
+									<Box sx={{ px: 1.75, pb: 2 }}>
+										<Hint>No match jobs.</Hint>
+									</Box>
+								) : (
+									matchJobs.map((job) => (
+										<Box key={job.id} sx={{ px: 1.75, py: 1.5, borderTop: `1px solid ${tokens.line}`, display: "flex", flexDirection: "column", gap: 0.75 }}>
+											<Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+												<Box sx={{ display: "flex", alignItems: "center", gap: 0.75, fontSize: 13.5, fontWeight: 600 }}>
+													<StoreLogo shopType={job.sourceShop} size={18} />
+													<span aria-hidden="true">→</span>
+													<StoreLogo shopType={job.targetShop} size={18} />
+													<Box component="span" sx={{ ml: 0.5 }}>
+														{job.mode}
+														{job.useLlm ? " · LLM" : ""}
+													</Box>
+												</Box>
+												<StatusPill status={job.status} />
+											</Box>
+											<LinearProgress
+												variant="determinate"
+												value={job.total > 0 ? Math.min(100, (job.processed / job.total) * 100) : 0}
+												aria-label="Progress"
+												sx={{ height: 5, borderRadius: 5, bgcolor: tokens.line }}
+											/>
+											<Typography sx={{ fontSize: 12.5, color: tokens.ink2, fontVariantNumeric: "tabular-nums" }}>
+												{job.processed}/{job.total} · {job.matched} same · {job.comparable} comparable · {job.failed} failed
+											</Typography>
+											<Typography sx={{ fontSize: 11.5, color: tokens.ink2, fontFamily: MONO, overflowWrap: "anywhere" }}>
+												{job.id} · {shortDateTime(job.updatedAt)}
+											</Typography>
+											{job.errorMessage && (
+												<Typography sx={{ fontSize: 12, color: BAD, overflowWrap: "anywhere" }}>{job.errorMessage}</Typography>
+											)}
+										</Box>
+									))
+								)}
+								{matchJobsTotal > 0 && (
+									<PhonePager
+										page={matchJobsPagination.page}
+										pageSize={matchJobsPagination.pageSize}
+										total={matchJobsTotal}
+										pageSizes={[10, 20, 50]}
+										onChange={setMatchJobsPagination}
+									/>
+								)}
+							</>
+						) : (
+							<DataGrid
+								rows={matchJobs}
+								columns={matchJobColumns}
+								getRowId={(row) => row.id}
+								autoHeight
+								loading={matchJobsLoading}
+								rowCount={matchJobsTotal}
+								paginationMode="server"
+								paginationModel={matchJobsPagination}
+								onPaginationModelChange={(model) => {
+									setMatchJobsPagination(model);
+								}}
+								pageSizeOptions={[10, 20, 50]}
+								disableRowSelectionOnClick
+								sx={gridSx}
+							/>
+						)}
+					</Section>
+				</>
+			)}
+		</Box>
+	);
+}
+
+const BAD = "#B42318";
+const BAD_TINT = "#FDECEC";
+const MONO = 'ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace';
+
+const fieldSx = { "& .MuiInputBase-root": { minHeight: 44 } } as const;
+
+const switchRowSx = {
+	m: 0,
+	width: "100%",
+	minHeight: 48,
+	justifyContent: "space-between",
+	borderBottom: `1px solid ${tokens.line}`,
+	"& .MuiFormControlLabel-label": { fontSize: 14, fontWeight: 600 },
+} as const;
+
+const jobGridSx = {
+	display: "grid",
+	gridTemplateColumns: "minmax(200px, 2fr) 110px minmax(140px, 1fr) minmax(140px, 1fr)",
+	gap: 1.5,
+	alignItems: "center",
+	px: 2.25,
+} as const;
+
+const gridSx = {
+	border: `1px solid ${tokens.line}`,
+	borderRadius: "12px",
+	"& .MuiDataGrid-columnHeaders": { bgcolor: tokens.imageGround },
+	"& .MuiDataGrid-columnHeaderTitle": { fontWeight: 700, fontSize: 12.5, color: tokens.ink2 },
+} as const;
+
+/** "Thu 20 Nov, 2:00 am" (adds the year when it isn't this year). */
+function shortDateTime(value?: string | null): string {
+	if (!value) return "—";
+	const d = new Date(value);
+	if (Number.isNaN(d.getTime())) return "—";
+	const sameYear = d.getFullYear() === new Date().getFullYear();
+	const day = d.toLocaleDateString("en-AU", {
+		weekday: "short",
+		day: "numeric",
+		month: "short",
+		...(sameYear ? {} : { year: "numeric" }),
+	});
+	return `${day}, ${d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function Section({
+	title,
+	action,
+	flush = false,
+	children,
+}: {
+	title: string;
+	action?: React.ReactNode;
+	/** Content runs edge to edge (lists); the header keeps its padding. */
+	flush?: boolean;
+	children: React.ReactNode;
+}) {
+	return (
+		<Box
+			component="section"
+			sx={{
+				bgcolor: tokens.surface,
+				border: `1px solid ${tokens.line}`,
+				borderRadius: "16px",
+				boxShadow: "0 1px 2px rgba(20,22,30,.04)",
+				overflow: "hidden",
+				minWidth: 0,
+				p: flush ? 0 : { xs: 1.75, sm: 2.25 },
+			}}
+		>
+			<Box
+				sx={{
+					display: "flex",
+					flexWrap: "wrap",
+					alignItems: "center",
+					justifyContent: "space-between",
+					gap: 1,
+					// Same header height with or without an action, so titles line up across side-by-side sections.
+					minHeight: 40,
+					mb: flush ? 0 : 1.5,
+					...(flush ? { px: { xs: 1.75, sm: 2.25 }, py: 1.5 } : {}),
+				}}
+			>
+				<Typography component="h2" sx={{ fontSize: 16, fontWeight: 700 }}>
+					{title}
+				</Typography>
+				{action}
+			</Box>
+			{children}
+		</Box>
+	);
+}
+
+function SubHeading({ children }: { children: React.ReactNode }) {
+	return (
+		<Typography
+			component="h3"
+			sx={{ fontSize: 12, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: tokens.ink2, mb: 0.75 }}
+		>
+			{children}
+		</Typography>
+	);
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+	return <Typography sx={{ fontSize: 12.5, color: tokens.ink2 }}>{children}</Typography>;
+}
+
+function StatTile({
+	label,
+	value,
+	tone,
+	small = false,
+	compact = false,
+}: {
+	label: string;
+	value: string;
+	tone?: "bad";
+	small?: boolean;
+	compact?: boolean;
+}) {
+	return (
+		<Box sx={{ p: compact ? "8px 10px" : { xs: "10px 12px", sm: "14px 16px" }, borderRadius: "12px", bgcolor: tokens.ground, minWidth: 0 }}>
+			<Typography sx={{ fontSize: { xs: 12, sm: 13 }, color: tokens.ink2, fontWeight: 600 }}>{label}</Typography>
+			<Typography
+				sx={{
+					fontFamily: small ? undefined : DISPLAY_FONT,
+					fontWeight: small ? 700 : 800,
+					fontSize: small ? { xs: 13.5, sm: 15 } : compact ? 18 : { xs: 22, sm: 28 },
+					mt: small ? 0.5 : 0,
+					lineHeight: 1.25,
+					fontVariantNumeric: "tabular-nums",
+					color: tone === "bad" ? BAD : tokens.ink,
+				}}
+			>
+				{value}
+			</Typography>
+		</Box>
+	);
+}
+
+/**
+ * Phone pager, the same controls as the desktop DataGrid footer: "1–10 of 38", rows per page,
+ * and page buttons (40px, first / last page always reachable).
+ */
+function PhonePager({
+	page,
+	pageSize,
+	total,
+	pageSizes,
+	onChange,
+	noBorder = false,
+}: {
+	page: number;
+	pageSize: number;
+	total: number;
+	pageSizes: number[];
+	onChange: (next: { page: number; pageSize: number }) => void;
+	noBorder?: boolean;
+}) {
+	const pages = Math.max(1, Math.ceil(total / pageSize));
+	const from = total === 0 ? 0 : page * pageSize + 1;
+	const to = Math.min(total, (page + 1) * pageSize);
+	return (
+		<Box
+			sx={{
+				px: 1.75,
+				py: 1.25,
+				borderTop: noBorder ? "none" : `1px solid ${tokens.line}`,
+				display: "flex",
+				flexDirection: "column",
+				alignItems: "center",
+				gap: 1,
+			}}
+		>
+			<Box sx={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+				<Typography sx={{ fontSize: 13, color: tokens.ink2, fontVariantNumeric: "tabular-nums" }}>
+					<Box component="strong" sx={{ color: tokens.ink }}>
+						{from.toLocaleString()}–{to.toLocaleString()}
+					</Box>{" "}
+					of {total.toLocaleString()}
+				</Typography>
+				<TextField
+					select
+					size="small"
+					value={pageSize}
+					onChange={(e) => onChange({ page: 0, pageSize: Number(e.target.value) })}
+					inputProps={{ "aria-label": "Rows per page" }}
+					sx={{ "& .MuiInputBase-root": { height: 40, fontSize: 13.5 } }}
+				>
+					{pageSizes.map((n) => (
+						<MenuItem key={n} value={n}>
+							{n} / page
+						</MenuItem>
+					))}
+				</TextField>
+			</Box>
+			{pages > 1 && (
+				<Pagination
+					count={pages}
+					page={Math.min(page + 1, pages)}
+					onChange={(_, p) => onChange({ page: p - 1, pageSize })}
+					siblingCount={0}
+					boundaryCount={1}
+					size="large"
+					sx={{ "& .MuiPaginationItem-root": { minWidth: 40, height: 40, mx: "1px" } }}
+				/>
+			)}
+		</Box>
+	);
+}
+
+/** Desktop health numbers on one line: small label over a number, no tile. */
+function InlineStat({ label, value, tone }: { label: string; value: string; tone?: "bad" }) {
+	return (
+		<Box>
+			<Typography sx={{ fontSize: 12.5, color: tokens.ink2, fontWeight: 600 }}>{label}</Typography>
+			<Typography
+				sx={{
+					fontFamily: DISPLAY_FONT,
+					fontWeight: 800,
+					fontSize: 22,
+					lineHeight: 1.3,
+					fontVariantNumeric: "tabular-nums",
+					color: tone === "bad" ? BAD : tokens.ink,
+				}}
+			>
+				{value}
+			</Typography>
+		</Box>
+	);
+}
+
+/** Status as a tinted pill: success / completed → green, fail(ed) → red, running / queued → indigo, else grey. */
+function StatusPill({ status }: { status?: string | null }) {
+	if (!status) {
+		return (
+			<Box component="span" sx={{ color: tokens.ink2 }}>
+				—
+			</Box>
+		);
+	}
+	const s = status.toLowerCase();
+	const palette =
+		s === "success" || s === "completed"
+			? { bg: tokens.saveTint, fg: tokens.save }
+			: s === "fail" || s === "failed"
+				? { bg: BAD_TINT, fg: BAD }
+				: s === "running" || s === "queued"
+					? { bg: tokens.brandTint, fg: tokens.brand }
+					: { bg: "#F0F1F4", fg: tokens.ink2 };
+	return (
+		<Box
+			component="span"
+			sx={{
+				display: "inline-block",
+				flexShrink: 0,
+				px: 1.25,
+				py: "3px",
+				lineHeight: 1.5,
+				verticalAlign: "middle",
+				borderRadius: 999,
+				fontSize: 12,
+				fontWeight: 700,
+				whiteSpace: "nowrap",
+				bgcolor: palette.bg,
+				color: palette.fg,
+			}}
+		>
+			{status || "-"}
+		</Box>
+	);
+}
+
+function MatchSide({
+	name,
+	shopName,
+	shopType,
+	imageUrl,
+}: {
+	name: string;
+	shopName: string;
+	shopType?: number | null;
+	imageUrl?: string | null;
+}) {
+	return (
+		<Box
+			sx={{
+				display: "flex",
+				alignItems: "center",
+				gap: 1.25,
+				p: { xs: 1.25, sm: 1.25 },
+				border: { xs: "none", sm: `1px solid ${tokens.line}` },
+				borderRadius: "12px",
+				minHeight: 64,
+				boxSizing: "border-box",
+				minWidth: 0,
+			}}
+		>
+			<Avatar
+				variant="rounded"
+				src={imageUrl ?? undefined}
+				alt=""
+				sx={{
+					width: 44,
+					height: 44,
+					flexShrink: 0,
+					borderRadius: "10px",
+					bgcolor: tokens.imageGround,
+					border: `1px solid ${tokens.line}`,
+					"& img": { objectFit: "contain" },
+				}}
+			>
+				<StoreLogo shopType={shopType} size={22} decorative />
+			</Avatar>
+			<Box sx={{ minWidth: 0 }}>
+				<Typography sx={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, overflowWrap: "anywhere" }}>{name}</Typography>
+				<Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.25 }}>
+					<StoreLogo shopType={shopType} size={14} decorative />
+					<Typography sx={{ fontSize: 12, color: tokens.ink2 }}>{shopName}</Typography>
+				</Box>
+			</Box>
 		</Box>
 	);
 }

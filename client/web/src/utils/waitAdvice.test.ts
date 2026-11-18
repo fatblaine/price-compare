@@ -1,5 +1,6 @@
 import type { UpcomingSpecial } from "../api/upcoming";
 import {
+	favoriteUpcomingParts,
 	favoriteUpcomingText,
 	formatStartDate,
 	isComparable,
@@ -168,5 +169,23 @@ describe("favoriteUpcomingText", () => {
 			favoriteUpcomingText(next(7.5, { priceUnit: "multibuy", saveAmount: 1 })),
 		).toBeNull();
 		expect(favoriteUpcomingText(null)).toBeNull();
+	});
+});
+
+describe("favoriteUpcomingParts", () => {
+	it("splits the favourites line into date, price and saving", () => {
+		expect(favoriteUpcomingParts(next(2.75, { saveAmount: 2.75 }))).toEqual({
+			startDate: "Wed 18 Nov",
+			price: "$2.75",
+			save: "$2.75",
+		});
+	});
+
+	it("follows the same rule as favoriteUpcomingText", () => {
+		expect(favoriteUpcomingParts(next(3.5, { saveAmount: 0.05 }))).toBeNull();
+		expect(
+			favoriteUpcomingParts(next(7.5, { priceUnit: "multibuy", saveAmount: 1 })),
+		).toBeNull();
+		expect(favoriteUpcomingParts(undefined)).toBeNull();
 	});
 });

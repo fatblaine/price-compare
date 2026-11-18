@@ -13,6 +13,14 @@ export const shopTypeName = (value: unknown): string => {
 	return value == null || value === "" ? "-" : String(value);
 };
 
+/** Receipts store the OCR'd store name as text ("COLES SUPERMARKETS", "Woolworths Metro"); map it to a shop type for the logo. */
+export const shopTypeFromStoreName = (name?: string | null): ShopTypeValue | null => {
+	const n = (name ?? "").toLowerCase();
+	if (n.includes("coles")) return ShopTypes.COLES;
+	if (n.includes("woolworths") || /(^|[^a-z])wws([^a-z]|$)/.test(n)) return ShopTypes.WOOLWORTHS;
+	return null;
+};
+
 export const SHOP_OPTIONS: Array<{ label: string; value: "" | string }> = [
 	{ label: "All", value: "" },
 	{ label: "Coles", value: `${ShopTypes.COLES}` },

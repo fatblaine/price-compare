@@ -1,18 +1,12 @@
 import * as React from "react";
 import {
 	Box,
-	Avatar,
 	Button,
-	Card,
-	CardActionArea,
-	CardContent,
+	ButtonBase,
 	CircularProgress,
 	Autocomplete,
-	Divider,
 	List,
 	ListItem,
-	ListItemAvatar,
-	ListItemText,
 	Dialog,
 	DialogTitle,
 	DialogContent,
@@ -42,9 +36,22 @@ import { addFavorite } from "./api/favorites";
 import { fetchProducts, type ProductRow } from "./api/products";
 import { useDebounce } from "./hooks/useDebounce";
 import CloseIcon from "@mui/icons-material/Close";
-import DeleteIcon from "@mui/icons-material/Delete";
+import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
+import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import StoreLogo from "./components/StoreLogo";
+import ConfirmSheet from "./components/ConfirmSheet";
+import { shopTypeFromStoreName } from "./constants/shopTypes";
+import { DISPLAY_FONT, tokens } from "./theme";
 
 const OCR_SCANS_KEY = "ocr_scans_today";
+const DAILY_SCANS = 3;
+
+/** System monospace for the printed-receipt details (receipt no., time, item numbers). No web font download. */
+const MONO = 'ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace';
 
 function readScansToday(): number {
 	const today = new Date().toISOString().slice(0, 10);
@@ -60,8 +67,57 @@ function readScansToday(): number {
 
 function saveScansToday(count: number): void {
 	const today = new Date().toISOString().slice(0, 10);
-	localStorage.setItem(OCR_SCANS_KEY, JSON.stringify({ date: today, count }));
+	try {
+		localStorage.setItem(OCR_SCANS_KEY, JSON.stringify({ date: today, count }));
+	} catch {
+		// Storage can be blocked (private mode); the server still enforces the limit.
+	}
 }
+
+/** A total of 0 means OCR did not read one (no real receipt is $0.00), so it shows as "—". */
+const money = (v?: number | null) =>
+	v == null || !Number.isFinite(Number(v)) || Number(v) <= 0 ? "—" : `$${Number(v).toFixed(2)}`;
+
+const toDate = (iso?: string | null): Date | null => {
+	if (!iso) return null;
+	const d = new Date(iso);
+	return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/** "Sat 15 Nov, 6:42 pm" */
+const receiptDateText = (iso?: string | null) => {
+	const d = toDate(iso);
+	if (!d) return "Date unknown";
+	const sameYear = d.getFullYear() === new Date().getFullYear();
+	const day = d.toLocaleDateString("en-AU", {
+		weekday: "short",
+		day: "numeric",
+		month: "short",
+		...(sameYear ? {} : { year: "numeric" }),
+	});
+	const time = d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+	return `${day}, ${time}`;
+};
+
+/** "15/11/26 18:42", printed on the paper. */
+const receiptStamp = (iso?: string | null) => {
+	const d = toDate(iso);
+	if (!d) return "";
+	const p = (n: number) => String(n).padStart(2, "0");
+	return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+const monthKey = (iso?: string | null) => {
+	const d = toDate(iso);
+	return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "unknown";
+};
+
+const monthLabel = (iso?: string | null) => {
+	const d = toDate(iso);
+	return d ? d.toLocaleDateString("en-AU", { month: "long", year: "numeric" }) : "Date unknown";
+};
+
+const receiptNo = (id: number) => String(id).padStart(6, "0");
 
 interface EditableReceiptItem {
 	id?: number | null;
@@ -77,31 +133,28 @@ interface FavoriteSelectionItem {
 	selected: boolean;
 }
 
-// Basic list-and-detail page to browse user's receipts.
+// Receipts as printed paper slips that unfold in place (design 2026-11-19); detail is loaded on first unfold.
 export default function MyReceiptsPage() {
 	const theme = useTheme();
 	const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 
 	const [receipts, setReceipts] = React.useState<ReceiptSummary[]>([]);
-	const [selectedId, setSelectedId] = React.useState<number | null>(null);
-	const [detail, setDetail] = React.useState<ReceiptDetail | null>(null);
+	const [openIds, setOpenIds] = React.useState<number[]>([]);
+	const [details, setDetails] = React.useState<Record<number, ReceiptDetail | null>>({});
+	const [loadingIds, setLoadingIds] = React.useState<number[]>([]);
 	const [loadingList, setLoadingList] = React.useState(false);
-	const [loadingDetail, setLoadingDetail] = React.useState(false);
+	const [listError, setListError] = React.useState(false);
 	const [uploading, setUploading] = React.useState(false);
 	const [uploadError, setUploadError] = React.useState<string | null>(null);
 	const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 	const [editDialogOpen, setEditDialogOpen] = React.useState(false);
-	const [editingReceiptId, setEditingReceiptId] = React.useState<number | null>(
-		null,
-	);
-	const [editingItems, setEditingItems] = React.useState<EditableReceiptItem[]>(
-		[],
-	);
+	const [editingReceiptId, setEditingReceiptId] = React.useState<number | null>(null);
+	// Offer "add to favourites" only after a fresh upload, not when renaming an old receipt.
+	const [editFromUpload, setEditFromUpload] = React.useState(false);
+	const [editingItems, setEditingItems] = React.useState<EditableReceiptItem[]>([]);
 	const [savingEdit, setSavingEdit] = React.useState(false);
 	const [favoriteDialogOpen, setFavoriteDialogOpen] = React.useState(false);
-	const [favoriteItems, setFavoriteItems] = React.useState<FavoriteSelectionItem[]>(
-		[],
-	);
+	const [favoriteItems, setFavoriteItems] = React.useState<FavoriteSelectionItem[]>([]);
 	const [addingFavorites, setAddingFavorites] = React.useState(false);
 	const [productSearchQuery, setProductSearchQuery] = React.useState("");
 	const [productOptions, setProductOptions] = React.useState<ProductRow[]>([]);
@@ -111,58 +164,50 @@ export default function MyReceiptsPage() {
 	const [confirmDeleteId, setConfirmDeleteId] = React.useState<number | null>(null);
 	const [scansUsedToday, setScansUsedToday] = React.useState<number>(() => readScansToday());
 
-	// Load receipt list once on mount.
-	React.useEffect(() => {
-		let cancelled = false;
-		const run = async () => {
-			setLoadingList(true);
-			try {
-				const data = await fetchMyReceipts();
-				if (!cancelled) {
-					setReceipts(data);
-					if (data.length > 0) {
-						setSelectedId((prev) => prev ?? data[0].id);
-					}
-				}
-			} catch (e) {
-				// In basic page we only log to console; production UI could show an error banner.
-				// eslint-disable-next-line no-console
-				console.error("Failed to load receipts", e);
-			} finally {
-				if (!cancelled) setLoadingList(false);
-			}
-		};
-		void run();
-		return () => {
-			cancelled = true;
-		};
+	const loadList = React.useCallback(async () => {
+		setLoadingList(true);
+		setListError(false);
+		try {
+			const data = await fetchMyReceipts();
+			setReceipts(data);
+			return data;
+		} catch (e) {
+			// eslint-disable-next-line no-console
+			console.error("Failed to load receipts", e);
+			setListError(true);
+			return null;
+		} finally {
+			setLoadingList(false);
+		}
 	}, []);
 
-	// Load receipt detail when selection changes.
+	// Load the list once; unfold the newest receipt so the page never opens empty-looking.
 	React.useEffect(() => {
-		if (selectedId == null) {
-			setDetail(null);
-			return;
+		void loadList().then((data) => {
+			if (data && data.length > 0) setOpenIds((prev) => (prev.length ? prev : [data[0].id]));
+		});
+	}, [loadList]);
+
+	const loadDetail = React.useCallback(async (id: number) => {
+		setLoadingIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+		try {
+			const d = await fetchReceiptDetail(id);
+			setDetails((prev) => ({ ...prev, [id]: d }));
+		} catch (e) {
+			// eslint-disable-next-line no-console
+			console.error("Failed to load receipt detail", e);
+			setDetails((prev) => ({ ...prev, [id]: null }));
+		} finally {
+			setLoadingIds((prev) => prev.filter((x) => x !== id));
 		}
-		let cancelled = false;
-		const run = async () => {
-			setLoadingDetail(true);
-			try {
-				const d = await fetchReceiptDetail(selectedId);
-				if (!cancelled) setDetail(d);
-			} catch (e) {
-				// eslint-disable-next-line no-console
-				console.error("Failed to load receipt detail", e);
-				if (!cancelled) setDetail(null);
-			} finally {
-				if (!cancelled) setLoadingDetail(false);
-			}
-		};
-		void run();
-		return () => {
-			cancelled = true;
-		};
-	}, [selectedId]);
+	}, []);
+
+	// Fetch detail the first time a receipt is unfolded.
+	React.useEffect(() => {
+		openIds.forEach((id) => {
+			if (!(id in details) && !loadingIds.includes(id)) void loadDetail(id);
+		});
+	}, [openIds, details, loadingIds, loadDetail]);
 
 	React.useEffect(() => {
 		let active = true;
@@ -203,20 +248,24 @@ export default function MyReceiptsPage() {
 		};
 	}, [debouncedProductQuery]);
 
-	const handleSelect = (id: number) => {
-		setSelectedId(id);
+	const toggleOpen = (id: number) => {
+		setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 	};
 
-	const handleDeleteConfirm = async (id: number) => {
+	const handleDeleteConfirm = async () => {
+		const id = confirmDeleteId;
+		if (id == null) return;
 		setDeletingId(id);
-		setConfirmDeleteId(null);
 		try {
 			await deleteReceipt(id);
 			setReceipts((prev) => prev.filter((r) => r.id !== id));
-			if (selectedId === id) {
-				setSelectedId(null);
-				setDetail(null);
-			}
+			setOpenIds((prev) => prev.filter((x) => x !== id));
+			setDetails((prev) => {
+				const next = { ...prev };
+				delete next[id];
+				return next;
+			});
+			setConfirmDeleteId(null);
 		} catch (e) {
 			// eslint-disable-next-line no-console
 			console.error("Failed to delete receipt", e);
@@ -231,9 +280,7 @@ export default function MyReceiptsPage() {
 		}
 	};
 
-	const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (
-		event,
-	) => {
+	const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (event) => {
 		const file = event.target.files?.[0];
 		if (!file) return;
 
@@ -248,11 +295,9 @@ export default function MyReceiptsPage() {
 			setScansUsedToday(newCount);
 			saveScansToday(newCount);
 
-			// Refresh list and select the new receipt in the sidebar.
-			setLoadingList(true);
-			const data = await fetchMyReceipts();
-			setReceipts(data);
-			setSelectedId(result.receiptId);
+			// Refresh the list and unfold the new receipt at the top.
+			await loadList();
+			setOpenIds((prev) => [result.receiptId, ...prev.filter((x) => x !== result.receiptId)]);
 
 			// Prepare editable items for the dialog.
 			const editable: EditableReceiptItem[] = [];
@@ -287,28 +332,42 @@ export default function MyReceiptsPage() {
 			}
 
 			setEditingReceiptId(result.receiptId);
+			setEditFromUpload(true);
 			setEditingItems(editable);
 			setEditDialogOpen(true);
 		} catch (e: any) {
 			// eslint-disable-next-line no-console
 			console.error("Failed to upload and parse receipt", e);
 			if (e?.response?.status === 429) {
-				setScansUsedToday(3);
-				saveScansToday(3);
+				setScansUsedToday(DAILY_SCANS);
+				saveScansToday(DAILY_SCANS);
 				setUploadError("You've reached your daily limit of 3 receipt scans. Please try again tomorrow.");
 			} else {
 				const message: string | undefined =
-					e?.response?.data && typeof e.response.data === "string"
-						? e.response.data
-						: e?.message;
+					e?.response?.data && typeof e.response.data === "string" ? e.response.data : e?.message;
 				setUploadError(message || "Upload failed. Please try again.");
 			}
 		} finally {
 			setUploading(false);
-			setLoadingList(false);
 			// reset file input so the same file can be selected again if needed
 			event.target.value = "";
 		}
+	};
+
+	// "Edit names" on any receipt: start from its saved items, keeping each item's product link.
+	const handleEditExisting = (detail: ReceiptDetail) => {
+		setEditingReceiptId(detail.id);
+		setEditFromUpload(false);
+		setEditingItems(
+			detail.items.map((it) => ({
+				id: it.id,
+				ocrName: it.originalName ?? "",
+				finalName: it.productName ?? "",
+				matchedProductId: it.matchedProductId ?? null,
+				confidence: it.confidence ?? 1.0,
+			})),
+		);
+		setEditDialogOpen(true);
 	};
 
 	const handleCloseEditDialog = () => {
@@ -316,22 +375,15 @@ export default function MyReceiptsPage() {
 		setEditDialogOpen(false);
 	};
 
-	const handleItemInputChange = (
-		index: number,
-		value: string,
-		reason: AutocompleteInputChangeReason,
-	) => {
+	const handleItemInputChange = (index: number, value: string, reason: AutocompleteInputChangeReason) => {
 		setEditingItems((prev) =>
 			prev.map((item, i) =>
 				i === index
 					? {
 							...item,
 							finalName: value,
-							matchedProductId:
-								reason === "input" || reason === "clear"
-									? null
-									: item.matchedProductId,
-					  }
+							matchedProductId: reason === "input" || reason === "clear" ? null : item.matchedProductId,
+						}
 					: item,
 			),
 		);
@@ -345,10 +397,7 @@ export default function MyReceiptsPage() {
 		}
 	};
 
-	const handleItemSelect = (
-		index: number,
-		value: ProductRow | string | null,
-	) => {
+	const handleItemSelect = (index: number, value: ProductRow | string | null) => {
 		setEditingItems((prev) =>
 			prev.map((item, i) => {
 				if (i !== index) return item;
@@ -409,11 +458,8 @@ export default function MyReceiptsPage() {
 		try {
 			await updateReceiptItems(editingReceiptId, payload);
 
-			// Refresh detail for the currently selected receipt.
-			if (selectedId != null) {
-				const d = await fetchReceiptDetail(selectedId);
-				setDetail(d);
-			}
+			// Refresh the edited receipt's unfolded detail.
+			await loadDetail(editingReceiptId);
 
 			// Prepare a separate list for favorites selection.
 			const favItems: FavoriteSelectionItem[] = editingItems
@@ -427,7 +473,7 @@ export default function MyReceiptsPage() {
 
 			setEditDialogOpen(false);
 
-			if (favItems.length > 0) {
+			if (editFromUpload && favItems.length > 0) {
 				setFavoriteItems(favItems);
 				setFavoriteDialogOpen(true);
 			}
@@ -446,7 +492,7 @@ export default function MyReceiptsPage() {
 					? {
 							...item,
 							selected: checked,
-					  }
+						}
 					: item,
 			),
 		);
@@ -480,295 +526,274 @@ export default function MyReceiptsPage() {
 		}
 	};
 
+	// Newest first, grouped by month with the month's total.
+	const groups = React.useMemo(() => {
+		const sorted = [...receipts].sort(
+			(a, b) => (toDate(b.purchaseDate)?.getTime() ?? 0) - (toDate(a.purchaseDate)?.getTime() ?? 0),
+		);
+		const out: { key: string; label: string; total: number; rows: ReceiptSummary[] }[] = [];
+		sorted.forEach((r) => {
+			const key = monthKey(r.purchaseDate);
+			let g = out.find((x) => x.key === key);
+			if (!g) {
+				g = { key, label: monthLabel(r.purchaseDate), total: 0, rows: [] };
+				out.push(g);
+			}
+			g.rows.push(r);
+			g.total += Number(r.totalAmount) || 0;
+		});
+		return out;
+	}, [receipts]);
+
+	const limitReached = scansUsedToday >= DAILY_SCANS;
+	const pendingDelete = receipts.find((r) => r.id === confirmDeleteId) ?? null;
+
+	const quotaDots = (
+		<Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, whiteSpace: "nowrap" }}>
+			<Box component="span" aria-hidden="true" sx={{ display: "inline-flex", gap: "3px" }}>
+				{Array.from({ length: DAILY_SCANS }).map((_, i) => (
+					<Box
+						key={i}
+						component="span"
+						sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: i < scansUsedToday ? tokens.brand : tokens.line }}
+					/>
+				))}
+			</Box>
+			<Box component="strong" sx={{ color: tokens.ink, fontVariantNumeric: "tabular-nums" }}>
+				{Math.min(scansUsedToday, DAILY_SCANS)} of {DAILY_SCANS}
+			</Box>{" "}
+			today
+		</Box>
+	);
+
+	const uploadCard = (
+		<Box
+			component="section"
+			aria-label="Add a receipt"
+			sx={{
+				bgcolor: tokens.surface,
+				border: `1px solid ${tokens.line}`,
+				borderRadius: "16px",
+				p: { xs: 1.5, md: 2.25 },
+				display: "flex",
+				flexDirection: "column",
+				gap: { xs: 1.25, md: 1.75 },
+				boxShadow: tokens.cardShadow,
+			}}
+		>
+			<input
+				ref={fileInputRef}
+				type="file"
+				accept="image/jpeg,image/png,application/pdf"
+				style={{ display: "none" }}
+				onChange={handleFileChange}
+			/>
+			{!isXs && (
+				<Typography component="h2" sx={{ fontSize: 16, fontWeight: 700, display: { xs: "none", md: "block" } }}>
+					Add a receipt
+				</Typography>
+			)}
+			<Button
+				variant="contained"
+				onClick={handleUploadClick}
+				disabled={uploading || limitReached}
+				startIcon={
+					uploading ? undefined : isXs ? (
+						<PhotoCameraOutlinedIcon aria-hidden="true" />
+					) : (
+						<FileUploadOutlinedIcon aria-hidden="true" />
+					)
+				}
+				sx={{ height: 48, fontSize: 15, fontWeight: 700 }}
+			>
+				{uploading ? (
+					<>
+						<CircularProgress size={18} sx={{ color: "inherit", mr: 1 }} />
+						Reading receipt…
+					</>
+				) : isXs ? (
+					"Scan a receipt"
+				) : (
+					"Upload a receipt"
+				)}
+			</Button>
+			<Box
+				sx={{
+					display: "flex",
+					alignItems: "center",
+					justifyContent: "space-between",
+					gap: 1,
+					fontSize: { xs: 12.5, md: 13 },
+					color: tokens.ink2,
+				}}
+			>
+				<span>{limitReached ? "Daily limit reached · resets tomorrow" : "Photo or PDF · JPG, PNG"}</span>
+				{quotaDots}
+			</Box>
+			{uploadError && (
+				<Typography role="alert" sx={{ fontSize: 13, color: "#B42318" }}>
+					{uploadError}
+				</Typography>
+			)}
+		</Box>
+	);
+
 	return (
 		<Box>
-			<Stack
-				direction={{ xs: "column", sm: "row" }}
-				alignItems={{ xs: "flex-start", sm: "center" }}
-				justifyContent="space-between"
-				spacing={2}
-				sx={{ mb: 2 }}
-			>
+			<Box sx={{ mb: { xs: 1.5, sm: 2.5 } }}>
 				<Typography
-					variant={isXs ? "h5" : "h4"}
-					fontWeight={800}
+					component="h1"
+					sx={{
+						fontFamily: DISPLAY_FONT,
+						fontWeight: 800,
+						fontSize: { xs: 24, sm: 34 },
+						letterSpacing: { xs: "-0.02em", sm: "-0.03em" },
+						lineHeight: 1.12,
+					}}
 				>
 					My Receipts
 				</Typography>
-				<Box>
-					<input
-						ref={fileInputRef}
-						type="file"
-						accept="image/jpeg,image/png,application/pdf"
-						style={{ display: "none" }}
-						onChange={handleFileChange}
-					/>
-					<Button
-						variant="contained"
-						onClick={handleUploadClick}
-						disabled={uploading || scansUsedToday >= 3}
-						sx={{
-							width: { xs: "100%", sm: "auto" },
-						}}
-					>
-						{uploading ? (
-							<CircularProgress size={20} sx={{ color: "white" }} />
-						) : (
-							"Upload receipt"
-						)}
-					</Button>
-					<Typography
-						variant="body2"
-						color={scansUsedToday >= 3 ? "error" : "text.secondary"}
-						sx={{ mt: 0.5 }}
-					>
-						{scansUsedToday} / 3 scans used today
+				{receipts.length > 0 && (
+					<Typography sx={{ mt: 0.5, fontSize: { xs: 13, sm: 15 }, color: tokens.ink2 }}>
+						<Box component="strong" sx={{ color: tokens.ink, fontWeight: 700 }}>
+							{receipts.length}
+						</Box>{" "}
+						{receipts.length === 1 ? "receipt" : "receipts"} · {isXs ? "tap" : "click"} one to unfold it
 					</Typography>
-					{uploadError && (
-						<Typography
-							variant="body2"
-							color="error"
-							sx={{ mt: 0.5 }}
-						>
-							{uploadError}
-						</Typography>
-					)}
-				</Box>
-			</Stack>
+				)}
+			</Box>
 
-			<Stack
-				direction={{ xs: "column", md: "row" }}
-				spacing={2}
-				alignItems="stretch"
+			<Box
+				sx={{
+					display: "grid",
+					gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 320px" },
+					gridTemplateAreas: { xs: '"aside" "main"', md: '"main aside"' },
+					alignItems: "start",
+					gap: { xs: 1.5, md: 3 },
+				}}
 			>
-				<Card
-					variant="outlined"
-					sx={{
-						flexBasis: { xs: "100%", md: "35%" },
-						maxHeight: 480,
-						overflow: "hidden",
-					}}
-				>
-					<CardContent sx={{ p: 0 }}>
-						<Box sx={{ p: 2, pb: 1.5 }}>
-							<Typography variant="subtitle1" fontWeight={600}>
-								Receipts
+				<Box sx={{ gridArea: "aside", display: "flex", flexDirection: "column", gap: 2 }}>
+					{uploadCard}
+					{groups.length > 0 && (
+						<Box
+							component="section"
+							aria-label="Spending by month"
+							sx={{
+								display: { xs: "none", md: "flex" },
+								flexDirection: "column",
+								bgcolor: tokens.surface,
+								border: `1px solid ${tokens.line}`,
+								borderRadius: "16px",
+								p: 2.25,
+							}}
+						>
+							<Typography component="h2" sx={{ fontSize: 16, fontWeight: 700, mb: 1 }}>
+								By month
 							</Typography>
-							<Typography variant="body2" color="text.secondary">
-								Select a receipt to view parsed product names.
-							</Typography>
-						</Box>
-						<Divider />
-						<Box sx={{ maxHeight: { xs: "none", md: 420 }, overflowY: { xs: "visible", md: "auto" } }}>
-							{loadingList ? (
+							{groups.map((g) => (
 								<Box
+									key={g.key}
 									sx={{
 										display: "flex",
-										alignItems: "center",
-										justifyContent: "center",
-										py: 4,
+										justifyContent: "space-between",
+										alignItems: "baseline",
+										gap: 1,
+										py: 1,
+										borderTop: `1px solid ${tokens.line}`,
+										fontSize: 14,
 									}}
 								>
-									<CircularProgress size={24} />
+									<Box component="span" sx={{ color: tokens.ink2 }}>
+										{g.label} · {g.rows.length}
+									</Box>
+									<Box component="strong" sx={{ fontVariantNumeric: "tabular-nums" }}>
+										{money(g.total)}
+									</Box>
 								</Box>
-							) : receipts.length === 0 ? (
-								<Box sx={{ p: 2 }}>
-									<Typography variant="body2" color="text.secondary">
-										No receipts found yet.
-									</Typography>
-								</Box>
-							) : (
-								<List dense disablePadding>
-									{receipts.map((r) => {
-										const isActive = r.id === selectedId;
-										const dateText = r.purchaseDate
-											? new Date(r.purchaseDate).toLocaleString()
-											: "-";
-										const isConfirming = confirmDeleteId === r.id;
-										const isDeleting = deletingId === r.id;
-										return (
-											<ListItem
-												key={r.id}
-												disableGutters
-												secondaryAction={
-													isConfirming ? (
-														<Stack direction="row" spacing={0.5} sx={{ pr: 1 }}>
-															<Button
-																size="small"
-																color="error"
-																variant="contained"
-																disabled={isDeleting}
-																onClick={() => void handleDeleteConfirm(r.id)}
-																sx={{ minWidth: 0, px: 1, fontSize: 11 }}
-															>
-																{isDeleting ? (
-																	<CircularProgress size={14} sx={{ color: "white" }} />
-																) : (
-																	"Yes"
-																)}
-															</Button>
-															<Button
-																size="small"
-																disabled={isDeleting}
-																onClick={() => setConfirmDeleteId(null)}
-																sx={{ minWidth: 0, px: 1, fontSize: 11 }}
-															>
-																No
-															</Button>
-														</Stack>
-													) : (
-														<IconButton
-															size="small"
-															aria-label="delete receipt"
-															disabled={isDeleting}
-															onClick={(e) => {
-																e.stopPropagation();
-																setConfirmDeleteId(r.id);
-															}}
-															sx={{ mr: 0.5 }}
-														>
-															<DeleteIcon fontSize="small" />
-														</IconButton>
-													)
-												}
-												sx={{
-													bgcolor: isActive ? "action.selected" : "transparent",
-													pr: isConfirming ? "96px" : "48px",
-												}}
-											>
-												<CardActionArea
-													onClick={() => handleSelect(r.id)}
-													sx={{ px: 2, py: 1.25 }}
-												>
-													<ListItemText
-														primary={
-															<Typography variant="body1" fontWeight={600}>
-																{r.storeName || "Unknown store"}
-															</Typography>
-														}
-														secondary={
-															<Typography
-																variant="body2"
-																color="text.secondary"
-															>
-																{dateText}
-															</Typography>
-														}
-													/>
-												</CardActionArea>
-											</ListItem>
-										);
-									})}
-								</List>
-							)}
+							))}
 						</Box>
-					</CardContent>
-				</Card>
+					)}
+				</Box>
 
-				<Card
-					variant="outlined"
-					sx={{
-						flexBasis: { xs: "100%", md: "65%" },
-						minHeight: 260,
-					}}
-				>
-					<CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-						<Typography variant="subtitle1" fontWeight={600} gutterBottom>
-							Receipt detail
-						</Typography>
-						{loadingDetail ? (
-							<Box
-								sx={{
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "center",
-									minHeight: 160,
-								}}
-							>
-								<CircularProgress size={24} />
-							</Box>
-						) : !detail ? (
-							<Typography variant="body2" color="text.secondary">
-								Select a receipt on the left to see its items.
-							</Typography>
-						) : (
-							<Box>
-								<Stack
-									direction={{ xs: "column", sm: "row" }}
-									spacing={2}
-									sx={{ mb: 2 }}
-								>
-									<Box sx={{ flex: 1 }}>
-										<Typography variant="body2" color="text.secondary">
-											Store
-										</Typography>
-										<Typography variant="body1" fontWeight={600}>
-											{detail.storeName || "Unknown store"}
-										</Typography>
-									</Box>
-									<Box sx={{ flex: 1 }}>
-										<Typography variant="body2" color="text.secondary">
-											Purchase date
-										</Typography>
-										<Typography variant="body1" fontWeight={600}>
-											{detail.purchaseDate
-												? new Date(detail.purchaseDate).toLocaleString()
-												: "-"}
-										</Typography>
-									</Box>
-								</Stack>
-
+				<Box sx={{ gridArea: "main", minWidth: 0, display: "flex", flexDirection: "column", gap: { xs: 1.5, sm: 2 } }}>
+					{loadingList && receipts.length === 0 ? (
+						<Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+							<CircularProgress size={28} />
+						</Box>
+					) : listError && receipts.length === 0 ? (
+						<EmptyBox>
+							Couldn't load your receipts.{" "}
+							<Button onClick={() => void loadList()} sx={{ height: 40 }}>
+								Try again
+							</Button>
+						</EmptyBox>
+					) : receipts.length === 0 ? (
+						<EmptyBox>
+							<Typography sx={{ fontWeight: 700, color: tokens.ink, mb: 0.5 }}>No receipts yet</Typography>
+							Scan a supermarket receipt and the products on it show up here.
+						</EmptyBox>
+					) : (
+						groups.map((g) => (
+							<Box component="section" key={g.key} aria-label={g.label} sx={{ display: "flex", flexDirection: "column", gap: { xs: 1.25, sm: 1.5 } }}>
 								<Typography
-									variant="body2"
-									color="text.secondary"
-									sx={{ mb: 1 }}
+									component="h2"
+									sx={{
+										mx: 0.5,
+										mt: 0.5,
+										display: "flex",
+										justifyContent: "space-between",
+										fontSize: { xs: 12, sm: 12.5 },
+										fontWeight: 700,
+										letterSpacing: ".06em",
+										textTransform: "uppercase",
+										color: tokens.ink2,
+									}}
 								>
-									Recognized product names
+									<span>{g.label}</span>
+									<Box component="span" sx={{ fontVariantNumeric: "tabular-nums" }}>
+										{money(g.total)}
+									</Box>
 								</Typography>
-								{detail.items.length === 0 ? (
-									<Typography variant="body2" color="text.secondary">
-										No product names were extracted for this receipt.
-									</Typography>
-								) : (
-									<List dense>
-										{detail.items.map((it) => (
-											<ListItem
-												key={it.id}
-												disableGutters
-												sx={{ gap: 1.5 }}
-											>
-												<ListItemAvatar sx={{ minWidth: 0 }}>
-													<Avatar
-														variant="rounded"
-														src={it.imageUrl ?? undefined}
-														alt={it.productName}
-														sx={{
-															width: 40,
-															height: 40,
-															fontSize: 14,
-															bgcolor: "action.hover",
-														}}
-													>
-														{it.productName?.[0]?.toUpperCase() ?? "?"}
-													</Avatar>
-												</ListItemAvatar>
-												<ListItemText primary={it.productName} />
-											</ListItem>
-										))}
-									</List>
-								)}
+								{g.rows.map((r) => (
+									<ReceiptPaper
+										key={r.id}
+										summary={r}
+										detail={details[r.id]}
+										loaded={r.id in details}
+										loading={loadingIds.includes(r.id)}
+										open={openIds.includes(r.id)}
+										compact={isXs}
+										onToggle={() => toggleOpen(r.id)}
+										onRetry={() => void loadDetail(r.id)}
+										onEdit={(d) => handleEditExisting(d)}
+										onDelete={() => setConfirmDeleteId(r.id)}
+										deleting={deletingId === r.id}
+									/>
+								))}
 							</Box>
-						)}
-					</CardContent>
-				</Card>
-			</Stack>
+						))
+					)}
+				</Box>
+			</Box>
 
-			<Dialog
-				open={editDialogOpen}
-				onClose={handleCloseEditDialog}
-				fullWidth
-				maxWidth="md"
+			<ConfirmSheet
+				open={Boolean(pendingDelete)}
+				title="Delete this receipt?"
+				confirmLabel="Delete receipt"
+				busy={deletingId != null}
+				onClose={() => setConfirmDeleteId(null)}
+				onConfirm={() => void handleDeleteConfirm()}
 			>
+				{pendingDelete && (
+					<Typography sx={{ fontSize: 14, lineHeight: 1.5, color: tokens.ink2 }}>
+						{pendingDelete.storeName || "Unknown store"} · {receiptDateText(pendingDelete.purchaseDate)} ·{" "}
+						{money(pendingDelete.totalAmount)}. The receipt and its recognised products are removed. This can't
+						be undone.
+					</Typography>
+				)}
+			</ConfirmSheet>
+
+			<Dialog open={editDialogOpen} onClose={handleCloseEditDialog} fullWidth maxWidth="md" fullScreen={isXs}>
 				<DialogTitle
 					sx={{
 						display: "flex",
@@ -777,21 +802,17 @@ export default function MyReceiptsPage() {
 						pr: 2,
 					}}
 				>
-					<Typography variant="h6" component="h2" fontWeight={700}>
-						Review parsed items
+					<Typography variant="h6" component="span" fontWeight={700}>
+						{editFromUpload ? "Review parsed items" : "Edit item names"}
 					</Typography>
-					<IconButton
-						onClick={handleCloseEditDialog}
-						size="small"
-						disabled={savingEdit}
-					>
+					<IconButton onClick={handleCloseEditDialog} disabled={savingEdit} aria-label="Close" sx={{ width: 44, height: 44 }}>
 						<CloseIcon fontSize="small" />
 					</IconButton>
 				</DialogTitle>
 				<DialogContent dividers>
 					<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-						Check the recognized products and adjust names if needed. These
-						changes will be saved to this receipt.
+						Check the recognized products and adjust names if needed. Pick a suggestion to link the item to a
+						product. These changes will be saved to this receipt.
 					</Typography>
 					{editingItems.length === 0 ? (
 						<Typography variant="body2" color="text.secondary">
@@ -804,17 +825,13 @@ export default function MyReceiptsPage() {
 									key={index}
 									sx={{
 										display: "flex",
-										gap: 2,
+										gap: 1,
 										alignItems: "flex-start",
 									}}
 								>
-									<Box sx={{ flex: 1 }}>
-										{item.ocrName && (
-											<Typography
-												variant="caption"
-												color="text.secondary"
-												sx={{ display: "block" }}
-											>
+									<Box sx={{ flex: 1, minWidth: 0 }}>
+										{item.ocrName && item.ocrName !== item.finalName && (
+											<Typography variant="caption" color="text.secondary" sx={{ display: "block", fontFamily: MONO }}>
 												OCR: {item.ocrName}
 											</Typography>
 										)}
@@ -823,18 +840,12 @@ export default function MyReceiptsPage() {
 											options={productOptions}
 											loading={productSearchLoading}
 											filterOptions={(opts) => opts}
-											getOptionLabel={(option) =>
-												typeof option === "string" ? option : option.name
-											}
+											getOptionLabel={(option) => (typeof option === "string" ? option : option.name)}
 											inputValue={item.finalName}
-											onInputChange={(_, value, reason) =>
-												handleItemInputChange(index, value, reason)
-											}
+											onInputChange={(_, value, reason) => handleItemInputChange(index, value, reason)}
 											onChange={(_, value) => handleItemSelect(index, value)}
 											renderOption={(props, option) => (
-												<li {...props}>
-													{typeof option === "string" ? option : option.name}
-												</li>
+												<li {...props}>{typeof option === "string" ? option : option.name}</li>
 											)}
 											renderInput={(params) => (
 												<TextField
@@ -842,17 +853,12 @@ export default function MyReceiptsPage() {
 													fullWidth
 													size="small"
 													margin="dense"
-													label="Final name"
+													label={`Item ${index + 1}`}
 													InputProps={{
 														...params.InputProps,
 														endAdornment: (
 															<>
-																{productSearchLoading ? (
-																	<CircularProgress
-																		size={18}
-																		sx={{ mr: 1 }}
-																	/>
-																) : null}
+																{productSearchLoading ? <CircularProgress size={18} sx={{ mr: 1 }} /> : null}
 																{params.InputProps.endAdornment}
 															</>
 														),
@@ -861,50 +867,39 @@ export default function MyReceiptsPage() {
 											)}
 										/>
 									</Box>
-									<Box
-										sx={{
-											display: "flex",
-											flexDirection: "column",
-											alignItems: "flex-end",
-											gap: 0.5,
-										}}
+									<IconButton
+										onClick={() => handleRemoveItem(index)}
+										aria-label={`Remove item ${index + 1}`}
+										sx={{ width: 44, height: 44, mt: 1 }}
 									>
-										<IconButton
-											size="small"
-											onClick={() => handleRemoveItem(index)}
-										>
-											<CloseIcon fontSize="small" />
-										</IconButton>
-									</Box>
+										<CloseIcon fontSize="small" />
+									</IconButton>
 								</Box>
 							))}
 						</Stack>
 					)}
 					<Box sx={{ mt: 2 }}>
-						<Button variant="text" onClick={handleAddItem}>
+						<Button variant="text" onClick={handleAddItem} sx={{ height: 44 }}>
 							Add item
 						</Button>
 					</Box>
 				</DialogContent>
-				<DialogActions>
-					<Button onClick={handleCloseEditDialog} disabled={savingEdit}>
+				<DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+					<Button variant="outlined" onClick={handleCloseEditDialog} disabled={savingEdit} sx={{ height: 44 }}>
 						Cancel
 					</Button>
 					<Button
+						variant="contained"
 						onClick={() => void saveEditedItems()}
 						disabled={savingEdit || !editingReceiptId}
+						sx={{ height: 44 }}
 					>
 						{savingEdit ? "Saving..." : "Save items"}
 					</Button>
 				</DialogActions>
 			</Dialog>
 
-			<Dialog
-				open={favoriteDialogOpen}
-				onClose={handleSkipFavorites}
-				fullWidth
-				maxWidth="sm"
-			>
+			<Dialog open={favoriteDialogOpen} onClose={handleSkipFavorites} fullWidth maxWidth="sm">
 				<DialogTitle
 					sx={{
 						display: "flex",
@@ -913,21 +908,16 @@ export default function MyReceiptsPage() {
 						pr: 2,
 					}}
 				>
-					<Typography variant="h6" component="h2" fontWeight={700}>
+					<Typography variant="h6" component="span" fontWeight={700}>
 						Add to My Favorites
 					</Typography>
-					<IconButton
-						onClick={handleSkipFavorites}
-						size="small"
-						disabled={addingFavorites}
-					>
+					<IconButton onClick={handleSkipFavorites} disabled={addingFavorites} aria-label="Close" sx={{ width: 44, height: 44 }}>
 						<CloseIcon fontSize="small" />
 					</IconButton>
 				</DialogTitle>
 				<DialogContent dividers>
 					<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-						Select the products from this receipt that you want to track in My
-						Favorites.
+						Select the products from this receipt that you want to track in My Favorites.
 					</Typography>
 					{favoriteItems.length === 0 ? (
 						<Typography variant="body2" color="text.secondary">
@@ -941,12 +931,7 @@ export default function MyReceiptsPage() {
 										control={
 											<Checkbox
 												checked={item.selected}
-												onChange={(e) =>
-													handleToggleFavoriteSelection(
-														index,
-														e.target.checked,
-													)
-												}
+												onChange={(e) => handleToggleFavoriteSelection(index, e.target.checked)}
 											/>
 										}
 										label={item.name}
@@ -956,23 +941,335 @@ export default function MyReceiptsPage() {
 						</List>
 					)}
 				</DialogContent>
-				<DialogActions>
-					<Button onClick={handleSkipFavorites} disabled={addingFavorites}>
+				<DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+					<Button variant="outlined" onClick={handleSkipFavorites} disabled={addingFavorites} sx={{ height: 44 }}>
 						Skip
 					</Button>
 					<Button
 						variant="contained"
 						onClick={() => void handleConfirmFavorites()}
 						disabled={addingFavorites || favoriteItems.length === 0}
+						sx={{ height: 44 }}
 					>
-						{addingFavorites ? (
-							<CircularProgress size={20} sx={{ color: "white" }} />
-						) : (
-							"Add to favorites"
-						)}
+						{addingFavorites ? <CircularProgress size={20} sx={{ color: "white" }} /> : "Add to favorites"}
 					</Button>
 				</DialogActions>
 			</Dialog>
+		</Box>
+	);
+}
+
+/** One receipt drawn as a printed slip: torn edge with side notches, zig-zag foot, mono print details. */
+function ReceiptPaper({
+	summary,
+	detail,
+	loaded,
+	loading,
+	open,
+	compact,
+	onToggle,
+	onRetry,
+	onEdit,
+	onDelete,
+	deleting,
+}: {
+	summary: ReceiptSummary;
+	detail: ReceiptDetail | null | undefined;
+	loaded: boolean;
+	loading: boolean;
+	open: boolean;
+	compact: boolean;
+	onToggle: () => void;
+	onRetry: () => void;
+	onEdit: (detail: ReceiptDetail) => void;
+	onDelete: () => void;
+	deleting: boolean;
+}) {
+	const store = summary.storeName?.trim() || "Unknown store";
+	const shop = shopTypeFromStoreName(summary.storeName);
+	const dateText = receiptDateText(summary.purchaseDate);
+	const total = money(summary.totalAmount);
+	const no = receiptNo(summary.id);
+	const panelId = `receipt-${summary.id}-items`;
+	const notch = compact ? 8 : 9;
+	const items = detail?.items ?? [];
+
+	return (
+		<Box
+			component="article"
+			className="receipt-paper"
+			sx={{
+				filter: "drop-shadow(0 1px 1px rgba(20,22,30,.07)) drop-shadow(0 10px 16px rgba(20,22,30,.05))",
+				opacity: deleting ? 0.5 : 1,
+			}}
+		>
+			<Box sx={{ bgcolor: tokens.surface, borderRadius: "16px 16px 0 0", p: { xs: "4px 4px 0", sm: "6px 6px 0" } }}>
+				<ButtonBase
+					onClick={onToggle}
+					aria-expanded={open}
+					aria-controls={panelId}
+					sx={{
+						width: "100%",
+						minHeight: { xs: 64, sm: 72 },
+						px: { xs: 1.25, sm: 1.75 },
+						py: 1,
+						borderRadius: "12px",
+						display: "flex",
+						alignItems: "center",
+						gap: { xs: 1.5, sm: 1.75 },
+						textAlign: "left",
+						color: tokens.ink,
+						"&:hover": { bgcolor: tokens.imageGround },
+						"&.Mui-focusVisible": { outline: `2px solid ${tokens.brand}`, outlineOffset: -2 },
+					}}
+				>
+					{shop != null ? (
+						<StoreLogo shopType={shop} size={compact ? 36 : 40} decorative />
+					) : (
+						<Box
+							sx={{
+								width: compact ? 36 : 40,
+								height: compact ? 36 : 40,
+								flexShrink: 0,
+								borderRadius: "9px",
+								bgcolor: tokens.ground,
+								color: tokens.ink2,
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "center",
+							}}
+						>
+							<ReceiptLongOutlinedIcon aria-hidden="true" sx={{ fontSize: 20 }} />
+						</Box>
+					)}
+					<Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.25 }}>
+						<Typography sx={{ fontSize: { xs: 15, sm: 16 }, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+							{store}
+						</Typography>
+						<Typography sx={{ fontSize: { xs: 12.5, sm: 13.5 }, color: tokens.ink2 }}>{dateText}</Typography>
+					</Box>
+					<Typography
+						sx={{
+							fontFamily: DISPLAY_FONT,
+							fontSize: { xs: 18, sm: 21 },
+							fontWeight: 800,
+							fontVariantNumeric: "tabular-nums",
+							letterSpacing: "-0.01em",
+						}}
+					>
+						{total}
+					</Typography>
+					<ExpandMoreIcon
+						aria-hidden="true"
+						sx={{ color: tokens.ink2, fontSize: 20, transition: "transform .15s", transform: open ? "rotate(180deg)" : "none" }}
+					/>
+				</ButtonBase>
+			</Box>
+
+			{/* Torn edge: real cut-outs on both sides so the drop shadow follows them. */}
+			<Box
+				aria-hidden="true"
+				sx={{
+					position: "relative",
+					height: notch * 2,
+					background: `radial-gradient(circle at 0 50%, transparent ${notch}px, ${tokens.surface} ${notch + 0.5}px) left / 51% 100% no-repeat, radial-gradient(circle at 100% 50%, transparent ${notch}px, ${tokens.surface} ${notch + 0.5}px) right / 51% 100% no-repeat`,
+					"&::after": {
+						content: '""',
+						position: "absolute",
+						left: notch * 2,
+						right: notch * 2,
+						top: notch - 1,
+						borderTop: `1.5px dashed ${tokens.lineStrong}`,
+					},
+				}}
+			/>
+
+			<Box id={panelId} sx={{ bgcolor: tokens.surface, px: { xs: 1.75, sm: 2.5 }, pb: 1, pt: 0.25 }}>
+				{!open ? (
+					<Box
+						sx={{
+							display: "flex",
+							justifyContent: "space-between",
+							gap: 1.5,
+							fontFamily: MONO,
+							fontSize: { xs: 11.5, sm: 12 },
+							color: tokens.ink2,
+						}}
+					>
+						<span>{detail ? `${detail.items.length} ${detail.items.length === 1 ? "ITEM" : "ITEMS"}` : "SHOW ITEMS"}</span>
+						<span>NO. {no}</span>
+					</Box>
+				) : (
+					<Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+						<Box
+							sx={{
+								display: "flex",
+								justifyContent: "space-between",
+								fontFamily: MONO,
+								fontSize: { xs: 11, sm: 12 },
+								color: tokens.ink2,
+								letterSpacing: ".02em",
+							}}
+						>
+							<span>NO. {no}</span>
+							<span>{receiptStamp(summary.purchaseDate)}</span>
+						</Box>
+
+						{loading && !detail ? (
+							<Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 2, color: tokens.ink2, fontSize: 13 }}>
+								<CircularProgress size={16} /> Loading items…
+							</Box>
+						) : loaded && !detail ? (
+							<Box sx={{ py: 1.5, fontSize: 13, color: tokens.ink2 }}>
+								Couldn't load the items.{" "}
+								<Button onClick={onRetry} sx={{ height: 40 }}>
+									Try again
+								</Button>
+							</Box>
+						) : items.length === 0 ? (
+							<Typography sx={{ py: 1.5, fontSize: 13.5, color: tokens.ink2 }}>
+								No product names were read from this receipt.
+							</Typography>
+						) : (
+							<Box
+								component="ol"
+								aria-label={`Items on ${store} receipt`}
+								sx={{
+									m: 0,
+									p: 0,
+									listStyle: "none",
+									display: "grid",
+									gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))" },
+									columnGap: 3.5,
+								}}
+							>
+								{items.map((it, i) => (
+									<Box
+										component="li"
+										key={it.id}
+										sx={{
+											display: "flex",
+											alignItems: "baseline",
+											gap: 1.25,
+											py: { xs: 0.875, sm: 1 },
+											borderBottom: `1px dotted ${tokens.lineStrong}`,
+										}}
+									>
+										<Box component="span" sx={{ fontFamily: MONO, fontSize: { xs: 11.5, sm: 12 }, color: tokens.ink2, flexShrink: 0 }}>
+											{String(i + 1).padStart(2, "0")}
+										</Box>
+										<Box component="span" sx={{ fontSize: { xs: 13.5, sm: 14 }, lineHeight: 1.35, minWidth: 0, overflowWrap: "anywhere" }}>
+											{it.productName}
+										</Box>
+									</Box>
+								))}
+							</Box>
+						)}
+
+						<Box
+							sx={{
+								display: "flex",
+								alignItems: "baseline",
+								justifyContent: "space-between",
+								pt: 0.5,
+								pb: 0.25,
+								borderBottom: `2px solid ${tokens.ink}`,
+							}}
+						>
+							<Box component="span" sx={{ fontFamily: MONO, fontSize: { xs: 12.5, sm: 13 }, fontWeight: 700, letterSpacing: ".14em" }}>
+								TOTAL
+							</Box>
+							<Box
+								component="span"
+								sx={{ fontFamily: DISPLAY_FONT, fontSize: { xs: 22, sm: 26 }, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}
+							>
+								{total}
+							</Box>
+						</Box>
+
+						<Box
+							sx={{
+								display: "flex",
+								flexDirection: { xs: "column", sm: "row" },
+								alignItems: { xs: "stretch", sm: "center" },
+								justifyContent: "space-between",
+								gap: 1.5,
+								pt: 0.25,
+							}}
+						>
+							<Box
+								aria-hidden="true"
+								sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: "center", gap: { xs: 0.5, sm: 1.5 } }}
+							>
+								<Box
+									sx={{
+										width: { xs: 180, sm: 168 },
+										height: { xs: 30, sm: 32 },
+										background: `repeating-linear-gradient(90deg, ${tokens.ink} 0 2px, transparent 2px 4px, ${tokens.ink} 4px 5px, transparent 5px 8px, ${tokens.ink} 8px 11px, transparent 11px 12px, ${tokens.ink} 12px 13px, transparent 13px 16px)`,
+									}}
+								/>
+								<Box component="span" sx={{ fontFamily: MONO, fontSize: { xs: 10.5, sm: 11 }, color: tokens.ink2, letterSpacing: ".2em" }}>
+									{no} {receiptStamp(summary.purchaseDate).replace(/\D/g, "").slice(0, 6)}
+								</Box>
+							</Box>
+							<Box sx={{ display: "flex", gap: 1 }}>
+								<Button
+									variant="outlined"
+									startIcon={<EditOutlinedIcon aria-hidden="true" />}
+									disabled={!detail || deleting}
+									onClick={() => detail && onEdit(detail)}
+									sx={{ height: 44, flex: { xs: 1, sm: "none" } }}
+								>
+									Edit names
+								</Button>
+								<Button
+									variant="outlined"
+									startIcon={<DeleteOutlineIcon aria-hidden="true" />}
+									onClick={onDelete}
+									disabled={deleting}
+									sx={{
+										height: 44,
+										color: "#B42318",
+										borderColor: "#F3D3D3",
+										"&:hover": { borderColor: "#E9A9A9", bgcolor: "#FFF7F7" },
+									}}
+								>
+									Delete
+								</Button>
+							</Box>
+						</Box>
+					</Box>
+				)}
+			</Box>
+
+			{/* Zig-zag foot of the slip. */}
+			<Box
+				aria-hidden="true"
+				sx={{
+					height: compact ? 8 : 9,
+					background: `linear-gradient(135deg, ${tokens.surface} 25%, transparent 25%) 0 0 / ${compact ? 16 : 18}px ${compact ? 16 : 18}px repeat-x, linear-gradient(225deg, ${tokens.surface} 25%, transparent 25%) 0 0 / ${compact ? 16 : 18}px ${compact ? 16 : 18}px repeat-x`,
+				}}
+			/>
+		</Box>
+	);
+}
+
+function EmptyBox({ children }: { children: React.ReactNode }) {
+	return (
+		<Box
+			sx={{
+				py: { xs: 4, sm: 6 },
+				px: 2,
+				textAlign: "center",
+				bgcolor: tokens.surface,
+				border: `1px dashed ${tokens.lineStrong}`,
+				borderRadius: "16px",
+				color: tokens.ink2,
+				fontSize: { xs: 13.5, sm: 14.5 },
+				lineHeight: 1.5,
+			}}
+		>
+			{children}
 		</Box>
 	);
 }
