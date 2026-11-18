@@ -32,6 +32,7 @@ import {
 import { useDebounce } from "./hooks/useDebounce";
 import CompareDialog from "./components/CompareDialog";
 import StoreChip from "./components/StoreChip";
+import StoreLogo from "./components/StoreLogo";
 import { fetchBestMatchesByProducts, type CompareProduct } from "./api/compare";
 import { fetchUpcomingByProducts, type UpcomingSpecial } from "./api/upcoming";
 import { upcomingLine } from "./utils/waitAdvice";
@@ -95,6 +96,23 @@ function FreshnessChip({ data }: { data: LastUpdated | null }) {
 			Updated {label} · {storeCount} {storeCount === 1 ? "store" : "stores"}
 		</Box>
 	);
+}
+
+type Recommendation = {
+	/** Full sentence used from tablet width up. */
+	text: string;
+	save: boolean;
+	kind: "same" | "cheaper" | "save";
+	amount: string;
+	otherShopType: number;
+};
+
+/** Phone wording for the card's comparison line: the other store's logo stands in for its name. */
+function ShortRecommendation({ rec }: { rec: Recommendation }) {
+	const logo = <StoreLogo shopType={rec.otherShopType} size={14} />;
+	if (rec.kind === "same") return <>Same at {logo}</>;
+	if (rec.kind === "cheaper") return <>{logo} {rec.amount} cheaper</>;
+	return <>Save {rec.amount} vs {logo}</>;
 }
 
 function ProductImage({
@@ -424,6 +442,296 @@ export default function ProductsPage() {
 	const resetToFirstPage = () =>
 		setPaginationModel((prev) => (prev.page === 0 ? prev : { ...prev, page: 0 }));
 
+	// One product card; the list renders it in a staggered two-column layout on phones
+	// and a regular grid from tablet width up.
+	const renderCard = (row: ProductRow) => {
+		const sizeText = formatSize(row);
+		const isFavorite = favoriteIds.has(row.productId);
+		const favoriteBusy = favoriteBusyIds.includes(row.productId);
+		const compareTarget = compareDataMap[row.productId];
+		// Same comparison as before; only the wording and colour changed (BTS-161).
+		let recommendation: Recommendation | null = null;
+		if (compareTarget && row.price != null && compareTarget.price != null) {
+			const diff = compareTarget.price - row.price;
+			const other = shopTypeName(compareTarget.shopType);
+			const otherShopType = compareTarget.shopType;
+			const amount = `$${Math.abs(diff).toFixed(2)}`;
+			if (Math.abs(diff) < 0.001) {
+				recommendation = { text: `Same price at ${other}`, save: false, kind: "same", amount, otherShopType };
+			} else if (diff < 0) {
+				recommendation = {
+					text: `${other} is ${amount} cheaper`,
+					save: false,
+					kind: "cheaper",
+					amount,
+					otherShopType,
+				};
+			} else {
+				recommendation = { text: `Save ${amount} vs ${other}`, save: true, kind: "save", amount, otherShopType };
+			}
+		}
+		const nextWeek = upcomingLine({
+			herePrice: row.price,
+			hereShopType: Number(row.shopType),
+			hereNext: upcomingMap[row.productId],
+			otherPrice: compareTarget?.price ?? null,
+			otherShopType: compareTarget?.shopType ?? null,
+			otherNext: compareTarget?.productId ? upcomingMap[compareTarget.productId] : null,
+			shopName: shopTypeName,
+		});
+		const priceText = (
+			<Typography
+				component="p"
+				sx={{
+					m: 0,
+					fontFamily: DISPLAY_FONT,
+					fontWeight: 800,
+					letterSpacing: "-0.02em",
+					fontSize: { xs: 18, sm: 26 },
+					lineHeight: 1.1,
+					fontVariantNumeric: "tabular-nums",
+					...(isXs && {
+						flex: 1,
+						minWidth: 0,
+						whiteSpace: "nowrap",
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+					}),
+				}}
+			>
+				{formatPrice(row.price)}
+			</Typography>
+		);
+		const compareButton = (
+			<Button
+				className="compare-btn"
+				variant="contained"
+				fullWidth={!isXs}
+				sx={{
+					mt: { sm: "auto" },
+					height: { xs: 28, sm: 44 },
+					// Phones: a small, light button; the hit area stays 40px.
+					...(isXs && {
+						position: "relative",
+						flexShrink: 0,
+						minWidth: 0,
+						px: 1.25,
+						fontSize: 12,
+						bgcolor: tokens.brandTint,
+						color: tokens.brand,
+						boxShadow: "none",
+						"&:hover": { bgcolor: "#E2E3FD", boxShadow: "none" },
+						"&::after": { content: '""', position: "absolute", inset: "-6px -2px" },
+					}),
+				}}
+				onClick={() => handleCompare(row.productId, row.name, row.shopType, row)}
+			>
+				{isXs ? "Compare" : "Compare prices"}
+			</Button>
+		);
+		return (
+			<Card
+				key={row.productId}
+				className="product-card"
+				sx={{
+					display: "flex",
+					flexDirection: "column",
+					overflow: "hidden",
+					borderRadius: { xs: "12px", sm: "16px" },
+					transition: "box-shadow .2s ease, border-color .2s ease",
+					"&:hover": {
+						borderColor: tokens.lineStrong,
+						boxShadow: "0 1px 2px rgba(20,22,30,.06), 0 16px 32px rgba(20,22,30,.08)",
+					},
+				}}
+			>
+				<Box
+					sx={{
+						position: "relative",
+						height: { xs: 72, sm: 150 },
+						bgcolor: tokens.imageGround,
+						borderBottom: `1px solid ${tokens.line}`,
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						p: { xs: 0.75, sm: 1.5 },
+					}}
+				>
+					<ProductImage src={row.imageUrl} alt={row.name} />
+				{/* Phones: the store logo replaces the store-name chip. */}
+				{isXs && (
+					<StoreLogo shopType={row.shopType} size={18} sx={{ position: "absolute", top: 6, left: 6 }} />
+				)}
+					<IconButton
+						className="favorite-btn"
+						onClick={() => void handleToggleFavorite(row.productId)}
+						disabled={favoriteBusy}
+						aria-label={
+							isFavorite
+								? "Remove from My Favorites"
+								: "Add to My Favorites"
+						}
+						aria-pressed={isFavorite}
+						sx={{
+							position: "absolute",
+							top: { xs: 4, sm: 12 },
+							right: { xs: 4, sm: 12 },
+							width: { xs: 30, sm: 40 },
+							height: { xs: 30, sm: 40 },
+							// Phones: a smaller circle, the hit area stays 40px.
+							...(isXs && { "&::after": { content: '""', position: "absolute", inset: -5 } }),
+							bgcolor: tokens.surface,
+							border: `1px solid ${tokens.line}`,
+							boxShadow: "0 2px 8px rgba(20,22,30,.1)",
+							color: isFavorite ? tokens.fav : tokens.ink3,
+							"&:hover": { bgcolor: tokens.surface, color: tokens.fav },
+						}}
+					>
+						{isFavorite ? (
+							<FavoriteIcon sx={{ fontSize: { xs: 16, sm: 19 } }} />
+						) : (
+							<FavoriteBorderIcon sx={{ fontSize: { xs: 16, sm: 19 } }} />
+						)}
+					</IconButton>
+				</Box>
+				<Box
+					sx={{
+						p: { xs: "6px 8px 8px", sm: "14px 15px 16px" },
+						display: "flex",
+						flexDirection: "column",
+						gap: { xs: 0.375, sm: 1.125 },
+						flex: 1,
+						minWidth: 0,
+					}}
+				>
+					<Box sx={{ display: { xs: "none", sm: "flex" }, alignItems: "center", gap: 1, flexWrap: "wrap", minWidth: 0 }}>
+						<StoreChip shopType={row.shopType} size="small" />
+						{sizeText && (
+							<Typography component="span" sx={{ fontSize: { xs: 11, sm: 12 }, color: tokens.ink3 }}>
+								{sizeText}
+							</Typography>
+						)}
+					</Box>
+					<Typography
+						component="h3"
+						sx={{
+							m: 0,
+							fontSize: { xs: 12.5, sm: 15 },
+							lineHeight: { xs: 1.25, sm: 1.35 },
+							fontWeight: 600,
+							display: "-webkit-box",
+							WebkitLineClamp: 2,
+							WebkitBoxOrient: "vertical",
+							overflow: "hidden",
+							minHeight: { xs: 0, sm: 40 },
+						}}
+					>
+						{row.name || "-"}
+					</Typography>
+					{isXs ? (
+						// Phones: price and a small Compare button share one row.
+						<Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+							{priceText}
+							{compareButton}
+						</Box>
+					) : (
+						priceText
+					)}
+					{row.promoText && (
+						<Box
+							component="span"
+							title={row.promoText}
+							sx={{
+								alignSelf: "flex-start",
+								maxWidth: "100%",
+								px: 1,
+								py: { xs: 0.25, sm: 0.375 },
+								borderRadius: 999,
+								bgcolor: tokens.promoTint,
+								color: tokens.promo,
+								fontSize: { xs: 10, sm: 11.5 },
+								fontWeight: 600,
+								overflow: "hidden",
+								textOverflow: "ellipsis",
+								whiteSpace: "nowrap",
+							}}
+						>
+							{row.promoText}
+						</Box>
+					)}
+					{/* Phones: the comparison line also carries the size, and is skipped when it has neither. */}
+					{(recommendation || sizeText || !isXs) && (
+						<Box sx={{ minHeight: { xs: 0, sm: 20 }, display: "flex", alignItems: "center" }}>
+						{recommendation && (
+							<Typography
+								component="span"
+								className="recommendation-text"
+								sx={{
+									display: "inline-flex",
+									alignItems: "center",
+									gap: 0.5,
+									fontSize: { xs: 11.5, sm: 13 },
+									fontWeight: recommendation.save ? 700 : 600,
+									color: recommendation.save ? tokens.save : tokens.ink2,
+									fontVariantNumeric: "tabular-nums",
+								}}
+							>
+								{recommendation.save && (
+									<ArrowDownwardIcon aria-hidden="true" sx={{ fontSize: 14 }} />
+								)}
+								{isXs ? <ShortRecommendation rec={recommendation} /> : recommendation.text}
+							</Typography>
+						)}
+						{isXs && sizeText && (
+							<Typography
+								component="span"
+								sx={{ ml: "auto", pl: 1, fontSize: 10.5, color: tokens.ink3, whiteSpace: "nowrap" }}
+							>
+								{sizeText}
+							</Typography>
+						)}
+					</Box>
+					)}
+					{nextWeek && (
+						<Typography
+							component="span"
+							className="next-week-text"
+							title={`${nextWeek.text} (next week's catalogue)`}
+							sx={{
+								display: "inline-flex",
+								alignItems: "center",
+								gap: 0.5,
+								mt: { xs: 0, sm: -0.5 },
+								fontSize: { xs: 11.5, sm: 13 },
+								fontWeight: 600,
+								color: tokens.promo,
+								fontVariantNumeric: "tabular-nums",
+								minWidth: 0,
+								whiteSpace: "nowrap",
+								overflow: "hidden",
+								textOverflow: "ellipsis",
+							}}
+						>
+							<EventIcon aria-hidden="true" sx={{ fontSize: 14, flexShrink: 0 }} />
+							<Box component="span" sx={{ display: { xs: "none", sm: "inline" }, overflow: "hidden", textOverflow: "ellipsis" }}>
+								{nextWeek.text}
+							</Box>
+							<Box component="span" sx={{ display: { xs: "inline", sm: "none" }, overflow: "hidden", textOverflow: "ellipsis" }}>
+								{nextWeek.shopType === Number(row.shopType)
+									? nextWeek.shortText
+									: `${nextWeek.shortText.split(":")[0]}: ${formatPrice(nextWeek.price)}`}
+							</Box>
+							{isXs && nextWeek.shopType !== Number(row.shopType) && (
+								<StoreLogo shopType={nextWeek.shopType} size={14} />
+							)}
+						</Typography>
+					)}
+					{!isXs && compareButton}
+				</Box>
+			</Card>
+		);
+	};
+
 	return (
 		<Box sx={{ width: "100%" }}>
 			{/* Page header: a full-width white band under the app bar, as in the design;
@@ -434,7 +742,7 @@ export default function ProductsPage() {
 			>
 				<Container
 					maxWidth="lg"
-					sx={{ pt: { xs: 1.75, sm: 4, md: 5.5 }, pb: { xs: 1.75, sm: 3.5 } }}
+					sx={{ px: { xs: 1.5, sm: 3 }, pt: { xs: 1, sm: 4, md: 5.5 }, pb: { xs: 1, sm: 3.5 } }}
 				>
 					{/* Text on the left; on wide screens a decorative illustration fills the space
 					    to the right of the headline, above the search bar. */}
@@ -446,8 +754,19 @@ export default function ProductsPage() {
 							gap: 4,
 						}}
 					>
-						<Box sx={{ minWidth: 0 }}>
-							<FreshnessChip data={lastUpdated} />
+						<Box sx={{ minWidth: 0, flex: 1 }}>
+							{/* Phones: the product count sits on the freshness row instead of its own line. */}
+							<Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+								<FreshnessChip data={lastUpdated} />
+								<Typography
+									sx={{ display: { xs: "block", sm: "none" }, fontSize: 12, color: tokens.ink2, whiteSpace: "nowrap" }}
+								>
+									<Box component="strong" sx={{ color: tokens.ink, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+										{rowCount.toLocaleString("en-AU")}
+									</Box>{" "}
+									products
+								</Typography>
+							</Box>
 							<Box sx={{ display: { xs: "none", sm: "block" }, maxWidth: 640 }}>
 								<Typography
 									component="h2"
@@ -498,7 +817,7 @@ export default function ProductsPage() {
 
 					<Box
 						sx={{
-							mt: { xs: 1.5, sm: 3 },
+							mt: { xs: 1, sm: 3 },
 							display: "flex",
 							alignItems: "center",
 							gap: { xs: 1, sm: 1.25 },
@@ -520,7 +839,7 @@ export default function ProductsPage() {
 								display: "flex",
 								alignItems: "center",
 								gap: 1.25,
-								height: 46,
+								height: { xs: 40, sm: 46 },
 								px: 1.5,
 								borderRadius: "12px",
 								bgcolor: { xs: "#F7F8FA", sm: "transparent" },
@@ -557,8 +876,8 @@ export default function ProductsPage() {
 									disabled={aiSearchExhausted}
 									aria-label="Search by description with AI"
 									sx={{
-										height: { xs: 46, sm: 44 },
-										minWidth: { xs: 46, sm: 0 },
+										height: { xs: 40, sm: 44 },
+										minWidth: { xs: 40, sm: 0 },
 										px: { xs: 0, sm: 2 },
 										borderColor: aiSearchOpen ? tokens.brand : undefined,
 									}}
@@ -582,14 +901,14 @@ export default function ProductsPage() {
 
 					<Box
 						sx={{
-							mt: { xs: 1.5, sm: 2.25 },
+							mt: { xs: 1, sm: 2.25 },
 							display: "flex",
 							alignItems: "center",
 							gap: 1,
 							// Phones: the row scrolls sideways instead of wrapping.
 							overflowX: "auto",
-							mx: { xs: -2, sm: 0 },
-							px: { xs: 2, sm: 0 },
+							mx: { xs: -1.5, sm: 0 },
+							px: { xs: 1.5, sm: 0 },
 							scrollbarWidth: "none",
 							"&::-webkit-scrollbar": { display: "none" },
 						}}
@@ -630,7 +949,10 @@ export default function ProductsPage() {
 											},
 										}}
 									>
-										{dot && (
+										{dot && isXs && (
+											<StoreLogo shopType={opt.value} size={18} decorative sx={{ ml: -0.5, mr: 0.75 }} />
+										)}
+										{dot && !isXs && (
 											<Box
 												component="span"
 												aria-hidden="true"
@@ -646,8 +968,8 @@ export default function ProductsPage() {
 				</Container>
 			</Box>
 
-			<Container maxWidth="lg" sx={{ pt: { xs: 2, sm: 3 } }}>
-				<Typography sx={{ fontSize: { xs: 13, sm: 14 }, color: tokens.ink2, mb: { xs: 1.5, sm: 2 } }}>
+			<Container maxWidth="lg" sx={{ px: { xs: 1.5, sm: 3 }, pt: { xs: 1, sm: 3 } }}>
+				<Typography sx={{ display: { xs: "none", sm: "block" }, fontSize: { xs: 13, sm: 14 }, color: tokens.ink2, mb: { xs: 1.5, sm: 2 } }}>
 					<Box component="strong" sx={{ color: tokens.ink, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
 						{rowCount.toLocaleString("en-AU")}
 					</Box>{" "}
@@ -676,247 +998,37 @@ export default function ProductsPage() {
 							</Typography>
 						</Box>
 					) : (
-						<Box
-							sx={{
-								display: "grid",
-								gridTemplateColumns: {
-									xs: "repeat(2, minmax(0, 1fr))",
-									sm: "repeat(auto-fill, minmax(224px, 1fr))",
-								},
-								gap: { xs: 1.5, sm: 2.25 },
-							}}
-						>
-							{rows.map((row) => {
-								const sizeText = formatSize(row);
-								const isFavorite = favoriteIds.has(row.productId);
-								const favoriteBusy = favoriteBusyIds.includes(row.productId);
-								const compareTarget = compareDataMap[row.productId];
-								// Same comparison as before; only the wording and colour changed (BTS-161).
-								let recommendation: { text: string; save: boolean } | null = null;
-								if (compareTarget && row.price != null && compareTarget.price != null) {
-									const diff = compareTarget.price - row.price;
-									const other = shopTypeName(compareTarget.shopType);
-									if (Math.abs(diff) < 0.001) {
-										recommendation = { text: `Same price at ${other}`, save: false };
-									} else if (diff < 0) {
-										recommendation = {
-											text: `${other} is $${Math.abs(diff).toFixed(2)} cheaper`,
-											save: false,
-										};
-									} else {
-										recommendation = { text: `Save $${diff.toFixed(2)} vs ${other}`, save: true };
-									}
-								}
-								const nextWeek = upcomingLine({
-									herePrice: row.price,
-									hereShopType: Number(row.shopType),
-									hereNext: upcomingMap[row.productId],
-									otherPrice: compareTarget?.price ?? null,
-									otherShopType: compareTarget?.shopType ?? null,
-									otherNext: compareTarget?.productId ? upcomingMap[compareTarget.productId] : null,
-									shopName: shopTypeName,
-								});
-								return (
-									<Card
-										key={row.productId}
-										className="product-card"
-										sx={{
-											display: "flex",
-											flexDirection: "column",
-											overflow: "hidden",
-											borderRadius: { xs: "14px", sm: "16px" },
-											transition: "box-shadow .2s ease, border-color .2s ease",
-											"&:hover": {
-												borderColor: tokens.lineStrong,
-												boxShadow: "0 1px 2px rgba(20,22,30,.06), 0 16px 32px rgba(20,22,30,.08)",
-											},
-										}}
+						isXs ? (
+							// Phones: staggered two columns. Cards alternate left/right in list order, each
+							// column stacks at its own pace and the right one starts lower.
+							<Box
+								sx={{
+									display: "grid",
+									gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+									gap: 1,
+									alignItems: "start",
+								}}
+							>
+								{[0, 1].map((col) => (
+									<Box
+										key={col}
+										sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, pt: col === 1 ? 3.5 : 0 }}
 									>
-										<Box
-											sx={{
-												position: "relative",
-												height: { xs: 96, sm: 150 },
-												bgcolor: tokens.imageGround,
-												borderBottom: `1px solid ${tokens.line}`,
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "center",
-												p: { xs: 1, sm: 1.5 },
-											}}
-										>
-											<ProductImage src={row.imageUrl} alt={row.name} />
-											<IconButton
-												className="favorite-btn"
-												onClick={() => void handleToggleFavorite(row.productId)}
-												disabled={favoriteBusy}
-												aria-label={
-													isFavorite
-														? "Remove from My Favorites"
-														: "Add to My Favorites"
-												}
-												aria-pressed={isFavorite}
-												sx={{
-													position: "absolute",
-													top: { xs: 6, sm: 12 },
-													right: { xs: 6, sm: 12 },
-													width: 40,
-													height: 40,
-													bgcolor: tokens.surface,
-													border: `1px solid ${tokens.line}`,
-													boxShadow: "0 2px 8px rgba(20,22,30,.1)",
-													color: isFavorite ? tokens.fav : tokens.ink3,
-													"&:hover": { bgcolor: tokens.surface, color: tokens.fav },
-												}}
-											>
-												{isFavorite ? (
-													<FavoriteIcon sx={{ fontSize: 19 }} />
-												) : (
-													<FavoriteBorderIcon sx={{ fontSize: 19 }} />
-												)}
-											</IconButton>
-										</Box>
-										<Box
-											sx={{
-												p: { xs: "10px 11px 12px", sm: "14px 15px 16px" },
-												display: "flex",
-												flexDirection: "column",
-												gap: { xs: 0.75, sm: 1.125 },
-												flex: 1,
-												minWidth: 0,
-											}}
-										>
-											<Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", minWidth: 0 }}>
-												<StoreChip shopType={row.shopType} size="small" />
-												{sizeText && (
-													<Typography component="span" sx={{ fontSize: { xs: 11, sm: 12 }, color: tokens.ink3 }}>
-														{sizeText}
-													</Typography>
-												)}
-											</Box>
-											<Typography
-												component="h3"
-												sx={{
-													m: 0,
-													fontSize: { xs: 13, sm: 15 },
-													lineHeight: 1.35,
-													fontWeight: 600,
-													display: "-webkit-box",
-													WebkitLineClamp: 2,
-													WebkitBoxOrient: "vertical",
-													overflow: "hidden",
-													minHeight: { xs: 35, sm: 40 },
-												}}
-											>
-												{row.name || "-"}
-											</Typography>
-											<Typography
-												component="p"
-												sx={{
-													m: 0,
-													fontFamily: DISPLAY_FONT,
-													fontWeight: 800,
-													letterSpacing: "-0.02em",
-													fontSize: { xs: 20, sm: 26 },
-													lineHeight: 1.1,
-													fontVariantNumeric: "tabular-nums",
-												}}
-											>
-												{formatPrice(row.price)}
-											</Typography>
-											{row.promoText && (
-												<Box
-													component="span"
-													title={row.promoText}
-													sx={{
-														alignSelf: "flex-start",
-														maxWidth: "100%",
-														px: 1,
-														py: 0.375,
-														borderRadius: 999,
-														bgcolor: tokens.promoTint,
-														color: tokens.promo,
-														fontSize: { xs: 10.5, sm: 11.5 },
-														fontWeight: 600,
-														overflow: "hidden",
-														textOverflow: "ellipsis",
-														whiteSpace: "nowrap",
-													}}
-												>
-													{row.promoText}
-												</Box>
-											)}
-											<Box sx={{ minHeight: 20, display: "flex", alignItems: "center" }}>
-												{recommendation && (
-													<Typography
-														component="span"
-														className="recommendation-text"
-														sx={{
-															display: "inline-flex",
-															alignItems: "center",
-															gap: 0.5,
-															fontSize: { xs: 11.5, sm: 13 },
-															fontWeight: recommendation.save ? 700 : 600,
-															color: recommendation.save ? tokens.save : tokens.ink2,
-															fontVariantNumeric: "tabular-nums",
-														}}
-													>
-														{recommendation.save && (
-															<ArrowDownwardIcon aria-hidden="true" sx={{ fontSize: 14 }} />
-														)}
-														{recommendation.text}
-													</Typography>
-												)}
-											</Box>
-											{nextWeek && (
-												<Typography
-													component="span"
-													className="next-week-text"
-													title={`${nextWeek.text} (next week's catalogue)`}
-													sx={{
-														display: "inline-flex",
-														alignItems: "center",
-														gap: 0.5,
-														mt: -0.5,
-														fontSize: { xs: 11.5, sm: 13 },
-														fontWeight: 600,
-														color: tokens.promo,
-														fontVariantNumeric: "tabular-nums",
-														minWidth: 0,
-														whiteSpace: "nowrap",
-														overflow: "hidden",
-														textOverflow: "ellipsis",
-													}}
-												>
-													<EventIcon aria-hidden="true" sx={{ fontSize: 14, flexShrink: 0 }} />
-													<Box component="span" sx={{ display: { xs: "none", sm: "inline" }, overflow: "hidden", textOverflow: "ellipsis" }}>
-														{nextWeek.text}
-													</Box>
-													<Box component="span" sx={{ display: { xs: "inline", sm: "none" }, overflow: "hidden", textOverflow: "ellipsis" }}>
-														{nextWeek.shortText}
-													</Box>
-												</Typography>
-											)}
-											<Button
-												className="compare-btn"
-												variant="contained"
-												fullWidth
-												sx={{ mt: "auto", height: { xs: 40, sm: 44 } }}
-												onClick={() =>
-													handleCompare(
-														row.productId,
-														row.name,
-														row.shopType,
-														row,
-													)
-												}
-											>
-												{isXs ? "Compare" : "Compare prices"}
-											</Button>
-										</Box>
-									</Card>
-								);
-							})}
-						</Box>
+										{rows.filter((_, idx) => idx % 2 === col).map(renderCard)}
+									</Box>
+								))}
+							</Box>
+						) : (
+							<Box
+								sx={{
+									display: "grid",
+									gridTemplateColumns: "repeat(auto-fill, minmax(224px, 1fr))",
+									gap: 2.25,
+								}}
+							>
+								{rows.map(renderCard)}
+							</Box>
+						)
 					)}
 				</Box>
 
