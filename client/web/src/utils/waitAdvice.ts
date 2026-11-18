@@ -130,8 +130,21 @@ export function upcomingLine(input: {
 export function favoriteUpcomingText(
 	upcoming: UpcomingSpecial | null | undefined,
 ): string | null {
+	const parts = favoriteUpcomingParts(upcoming);
+	if (!parts) return null;
+	return `On special from ${parts.startDate}: ${parts.price} (save ${parts.save})`;
+}
+
+/** The same rule as favoriteUpcomingText, split into pieces for a compact pill + saving label. */
+export function favoriteUpcomingParts(
+	upcoming: UpcomingSpecial | null | undefined,
+): { startDate: string; price: string; save: string } | null {
 	if (!isComparable(upcoming)) return null;
 	const save = upcoming.saveAmount ?? 0;
 	if (!(save >= MIN_DROP_ABS)) return null;
-	return `On special from ${formatStartDate(upcoming.validFrom)}: ${money(upcoming.price)} (save ${money(save)})`;
+	return {
+		startDate: formatStartDate(upcoming.validFrom),
+		price: money(upcoming.price),
+		save: money(save),
+	};
 }

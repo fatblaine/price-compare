@@ -14,7 +14,11 @@ export interface ReceiptItem {
 	id: number;
 	receiptId: number;
 	productName: string;
+	/** Name as read by OCR; kept when the user renames the item. */
+	originalName?: string | null;
+	matchedProductId?: string | null;
 	imageUrl?: string | null;
+	confidence?: number | null;
 }
 
 export interface ReceiptDetail {
